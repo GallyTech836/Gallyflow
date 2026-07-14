@@ -1,0 +1,187 @@
+import { useState, useEffect } from 'react';
+import { Trash2 } from 'lucide-react';
+import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
+
+/**
+ * Modal único de gestión de cita — mismo HTML/clases que el modal
+ * original de AdminApp.jsx (líneas 3958-4099). Para Barber, los
+ * campos no editables quedan con `disabled`, no se cambia el tipo
+ * de elemento ni el layout. La única diferencia de comportamiento
+ * por rol viene de permissions.js, nunca de un `if (role === ...)`
+ * hardcodeado aquí dentro salvo para decidir disabled/visible.
+ */
+export default function AppointmentManageModal({
+  appointment,
+  role,
+  services = [],
+  professionals = [],
+  onClose,
+  onChangeField,   // (field, value) => void  — actualiza el draft en el padre
+  onSubmit,        // (e) => void  — equivalente a handleUpdateReservation
+  onDelete,        // () => void  — equivalente a handleDeleteReservation (solo admin)
+  onTransition,    // (nextStatus) => void  — equivalente a handleUpdateStatus
+}) {
+  if (!appointment) return null;
+
+  const canEdit = (field) => canEditField(role, field);
+  const allowDelete = canHardDelete(role);
+  const nextStates = getAllowedNextStates(role, appointment.status);
+  const canGoTo = (status) => nextStates.includes(status);
+
+  return (
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-md p-5 relative shadow-2xl">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-bold text-white">Editar o Gestionar Cita</h3>
+          {allowDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                onDelete(appointment.id);
+                onClose();
+              }}
+              className="p-1 hover:bg-rose-500/10 text-rose-400 rounded flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Eliminar Cita
+            </button>
+          )}
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-3.5">
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold block mb-1">Nombre del Cliente *</label>
+            <input
+              type="text"
+              required
+              disabled={!canEdit('clientName')}
+              value={appointment.clientName}
+              onChange={(e) => onChangeField('clientName', e.target.value)}
+              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">Profesional Asignado *</label>
+              <select
+                required
+                disabled={!canEdit('professionalId')}
+                value={appointment.professionalId || appointment.barberId || 'pending'}
+                onChange={(e) => onChangeField('professionalId', e.target.value)}
+                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="pending">Sin Profesional (PENDIENTE)</option>
+                {(professionals || []).filter(b => b?.active).map(b => (
+                  <option key={b?.id} value={b?.id}>{b?.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicio *</label>
+              <select
+                required
+                disabled={!canEdit('serviceId')}
+                value={appointment.serviceId}
+                onChange={(e) => onChangeField('serviceId', e.target.value)}
+                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {(services || []).map(s => (
+                  <option key={s?.id} value={s?.id}>{s?.name} ({s?.price} Bs)</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">Hora de Inicio *</label>
+              <input
+                type="time"
+                required
+                disabled={!canEdit('time')}
+                value={appointment.time}
+                onChange={(e) => onChangeField('time', e.target.value)}
+                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">Estatus Actual</label>
+              <select
+                disabled={!canEdit('status')}
+                value={appointment.status}
+                onChange={(e) => onChangeField('status', e.target.value)}
+                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="pending">Por Confirmar</option>
+                <option value="confirmed">Confirmada</option>
+                <option value="in-process">En Atención</option>
+                <option value="completed">Completada (Pagado)</option>
+                <option value="cancelled">Cancelada (Inactiva)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold block mb-1">Notas de la Reserva</label>
+            <input
+              type="text"
+              disabled={!canEdit('notes')}
+              value={appointment.notes || ''}
+              onChange={(e) => onChangeField('notes', e.target.value)}
+              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-2.5 pt-3">
+            <div className="flex gap-1">
+              {appointment.status === 'confirmed' && canGoTo('in-process') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onTransition('in-process');
+                    onClose();
+                  }}
+                  className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded text-[9px] cursor-pointer font-bold"
+                >
+                  Iniciar Atención
+                </button>
+              )}
+              {appointment.status === 'in-process' && canGoTo('completed') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onTransition('completed');
+                    onClose();
+                  }}
+                  className="px-2 py-1 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold rounded text-[9px] cursor-pointer font-bold"
+                >
+                  Marcar Finalizado
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-1.5 ml-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-700 cursor-pointer"
+              >
+                Salir
+              </button>
+              <button
+                type="submit"
+                disabled={!canEdit('clientName') && !canEdit('status') && !canEdit('notes')}
+                className="px-3.5 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
