@@ -10,5 +10,5 @@ if (!appId || !restApiKey) {
 export const oneSignalConfig = {
   appId,
   restApiKey,
-  apiUrl: 'https://onesignal.com/api/v1/notifications',
+  apiUrl: 'https://api.onesignal.com/notifications',
 };

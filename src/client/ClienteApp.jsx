@@ -5,6 +5,7 @@ import { Sparkles, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, Ch
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
+import { notify, NotificationType } from '../shared/notifications';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -341,6 +342,7 @@ export default function App({ negocioSlug } = {}) {
         branch: selectedBarber?.branch || selectedBranch?.name || '',
         createdAt: new Date().toISOString()
       });
+      notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, {});
       setStep(7); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);

@@ -13,6 +13,7 @@ import { FIELD_PERMISSIONS } from '../shared/appointments/permissions';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission } from '../shared/commissions/commissionModel';
+import { useNotifications, notify, NotificationType } from '../shared/notifications';
 
 // --- ICONOS SVG PERSONALIZADOS (Diseño ultra-limpio) ---
 const Icons = {
@@ -223,6 +224,7 @@ const MESES_NOMBRES = [
 export default function App() {
   const { barberUser, error: authError, loading: authLoading, loginBarber, logoutBarber } = useBarberAuth();
   const negocioId = barberUser?.negocioId;
+  useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const { servicios: services } = useServicios(negocioId);
 
@@ -406,6 +408,7 @@ useEffect(() => {
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast("Cita agendada correctamente");
+      notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, {}, barberUser?.id);
     } catch (err) {
       triggerToast("Error al agendar la cita: " + err.message, "error");
       return;
@@ -563,6 +566,12 @@ useEffect(() => {
       }
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), payload);
       triggerToast('Cita actualizada');
+      notify(
+        payload.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
+        negocioId,
+        { citaId: managingAppt.id },
+        barberUser?.id
+      );
     } catch (err) {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
     }
@@ -604,6 +613,7 @@ useEffect(() => {
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast('Cita agendada correctamente');
+      notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, {}, barberUser?.id);
     } catch (err) {
       triggerToast('Error al agendar: ' + err.message, 'error');
     }
@@ -624,6 +634,7 @@ useEffect(() => {
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', apptId));
       triggerToast("Cita eliminada", "info");
+      notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: apptId }, barberUser?.id);
     } catch (err) {
       triggerToast('Error al eliminar la cita: ' + err.message, 'error');
     }
