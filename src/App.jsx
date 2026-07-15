@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import LoginPage from './auth/LoginPage';
 import { useAuth } from './auth/useAuth';
+import { useManifestByRoute } from './shared/pwa/useManifestByRoute';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 const BarberApp = lazy(() => import('./barber/BarberApp'));
@@ -12,6 +13,7 @@ const LoadingScreen = (
 
 function App() {
   const path = window.location.pathname;
+  useManifestByRoute();
 
   // Título de pestaña por app: BarberApp usa el suyo propio, el resto
   // conserva el título por defecto definido en index.html ("GallyFlow").

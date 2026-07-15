@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 
 const MANIFESTS = [
-  { match: (path) => path.startsWith("/admin"), href: "/manifest-admin.json" },
   { match: (path) => path.startsWith("/barber"), href: "/manifest-barber.json" },
-  { match: () => true, href: "/manifest-cliente.json" }, // fallback: ClienteApp
+  { match: (path) => path.startsWith("/reservar"), href: "/manifest-cliente.json" },
+  { match: () => true, href: "/manifest-admin.json" }, // fallback: AdminApp
 ];
 
 export function useManifestByRoute() {
