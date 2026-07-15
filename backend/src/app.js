@@ -23,12 +23,6 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'gallyflow-backend' });
 });
 
-app.use('/api', notificationsRoutes);
-
-app.use((req, res) => {
-  res.status(404).json({ error: 'Ruta no encontrada.' });
-});
-
 // Ruta raíz: identificación rápida del servicio al abrir la URL directo
 // desde el navegador (ej. para confirmar que el deploy de Railway está activo).
 app.get('/', (req, res) => {
@@ -38,6 +32,14 @@ app.get('/', (req, res) => {
     version: '1.0.0',
   });
 });
+
+app.use('/api', notificationsRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Ruta no encontrada.' });
+});
+
+
 
 app.use((err, req, res, next) => {
   logger.error('[app] Error no controlado:', err.message);
