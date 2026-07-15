@@ -1,0 +1,21 @@
+{
+    "name": "gallyflow-backend",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Backend de notificaciones de GallyFlow (Railway). Fase 1: infraestructura base.",
+    "scripts": {
+      "start": "node src/server.js",
+      "dev": "node --watch src/server.js"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    },
+    "dependencies": {
+      "cors": "^2.8.5",
+      "dotenv": "^16.4.5",
+      "express": "^4.19.2",
+      "express-rate-limit": "^7.4.0",
+      "firebase-admin": "^12.3.1"
+    }
+  }
