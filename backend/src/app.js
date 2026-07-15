@@ -29,6 +29,16 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });
 });
 
+// Ruta raíz: identificación rápida del servicio al abrir la URL directo
+// desde el navegador (ej. para confirmar que el deploy de Railway está activo).
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'GallyFlow API',
+    version: '1.0.0',
+  });
+});
+
 app.use((err, req, res, next) => {
   logger.error('[app] Error no controlado:', err.message);
   res.status(err.status || 500).json({ error: err.message || 'Error interno.' });
