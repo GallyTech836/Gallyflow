@@ -37,7 +37,7 @@ export function useNotifications({ uid, rol, negocioId }) {
         if (!result?.ok) {
           console.warn('[useNotifications] El backend no confirmó el registro:', result);
         }
-      } carch (err) {
+      } catch (err) {
         alert('[useNotifications] ERROR: ' + err.message);
       }
     }
