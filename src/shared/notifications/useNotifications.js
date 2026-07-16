@@ -22,7 +22,6 @@ export function useNotifications({ uid, rol, negocioId }) {
     initialized.current = true;
 
     async function setup() {
-      alert('[useNotifications] setup() se está ejecutando');
       try {
         await OneSignal.init({ appId: ONESIGNAL_APP_ID });
         await OneSignal.Notifications.requestPermission();
@@ -38,7 +37,7 @@ export function useNotifications({ uid, rol, negocioId }) {
           console.warn('[useNotifications] El backend no confirmó el registro:', result);
         }
       } catch (err) {
-        alert('[useNotifications] ERROR: ' + err.message);
+        console.error('[useNotifications] Error al configurar notificaciones:', err);
       }
     }
 
