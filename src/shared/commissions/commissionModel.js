@@ -11,6 +11,7 @@
 // asignado, o lo tiene con commissionEnabled=false, o el valor no es un
 // número válido, el resultado se marca como configuración incompleta
 // (isConfigured: false) en vez de asumir un porcentaje por defecto.
+import { getServicesFromCita } from '../appointments/serviceSelection.js';
 
 export const COMMISSION_TYPE = {
   PERCENTAGE: '%',
@@ -172,4 +173,32 @@ export function calculateCommission(reservation, barber, allServices = null) {
     type: assignment.type || null,
     value,
   };
+}
+/**
+ * Calcula la comisión total de una cita que puede tener uno o varios
+ * servicios (services[] en el esquema nuevo, o campos planos legacy).
+ * Reutiliza calculateCommission() por cada servicio individual y suma
+ * los resultados, sin duplicar la lógica de asignación/porcentaje/fijo.
+ *
+ * @param {Object} cita - Documento de cita de Firestore (legacy o nuevo)
+ * @param {Object} barber - Perfil del barbero con services[]
+ * @param {Array} allServices - Lista global de servicios del negocio
+ * @returns {{ totalAmount: number, allConfigured: boolean, breakdown: Array }}
+ */
+export function calculateCommissionForCita(cita, barber, allServices = null) {
+  const services = getServicesFromCita(cita);
+
+  const breakdown = services.map((service) => {
+    const result = calculateCommission(
+      { serviceId: service.serviceId, serviceName: service.serviceName, price: service.price },
+      barber,
+      allServices
+    );
+    return { ...service, ...result };
+  });
+
+  const totalAmount = breakdown.reduce((sum, item) => sum + item.amount, 0);
+  const allConfigured = breakdown.length > 0 && breakdown.every((item) => item.isConfigured);
+
+  return { totalAmount, allConfigured, breakdown };
 }

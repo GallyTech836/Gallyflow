@@ -12,11 +12,11 @@ export async function registerDevice({ uid, rol, negocioId, oneSignalId }) {
   return res.json();
 }
 
-export async function notify(tipo, negocioId, data, actorUid) {
+export async function notify(tipo, negocioId, data, actorUid, targetProfessionalId) {
   const res = await fetch(`${BASE_URL}/notifications/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tipo, negocioId, data, actorUid }),
+    body: JSON.stringify({ tipo, negocioId, data, actorUid, targetProfessionalId }),
   });
   return res.json();
 }

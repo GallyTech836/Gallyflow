@@ -1124,7 +1124,7 @@ const [saleForm, setSaleForm] = useState({
       const docRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
       savedReservationId = docRef.id;
       triggerToast('¡Cita agendada con éxito!');
-      notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid);
+      notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) {
       triggerToast('Error al guardar la cita: ' + err.message, 'error');
       return;
@@ -1194,8 +1194,7 @@ const [saleForm, setSaleForm] = useState({
 
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
-      triggerToast('¡Cita agendada con éxito!');
-      notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid);
+      notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) { triggerToast('Error al guardar: ' + err.message, 'error'); return; }
 
     setActiveModal(null);
@@ -1253,7 +1252,8 @@ const [saleForm, setSaleForm] = useState({
         editingReservation.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
         { citaId: editingReservation.id, clientName: editingReservation.clientName, time: editingReservation.time },
-        user?.uid
+        user?.uid,
+        targetProfessionalId
       );
     } catch (err) {
       triggerToast('Error al modificar la cita: ' + err.message, 'error');
@@ -1345,7 +1345,8 @@ const [saleForm, setSaleForm] = useState({
         status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
         { citaId: id, status, clientName: targetReservation?.clientName, time: targetReservation?.time },
-        user?.uid
+        user?.uid,
+        targetReservation?.professionalId || targetReservation?.barberId
       );
     } catch (err) {
       triggerToast('Error al actualizar el estado: ' + err.message, 'error');
@@ -1375,7 +1376,7 @@ const [saleForm, setSaleForm] = useState({
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', id));
       triggerToast('Reserva eliminada con éxito.');
-      notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: id, clientName: targetReservation?.clientName, time: targetReservation?.time }, user?.uid);
+      notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: id, clientName: targetReservation?.clientName, time: targetReservation?.time }, user?.uid, targetReservation?.professionalId || targetReservation?.barberId);
     } catch (err) {
       triggerToast('Error al eliminar la reserva: ' + err.message, 'error');
     }

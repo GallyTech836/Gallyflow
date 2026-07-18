@@ -342,7 +342,7 @@ export default function App({ negocioSlug } = {}) {
         branch: selectedBarber?.branch || selectedBranch?.name || '',
         createdAt: new Date().toISOString()
       });
-      notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour });
+      notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, professionalId);
       setStep(7); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);

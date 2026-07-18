@@ -408,7 +408,7 @@ useEffect(() => {
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast("Cita agendada correctamente");
-      notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id);
+      notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
     } catch (err) {
       triggerToast("Error al agendar la cita: " + err.message, "error");
       return;
@@ -570,6 +570,7 @@ useEffect(() => {
         payload.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
         { citaId: managingAppt.id, clientName: managingAppt.clientName, time: managingAppt.time },
+        barberUser?.id,
         barberUser?.id
       );
     } catch (err) {
@@ -613,7 +614,7 @@ useEffect(() => {
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast('Cita agendada correctamente');
-      notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id);
+      notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
     } catch (err) {
       triggerToast('Error al agendar: ' + err.message, 'error');
     }
@@ -635,7 +636,7 @@ useEffect(() => {
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', apptId));
       triggerToast("Cita eliminada", "info");
-      notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: apptId, clientName: targetAppt?.clientName, time: targetAppt?.time }, barberUser?.id);
+      notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: apptId, clientName: targetAppt?.clientName, time: targetAppt?.time }, barberUser?.id, barberUser?.id);
     } catch (err) {
       triggerToast('Error al eliminar la cita: ' + err.message, 'error');
     }

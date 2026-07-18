@@ -23,13 +23,28 @@ export async function getRecipients(negocioId, roles, options = {}) {
     .where('rol', 'in', roles)
     .get();
 
-  return snap.docs
+  let recipients = snap.docs
     .map((doc) => ({ uid: doc.id, ...doc.data() }))
     .filter((u) => u.oneSignalId && u.uid !== options.excludeUid);
+
+  // Si viene un profesional específico, solo ese barbero (+ todos los
+  // admins, que siempre deben enterarse) reciben la notificación. Si no
+  // viene (ej. cita sin asignar todavía), se mantiene el broadcast a
+  // todo el negocio, igual que antes.
+  if (options.targetProfessionalId && options.targetProfessionalId !== 'pending') {
+    recipients = recipients.filter(
+      (u) => u.rol === 'admin' || u.uid === options.targetProfessionalId
+    );
+  }
+
+  return recipients;
 }
 
-export async function sendNotification({ tipo, negocioId, data, actorUid }) {
-  const recipients = await getRecipients(negocioId, ['admin', 'barber'], { excludeUid: actorUid });
+export async function sendNotification({ tipo, negocioId, data, actorUid, targetProfessionalId }) {
+  const recipients = await getRecipients(negocioId, ['admin', 'barber'], {
+    excludeUid: actorUid,
+    targetProfessionalId,
+  });
 
   if (recipients.length === 0) {
     logger.info(`[notificationService] Sin destinatarios para negocio=${negocioId}, tipo=${tipo}`);

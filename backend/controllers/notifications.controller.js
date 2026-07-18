@@ -17,12 +17,12 @@ export async function handleRegisterDevice(req, res) {
 }
 
 export async function handleSendNotification(req, res) {
-  const { tipo, negocioId, data, actorUid } = req.body || {};
+  const { tipo, negocioId, data, actorUid, targetProfessionalId } = req.body || {};
   if (!tipo || !negocioId) {
     return res.status(400).json({ error: 'Faltan campos requeridos: tipo, negocioId.' });
   }
   try {
-    const result = await sendNotification({ tipo, negocioId, data, actorUid });
+    const result = await sendNotification({ tipo, negocioId, data, actorUid, targetProfessionalId });
     return res.status(200).json({ ok: true, result });
   } catch (err) {
     logger.warn('[notifications.controller] sendNotification pendiente:', err.message);

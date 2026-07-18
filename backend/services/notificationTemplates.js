@@ -6,15 +6,15 @@ export function buildMessage(tipo, data = {}) {
 
   switch (tipo) {
     case 'RESERVA_CREADA_CLIENTE':
-      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Tienes una reserva a las ${hora} de ${cliente}.` };
+      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Tienes una reserva${hora} de ${cliente}.` };
     case 'RESERVA_CREADA_ADMIN':
-      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Se registró una reserva a las ${hora} con ${cliente}.` };
+      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Se registró una reserva${hora} con ${cliente}.` };
     case 'RESERVA_CREADA_BARBER':
-      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Un profesional registró una reserva a las ${hora} con ${cliente}.` };
+      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Un profesional registró una reserva${hora} con ${cliente}.` };
     case 'RESERVA_CANCELADA':
-      return { titulo: '🔔¡Reserva cancelada!', cuerpo: `Se canceló la reserva de ${cliente} a las ${hora}.` };
+      return { titulo: '🔔¡Reserva cancelada!', cuerpo: `Se canceló la reserva de ${cliente}${hora}.` };
     case 'RESERVA_MODIFICADA':
-      return { titulo: '🔔¡Reserva modificada¡', cuerpo: `Se modificó la reserva de ${cliente} para las ${hora}.` };
+      return { titulo: '🔔¡Reserva modificada!', cuerpo: `Se modificó la reserva de ${cliente}${hora}.` };
     default:
       return { titulo: 'GallyFlow', cuerpo: 'Tienes una actualización en tus reservas.' };
   }
