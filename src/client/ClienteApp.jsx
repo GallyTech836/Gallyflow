@@ -6,6 +6,7 @@ import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
 import { notify, NotificationType } from '../shared/notifications';
+import { calculateTotals } from '../shared/appointments/serviceSelection';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -281,8 +282,10 @@ export default function App({ negocioSlug } = {}) {
   // serviceId por cita). Se mantiene un array de 1 elemento para no tocar
   // el resto de los componentes que ya leen `selected` como lista.
   const toggleService = (service) => {
-    setSelectedServices(prev => 
-      prev.find(s => s.id === service.id) ? [] : [service]
+    setSelectedServices(prev =>
+      prev.find(s => s.id === service.id)
+        ? prev.filter(s => s.id !== service.id)
+        : [...prev, service]
     );
   };
   
@@ -316,23 +319,36 @@ export default function App({ negocioSlug } = {}) {
     }
     setLoading(true);
     try {
-      const service = selectedServices[0];
-      const finalPrice = (isTuesday && service.promoPrice && (service.id === 'sr' || service.id === 'jr'))
-        ? service.promoPrice
-        : service.price;
+      const servicesForCita = selectedServices.map((service) => {
+        const finalPrice = (isTuesday && service.promoPrice && (service.id === 'sr' || service.id === 'jr'))
+          ? service.promoPrice
+          : service.price;
+        return {
+          serviceId: service.id,
+          serviceName: service.name,
+          price: finalPrice,
+          duration: service.durationMin || 30,
+        };
+      });
+      const { totalPrice, totalDuration } = calculateTotals(servicesForCita);
       const professionalId = selectedBarber.isPending ? 'pending' : selectedBarber.id;
 
-      // Misma colección y misma forma de documento que usan Admin y Barber:
-      // negocios/{negocioId}/citas, con serviceId/professionalId/status.
+      // Misma colección que usan Admin y Barber: negocios/{negocioId}/citas.
+      // Se guarda el array completo en `services[]`, y además se mantienen
+      // serviceId/serviceName/price/duration a nivel raíz como alias de
+      // compatibilidad (apuntando al primer servicio / totales), para que
+      // el código que todavía no fue actualizado (reportes, agenda) siga
+      // funcionando sin romperse mientras se completan las fases siguientes.
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), {
         clientName: clientName.trim(),
         clientPhone: clientPhone.trim() || 'No especificado',
         professionalId,
         barberId: professionalId,
-        serviceId: service.id || service.id,
-        serviceName: service.name,
-        duration: service.durationMin || 30,
-        price: finalPrice,
+        services: servicesForCita,
+        serviceId: servicesForCita[0]?.serviceId || '',
+        serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
+        duration: totalDuration,
+        price: totalPrice,
         date: selectedDate,
         time: selectedHour,
         status: 'confirmed',
