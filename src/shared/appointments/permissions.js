@@ -55,7 +55,7 @@ export const ACTION_PERMISSIONS = {
     restrictedTransitions: null, // null = sin restricción adicional sobre statusModel
   },
   [ROLES.BARBER]: {
-    canHardDelete: false,   // nunca borra el documento, solo cancela
+    canHardDelete: true,   // nunca borra el documento, solo cancela
     canCancel: true,
     restrictedTransitions: null, // por ahora respeta el mismo ciclo que Admin
   },
