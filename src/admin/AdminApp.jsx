@@ -939,7 +939,7 @@ const [saleForm, setSaleForm] = useState({
   const handleLiquidarComisiones = async (barb) => {
     const pendientes = (barb?.detalle || []).filter(d => !d.paid);
     if (pendientes.length === 0) {
-      triggerToast('No hay comisiones pendientes para liquidar', 'error');
+      triggerToast('No hay comisiones pendientes', 'error');
       return;
     }
     try {
