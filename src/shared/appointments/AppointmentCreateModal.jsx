@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
+import { calculateTotals } from './serviceSelection';
 
 // Detecta el país por prefijo de teléfono. Lógica extraída de AdminApp.jsx.
 function detectPhoneCountry(phoneNum) {
@@ -59,7 +60,7 @@ export default function AppointmentCreateModal({
     clientName: '',
     phone: '',
     clientId: null,
-    serviceId: services[0]?.id || '',
+    serviceIds: services[0] ? [services[0].id] : [],
     professionalId: fixedProfessional?.id || 'pending',
     date: initialDate,
     time: initialTime,
@@ -85,15 +86,36 @@ export default function AppointmentCreateModal({
 
   const change = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
 
+  const toggleService = (serviceId) => {
+    setDraft(prev => ({
+      ...prev,
+      serviceIds: prev.serviceIds.includes(serviceId)
+        ? prev.serviceIds.filter(id => id !== serviceId)
+        : [...prev.serviceIds, serviceId],
+    }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    const serviceObj = services.find(s => s.id === draft.serviceId);
+    if (draft.serviceIds.length === 0) return;
+  
+    const servicesForCita = services
+      .filter(s => draft.serviceIds.includes(s.id))
+      .map(s => ({
+        serviceId: s.id,
+        serviceName: s.name,
+        price: s.price || 0,
+        duration: s.duration || 30,
+      }));
+    const { totalPrice, totalDuration } = calculateTotals(servicesForCita);
+  
     onSubmit({
       ...draft,
-      serviceName: serviceObj?.name || '',
-      price: serviceObj?.price || 0,
-      commission: serviceObj?.commission || 0,
-      duration: serviceObj?.duration || 30,
+      services: servicesForCita,
+      serviceId: servicesForCita[0]?.serviceId || '',
+      serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
+      price: totalPrice,
+      duration: totalDuration,
     });
   };
 
@@ -203,20 +225,21 @@ export default function AppointmentCreateModal({
 
           {/* ── Servicio y Profesional ───────────────────────── */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicio *</label>
-              <select
-                required
-                value={draft.serviceId}
-                onChange={(e) => change('serviceId', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500"
-              >
-                <option value="">Seleccione...</option>
-                {services.map(s => (
-                  <option key={s?.id} value={s?.id}>{s?.name} ({s?.price} Bs)</option>
-                ))}
-              </select>
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicios *</label>
+            <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+              {services.map(s => (
+                <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.serviceIds.includes(s?.id)}
+                   onChange={() => toggleService(s?.id)}
+                  />
+                  {s?.name} ({s?.price} Bs)
+                </label>
+              ))}
             </div>
+          </div>
 
             <div>
               <label className="text-[10px] text-slate-400 font-bold block mb-1">Profesional *</label>

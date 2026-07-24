@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
+import { calculateTotals, getServicesFromCita } from './serviceSelection';
 
 /**
  * Modal único de gestión de cita — mismo HTML/clases que el modal
@@ -27,6 +28,31 @@ export default function AppointmentManageModal({
   const allowDelete = canHardDelete(role);
   const nextStates = getAllowedNextStates(role, appointment.status);
   const canGoTo = (status) => nextStates.includes(status);
+
+  // Soporta tanto citas nuevas (appointment.services) como legacy
+  // (campos planos serviceId/price/duration) vía getServicesFromCita.
+  const currentServices = appointment.services && appointment.services.length > 0
+    ? appointment.services
+    : getServicesFromCita(appointment);
+
+  const toggleService = (service) => {
+    const exists = currentServices.some(s => s.serviceId === service.id);
+    const nextServices = exists
+      ? currentServices.filter(s => s.serviceId !== service.id)
+      : [...currentServices, {
+          serviceId: service.id,
+          serviceName: service.name,
+          price: service.price || 0,
+          duration: service.duration || 30,
+        }];
+
+    const { totalPrice, totalDuration } = calculateTotals(nextServices);
+    onChangeField('services', nextServices);
+    onChangeField('serviceId', nextServices[0]?.serviceId || '');
+    onChangeField('serviceName', nextServices.map(s => s.serviceName).join(' + '));
+    onChangeField('price', totalPrice);
+    onChangeField('duration', totalDuration);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -79,18 +105,20 @@ export default function AppointmentManageModal({
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicio *</label>
-              <select
-                required
-                disabled={!canEdit('serviceId')}
-                value={appointment.serviceId}
-                onChange={(e) => onChangeField('serviceId', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-              >
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicios *</label>
+              <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
                 {(services || []).map(s => (
-                  <option key={s?.id} value={s?.id}>{s?.name} ({s?.price} Bs)</option>
+                  <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      disabled={!canEdit('serviceId')}
+                      checked={currentServices.some(cs => cs.serviceId === s?.id)}
+                      onChange={() => toggleService(s)}
+                    />
+                    {s?.name} ({s?.price} Bs)
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
           </div>
 

@@ -13,6 +13,7 @@ import { FIELD_PERMISSIONS } from '../shared/appointments/permissions';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission } from '../shared/commissions/commissionModel';
+import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 
 // --- ICONOS SVG PERSONALIZADOS (Diseño ultra-limpio) ---
@@ -557,13 +558,6 @@ useEffect(() => {
       return;
     }
     try {
-      if (payload.serviceId !== undefined) {
-        const svcObj = services.find(s => s.id === payload.serviceId);
-        if (svcObj) {
-          payload.service = svcObj.name;
-          payload.serviceName = svcObj.name;
-        }
-      }
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), payload);
       triggerToast('Cita actualizada');
       notify(
@@ -601,7 +595,9 @@ useEffect(() => {
       service: draft.serviceName,
       serviceName: draft.serviceName,
       serviceId: draft.serviceId,
+      services: draft.services,
       price: draft.price,
+      duration: draft.duration,
       date: draft.date,
       time: draft.time,
       status: 'confirmed',
@@ -1262,7 +1258,7 @@ useEffect(() => {
                               slotAppointments.map((appt) => (
                                 <div 
                                   key={appt.id}
-                                  onClick={() => setManagingAppt(appt)}
+                                  onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
                                   className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg transition-all duration-300 hover:brightness-105 cursor-pointer ${
                                     appt.status === "completed" ? "bg-[#082F1D] text-[#34D399] border-[#10B981]/20" :
                                     appt.status === "confirmed" ? "bg-[#0B2545] text-[#60A5FA] border-[#3B82F6]/20" :
@@ -1333,7 +1329,7 @@ useEffect(() => {
                       filteredAppointments.map((appt) => (
                         <div 
                           key={appt.id} 
-                          onClick={() => setManagingAppt(appt)}
+                          onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
                           className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-[#2D314E] transition-all duration-200 shadow-md cursor-pointer"
                         >
                           <div className="flex items-center gap-4">

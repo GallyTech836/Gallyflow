@@ -9,6 +9,7 @@ import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission } from '../shared/commissions/commissionModel';
+import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
@@ -1201,37 +1202,38 @@ const [saleForm, setSaleForm] = useState({
   };
 
   const handleOpenEditReservation = (res) => {
-    setEditingReservation(res);
+    const services = res.services && res.services.length > 0 ? res.services : getServicesFromCita(res);
+    setEditingReservation({ ...res, services });
     setActiveModal('edit-reservation');
   };
 
   const handleUpdateReservation = async (e) => {
     if (e) e.preventDefault();
-    const serviceObj = services.find(s => s.id === editingReservation.serviceId);
-    const duration = serviceObj?.duration
-      ? Number(serviceObj.duration)
-      : (Number(editingReservation.duration) > 0 ? Number(editingReservation.duration) : 30);
     const targetProfessionalId = editingReservation.professionalId || editingReservation.barberId || 'pending';
+    const duration = Number(editingReservation.duration) > 0 ? Number(editingReservation.duration) : 30;
     const endTimeStr = minToTime(timeToMin(editingReservation.time) + duration);
-
+  
     const isClientRole = false;
     const check = checkConflicts(editingReservation.id, targetProfessionalId, editingReservation.date, editingReservation.time, endTimeStr, false, isClientRole);
-
+  
     if (!check.isValid) {
       triggerToast(check.message, 'error');
       return;
     }
-
-    const finalPrice = (isTuesday && serviceObj?.promoPrice) ? serviceObj.promoPrice : (serviceObj?.price || editingReservation.price);
+  
     const assignedBarber = barbers.find(b => b.id === targetProfessionalId);
-
+    const currentServices = editingReservation.services && editingReservation.services.length > 0
+      ? editingReservation.services
+      : getServicesFromCita(editingReservation);
+  
     const updatedRecord = {
       clientName: editingReservation.clientName,
       professionalId: targetProfessionalId,
       barberId: targetProfessionalId, // alias
-      serviceId: editingReservation.serviceId,
-      serviceName: serviceObj ? serviceObj.name : editingReservation.serviceName,
-      price: finalPrice,
+      services: currentServices,
+      serviceId: currentServices[0]?.serviceId || '',
+      serviceName: currentServices.map(s => s.serviceName).join(' + '),
+      price: editingReservation.price,
       time: editingReservation.time,
       startTime: editingReservation.time,
       endTime: endTimeStr,
@@ -1245,7 +1247,7 @@ const [saleForm, setSaleForm] = useState({
       branch: targetProfessionalId !== 'pending' ? (assignedBarber?.branch || editingReservation.branch || selectedBranch) : (editingReservation.branch || selectedBranch),
       updatedAt: new Date().toISOString()
     };
-
+  
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', editingReservation.id), updatedRecord);
       notify(
