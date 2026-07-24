@@ -22,6 +22,8 @@ export default function AppointmentManageModal({
   onDelete,        // () => void  — equivalente a handleDeleteReservation (solo admin)
   onTransition,    // (nextStatus) => void  — equivalente a handleUpdateStatus
 }) {
+  const [showServicesList, setShowServicesList] = useState(false);
+
   if (!appointment) return null;
 
   const canEdit = (field) => canEditField(role, field);
@@ -106,19 +108,34 @@ export default function AppointmentManageModal({
 
             <div>
               <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicios *</label>
-              <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
-                {(services || []).map(s => (
-                  <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
-                    <input
-                      type="checkbox"
-                      disabled={!canEdit('serviceId')}
-                      checked={currentServices.some(cs => cs.serviceId === s?.id)}
-                      onChange={() => toggleService(s)}
-                    />
-                    {s?.name} ({s?.price} Bs)
-                  </label>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowServicesList(prev => !prev)}
+                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-left text-white flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={!canEdit('serviceId')}
+              >
+                <span className="truncate">
+                  {currentServices.length > 0
+                    ? currentServices.map(s => s.serviceName).join(', ')
+                    : 'Selecciona servicios...'}
+                </span>
+                <span className="text-slate-400 ml-2">{showServicesList ? '▲' : '▼'}</span>
+              </button>
+              {showServicesList && (
+                <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
+                  {(services || []).map(s => (
+                    <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={!canEdit('serviceId')}
+                        checked={currentServices.some(cs => cs.serviceId === s?.id)}
+                        onChange={() => toggleService(s)}
+                      />
+                      {s?.name} ({s?.price} Bs)
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

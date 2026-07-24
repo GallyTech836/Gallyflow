@@ -71,6 +71,7 @@ export default function AppointmentCreateModal({
   // ── Estado de UI ───────────────────────────────────────────────────
   const [clientSearch, setClientSearch] = useState('');
   const [showClientList, setShowClientList] = useState(false);
+  const [showServicesList, setShowServicesList] = useState(false);
   const [isNewClient, setIsNewClient] = useState(false);
 
   // ── Derivados ──────────────────────────────────────────────────────
@@ -227,18 +228,32 @@ export default function AppointmentCreateModal({
           <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicios *</label>
-            <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
-              {services.map(s => (
-                <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.serviceIds.includes(s?.id)}
-                   onChange={() => toggleService(s?.id)}
-                  />
-                  {s?.name} ({s?.price} Bs)
-                </label>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowServicesList(prev => !prev)}
+              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-left text-white flex items-center justify-between"
+            >
+              <span className="truncate">
+                {draft.serviceIds.length > 0
+                  ? services.filter(s => draft.serviceIds.includes(s.id)).map(s => s.name).join(', ')
+                  : 'Selecciona servicios...'}
+              </span>
+              <span className="text-slate-400 ml-2">{showServicesList ? '▲' : '▼'}</span>
+            </button>
+            {showServicesList && (
+              <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
+                {services.map(s => (
+                  <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.serviceIds.includes(s?.id)}
+                      onChange={() => toggleService(s?.id)}
+                    />
+                    {s?.name} ({s?.price} Bs)
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
             <div>
