@@ -9,6 +9,7 @@ import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission } from '../shared/commissions/commissionModel';
+import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
@@ -881,16 +882,8 @@ const [saleForm, setSaleForm] = useState({
     completed.forEach(res => {
       const barber = (branchBarbers || []).find(b => b?.id === res?.professionalId || b?.id === res?.barberId);
       if (barber) {
-        const customComm = barber?.services?.find(s => s?.serviceId === res?.serviceId && s?.commissionEnabled);
-        if (customComm) {
-          if (customComm.type === 'Bs') {
-            pendingCommissions += Number(customComm.value || 0);
-          } else {
-            pendingCommissions += (Number(res?.price || 0) * Number(customComm.value || 0)) / 100;
-          }
-        } else {
-          pendingCommissions += (Number(res?.price || 0) * (Number(barber?.commission) || 40)) / 100;
-        }
+        const result = calculateCommissionForCita(res, barber, services);
+        pendingCommissions += result.totalAmount;
       }
     });
 
@@ -901,7 +894,7 @@ const [saleForm, setSaleForm] = useState({
       pendingCommissions,
       clientsServed: new Set(completed.map(r => r?.clientId).filter(Boolean)).size
     };
-  }, [rangeReservations, branchBarbers]);
+  }, [rangeReservations, branchBarbers, services]);
 
   const barberCommissionsList = useMemo(() => {
     if (!Array.isArray(branchBarbers)) return [];
@@ -912,15 +905,15 @@ const [saleForm, setSaleForm] = useState({
       let comisionPagada = 0;
 
       const detalle = barberRangeCompleted.map(res => {
-        const result = calculateCommission(res, barb, services);
-        comisionTotal += result.amount;
-        if (res?.commissionPaid) comisionPagada += result.amount;
+        const result = calculateCommissionForCita(res, barb, services);
+        comisionTotal += result.totalAmount;
+        if (res?.commissionPaid) comisionPagada += result.totalAmount;
         return {
           id: res?.id,
           serviceName: res?.serviceName || res?.service || 'Servicio',
           date: res?.date,
-          amount: result.amount,
-          isConfigured: result.isConfigured,
+          amount: result.totalAmount,
+          isConfigured: result.allConfigured,
           paid: !!res?.commissionPaid,
         };
       });
@@ -934,7 +927,7 @@ const [saleForm, setSaleForm] = useState({
         detalle,
       };
     });
-  }, [branchBarbers, rangeReservations]);
+  }, [branchBarbers, rangeReservations, services]);
 
   const handleLiquidarComisiones = async (barb) => {
     const pendientes = (barb?.detalle || []).filter(d => !d.paid);

@@ -13,6 +13,7 @@ import { FIELD_PERMISSIONS } from '../shared/appointments/permissions';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission } from '../shared/commissions/commissionModel';
+import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 
@@ -798,11 +799,11 @@ useEffect(() => {
 
     const finalizedAppts = barbtAppts.filter(a => a.status === STATUS.COMPLETED);
     const finalizedWithCommission = finalizedAppts.map(item => {
-      const result = calculateCommission(item, activeBarber, services);
+      const result = calculateCommissionForCita(item, activeBarber, services);
 
       return {
         ...item,
-        commission: result.amount
+        commission: result.totalAmount
       };
     });
     const totalServicios = finalizedAppts.length;
@@ -812,10 +813,10 @@ useEffect(() => {
     let sinConfigurar = 0;
 
     finalizedAppts.forEach(item => {
-      const result = calculateCommission(item, activeBarber, services);
-      if (!result.isConfigured) sinConfigurar += 1;
-      comisionTotal += result.amount;
-      if (item.commissionPaid) comisionPaid += result.amount;
+      const result = calculateCommissionForCita(item, activeBarber, services);
+      if (!result.allConfigured) sinConfigurar += 1;
+      comisionTotal += result.totalAmount;
+      if (item.commissionPaid) comisionPaid += result.totalAmount;
     });
 
     const comisionPending = comisionTotal - comisionPaid;
