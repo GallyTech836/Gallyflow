@@ -8,7 +8,6 @@ import { useNegocio } from '../firebase/useNegocio';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
-import { calculateCommission } from '../shared/commissions/commissionModel';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { uploadImage } from '../shared/cloudinary/uploadImage';

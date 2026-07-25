@@ -12,7 +12,6 @@ import AppointmentManageModal from '../shared/appointments/AppointmentManageModa
 import { FIELD_PERMISSIONS } from '../shared/appointments/permissions';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { STATUS } from '../shared/appointments/statusModel';
-import { calculateCommission } from '../shared/commissions/commissionModel';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
