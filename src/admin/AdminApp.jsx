@@ -1150,30 +1150,50 @@ const [saleForm, setSaleForm] = useState({
   };
   
   const handleCreateReservationFromDraft = async (draft) => {
-    const serviceObj = services.find(s => s.id === draft.serviceId);
-    const duration = serviceObj?.duration || 30;
+    // draft.services ya viene armado por el modal compartido (multi-servicio).
+    // Fallback por si algún llamador viejo solo manda draft.serviceId.
+    const draftServices = draft.services && draft.services.length > 0
+      ? draft.services
+      : (() => {
+          const single = services.find(s => s.id === draft.serviceId);
+          return single
+            ? [{ serviceId: single.id, serviceName: single.name, price: single.price || 0, duration: single.duration || 30 }]
+            : [];
+        })();
+
+    // Aplica la promo de martes a cada servicio individualmente.
+    const pricedServices = draftServices.map(s => {
+      const fullService = services.find(sv => sv.id === s.serviceId);
+      const promoPrice = (isTuesday && fullService?.promoPrice) ? fullService.promoPrice : s.price;
+      return { ...s, price: promoPrice };
+    });
+
+    const totalPrice = pricedServices.reduce((sum, s) => sum + Number(s.price || 0), 0);
+    const totalDuration = pricedServices.reduce((sum, s) => sum + Number(s.duration || 30), 0);
+
     const targetProfessionalId = draft.professionalId || 'pending';
-    const endTimeStr = minToTime(timeToMin(draft.time) + duration);
+    const endTimeStr = minToTime(timeToMin(draft.time) + totalDuration);
     const check = checkConflicts(null, targetProfessionalId, draft.date, draft.time, endTimeStr, false, false);
     if (!check.isValid) { triggerToast(check.message, 'error'); return; }
 
     const phoneId = (draft.phone || 'sin-telefono').replace(/[^0-9]/g, '') || 'sin-telefono';
     let clientObj = clients.find(c => c.name.toLowerCase() === draft.clientName.toLowerCase()) || {
       id: phoneId, name: draft.clientName, phone: draft.phone || 'N/A',
-      visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: serviceObj?.name || 'N/A'
+      visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: pricedServices[0]?.serviceName || 'N/A'
     };
     try { await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true }); }
     catch (err) { triggerToast('Error al guardar el cliente: ' + err.message, 'error'); }
 
     const currentBranchObj = branches.find(b => b.name === selectedBranch) || branches[0];
-    const finalPrice = (isTuesday && serviceObj?.promoPrice) ? serviceObj.promoPrice : (serviceObj?.price || 120);
 
     const reservationObj = {
       clientId: clientObj.id, clientName: clientObj.name,
       professionalId: targetProfessionalId, barberId: targetProfessionalId,
-      serviceId: draft.serviceId, serviceName: serviceObj?.name || 'Servicio',
-      price: finalPrice, time: draft.time, startTime: draft.time,
-      endTime: endTimeStr, duration: Number(duration),
+      services: pricedServices,
+      serviceId: pricedServices[0]?.serviceId || '',
+      serviceName: pricedServices.map(s => s.serviceName).join(' + '),
+      price: totalPrice, time: draft.time, startTime: draft.time,
+      endTime: endTimeStr, duration: Number(totalDuration),
       date: draft.date, reservationDate: draft.date, status: 'confirmed',
       paymentMethod: draft.paymentMethod, bookedBy: 'admin',
       branch: targetProfessionalId !== 'pending'
