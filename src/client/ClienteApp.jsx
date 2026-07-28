@@ -193,6 +193,16 @@ export default function App({ negocioSlug } = {}) {
     return () => unsub();
   }, [negocioId]);
 
+  const [blockouts, setBlockouts] = useState([]);
+  useEffect(() => {
+    if (!negocioId) return;
+    const ref = collection(db, 'negocios', negocioId, 'horariosBloqueados');
+    const unsub = onSnapshot(ref, (snap) => {
+      setBlockouts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [negocioId]);
+
   useEffect(() => {
     if (selectedDate) {
       const day = new Date(selectedDate + "T12:00:00").getDay();
@@ -243,6 +253,11 @@ export default function App({ negocioSlug } = {}) {
       c?.status !== 'cancelled'
     );
 
+    const bloqueosDelBarbero = blockouts.filter(b =>
+      b?.date === selectedDate &&
+      (b?.barberId === selectedBarber.id || b?.professionalId === selectedBarber.id)
+    );
+
     const SLOT_STEP = 30; // minutos entre cada horario mostrado (09:00, 09:30, ...)
     const hours = [];
     for (let slotStart = startOfDayMin; slotStart < endOfDayMin; slotStart += SLOT_STEP) {
@@ -262,12 +277,20 @@ export default function App({ negocioSlug } = {}) {
       });
       if (seCruza) continue;
 
+      // No debe cruzarse con ningún bloqueo administrativo del profesional
+      const seCruzaBloqueo = bloqueosDelBarbero.some(b => {
+        const bStart = timeToMin(b?.startTime);
+        const bEnd = timeToMin(b?.endTime);
+        return slotStart < bEnd && slotEnd > bStart;
+      });
+      if (seCruzaBloqueo) continue;
+
       if (!cumpleAnticipacion(hourStr)) continue;
 
       hours.push(hourStr);
     }
     return hours;
-  }, [selectedBarber, selectedDate, selectedServices, citasNegocio]);
+  }, [selectedBarber, selectedDate, selectedServices, citasNegocio, blockouts]);
 
   const calculateTotal = useMemo(() => {
     return selectedServices.reduce((acc, curr) => {
