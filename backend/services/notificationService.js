@@ -16,6 +16,13 @@ const PROVIDERS = {
   email: emailProvider,
 };
 
+// URLs de destino según el rol de quien recibe la notificación. Deben
+// coincidir exactamente con las rutas que reconoce App.jsx en el frontend.
+const APP_URLS = {
+  admin: 'https://gallyflow.vercel.app/',
+  barber: 'https://gallyflow.vercel.app/barber',
+};
+
 export async function getRecipients(negocioId, roles, options = {}) {
   const snap = await db
     .collection('usuarios')
@@ -54,7 +61,7 @@ export async function sendNotification({ tipo, negocioId, data, actorUid, target
   const mensaje = buildMessage(tipo, data);
 
   const results = await Promise.allSettled(
-    recipients.map((r) => PROVIDERS.push.send(r.oneSignalId, mensaje))
+    recipients.map((r) => PROVIDERS.push.send(r.oneSignalId, mensaje, APP_URLS[r.rol]))
   );
 
   const sent = results.filter((r) => r.status === 'fulfilled').length;

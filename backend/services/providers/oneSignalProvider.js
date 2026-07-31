@@ -8,21 +8,25 @@ import { oneSignalConfig } from '../../config/onesignal.js';
  * @param {string} oneSignalId - Subscription ID del dispositivo destino.
  * @param {{ titulo: string, cuerpo: string }} mensaje
  */
-export async function send(oneSignalId, mensaje) {
+export async function send(oneSignalId, mensaje, url) {
+  const body = {
+    app_id: oneSignalConfig.appId,
+    include_subscription_ids: [oneSignalId],
+    headings: { en: mensaje.titulo },
+    contents: { en: mensaje.cuerpo },
+  };
+
+  if (url) {
+    body.url = url;
+  }
+
   const response = await fetch(`${oneSignalConfig.apiUrl}?c=push`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // Las claves nuevas (formato os_v2_app_...) usan el prefijo "Key ",
-      // distinto al "Basic" que usaban las claves heredadas.
       Authorization: `Key ${oneSignalConfig.restApiKey}`,
     },
-    body: JSON.stringify({
-      app_id: oneSignalConfig.appId,
-      include_subscription_ids: [oneSignalId],
-      headings: { en: mensaje.titulo },
-      contents: { en: mensaje.cuerpo },
-    }),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
@@ -32,7 +36,6 @@ export async function send(oneSignalId, mensaje) {
   }
 
   if (!data.id) {
-    // Respuesta válida pero sin destinatario real (ej. el dispositivo se desuscribió).
     throw new Error(`[oneSignalProvider] OneSignal no despachó el mensaje: ${JSON.stringify(data.errors || 'sin detalle')}`);
   }
 
