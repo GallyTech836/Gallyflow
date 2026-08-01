@@ -133,20 +133,6 @@ export default function AppointmentCreateModal({
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (draft.serviceIds.length === 0) return;
-  
-    const servicesForCita = services
-      .filter(s => draft.serviceIds.includes(s.id))
-      .map(s => ({
-        serviceId: s.id,
-        serviceName: s.name,
-        price: s.price || 0,
-        duration: s.duration || 30,
-      }));
-    const { 
-
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-md p-5 relative shadow-2xl">
@@ -304,42 +290,42 @@ export default function AppointmentCreateModal({
                     <option key={b?.id} value={b?.id}>{b?.name}</option>
                   ))}
                 </select>
-                )}
-                </div>
-              </div>
-    
-              {/* ── Sobre Horario ─────────────────────────────────── */}
-              <div className="flex items-center gap-2 bg-[#131728] border border-[#232A4C] rounded-lg p-2.5">
-                <input
-                  type="checkbox"
-                  id="overtime-toggle"
-                  checked={draft.overtime}
-                  onChange={(e) => change('overtime', e.target.checked)}
-                  className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
-                />
-                <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-amber-400 cursor-pointer select-none">
-                  Sobre Horario (permite editar la duración de los servicios)
-                </label>
-              </div>
-    
-              {draft.overtime && draft.serviceIds.length > 0 && (
-                <div className="p-3 bg-[#131728] border border-amber-500/20 rounded-lg space-y-2">
-                  <label className="text-[9px] text-amber-400 font-bold block">Duración por servicio (minutos)</label>
-                  {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
-                    <div key={s?.id} className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-slate-300 truncate flex-1">{s?.name}</span>
-                      <input
-                        type="number"
-                        min="5"
-                        step="5"
-                        value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
-                        onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
-                        className="w-16 bg-[#0C0E17] border border-[#232B4C] rounded-lg p-1.5 text-xs text-white outline-none text-center font-mono"
-                      />
-                    </div>
-                  ))}
-                </div>
               )}
+            </div>
+          </div>
+
+          {/* ── Sobre Horario ─────────────────────────────────── */}
+          <div className="flex items-center gap-2 bg-[#131728] border border-[#232A4C] rounded-lg p-2.5">
+            <input
+              type="checkbox"
+              id="overtime-toggle"
+              checked={draft.overtime}
+              onChange={(e) => change('overtime', e.target.checked)}
+              className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+            />
+            <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-amber-400 cursor-pointer select-none">
+              Sobre Horario (permite editar la duración de los servicios)
+            </label>
+          </div>
+
+          {draft.overtime && draft.serviceIds.length > 0 && (
+            <div className="p-3 bg-[#131728] border border-amber-500/20 rounded-lg space-y-2">
+              <label className="text-[9px] text-amber-400 font-bold block">Duración por servicio (minutos)</label>
+              {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
+                <div key={s?.id} className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-300 truncate flex-1">{s?.name}</span>
+                  <input
+                    type="number"
+                    min="5"
+                    step="5"
+                    value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
+                    onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
+                    className="w-16 bg-[#0C0E17] border border-[#232B4C] rounded-lg p-1.5 text-xs text-white outline-none text-center font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── Fecha y Hora ─────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-3">
