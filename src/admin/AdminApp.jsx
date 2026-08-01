@@ -1219,7 +1219,7 @@ const [saleForm, setSaleForm] = useState({
       branchId: currentBranchObj?.id || 'br1',
       clientPhone: draft.phone || clientObj.phone || '',
       countryCode: detectPhoneCountry(draft.phone)?.code || '+591',
-      notes: draft.notes || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      notes: draft.notes || '', overtime: !!draft.overtime, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     };
 
     try {
