@@ -1,6 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { calculateTotals } from './serviceSelection';
+
+const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+// Devuelve el nombre del día (en español, igual formato que availableDays del
+// servicio) para una fecha 'YYYY-MM-DD'. Devuelve null si no hay fecha.
+function getDayName(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  return DAY_NAMES[d.getDay()];
+}
 
 // Detecta el país por prefijo de teléfono. Lógica extraída de AdminApp.jsx.
 function detectPhoneCountry(phoneNum) {
@@ -87,6 +97,26 @@ export default function AppointmentCreateModal({
     );
   }, [clientSearch, clients]);
 
+  // Servicios visibles ese día de la semana. Si un servicio no tiene
+  // availableDays configurado (o viene vacío), se considera visible todos
+  // los días — así no rompemos servicios creados antes de esta funcionalidad.
+  const servicesForDate = useMemo(() => {
+    const dayName = getDayName(draft.date);
+    if (!dayName) return services;
+    return services.filter(s => !s?.availableDays?.length || s.availableDays.includes(dayName));
+  }, [services, draft.date]);
+
+  // Si cambia la fecha y algún servicio ya elegido deja de estar disponible
+  // ese día, lo deseleccionamos automáticamente.
+  useEffect(() => {
+    setDraft(prev => {
+      const validIds = servicesForDate.map(s => s.id);
+      const filteredIds = prev.serviceIds.filter(id => validIds.includes(id));
+      if (filteredIds.length === prev.serviceIds.length) return prev;
+      return { ...prev, serviceIds: filteredIds };
+    });
+  }, [servicesForDate]);
+
   const change = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
 
   const toggleService = (serviceId) => {
@@ -109,7 +139,7 @@ export default function AppointmentCreateModal({
     e.preventDefault();
     if (draft.serviceIds.length === 0) return;
   
-    const servicesForCita = services
+    const servicesForCita = servicesForDate
       .filter(s => draft.serviceIds.includes(s.id))
       .map(s => {
         const customDuration = draft.overtime && draft.serviceDurations[s.id];
@@ -248,14 +278,17 @@ export default function AppointmentCreateModal({
             >
               <span className="truncate">
                 {draft.serviceIds.length > 0
-                  ? services.filter(s => draft.serviceIds.includes(s.id)).map(s => s.name).join(', ')
+                  ? servicesForDate.filter(s => draft.serviceIds.includes(s.id)).map(s => s.name).join(', ')
                   : 'Selecciona servicios...'}
               </span>
               <span className="text-slate-400 ml-2">{showServicesList ? '▲' : '▼'}</span>
             </button>
             {showServicesList && (
               <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
-                {services.map(s => (
+                {servicesForDate.length === 0 && (
+                  <p className="text-[10px] text-slate-500 p-1">No hay servicios disponibles para el día seleccionado.</p>
+                )}
+                {servicesForDate.map(s => (
                   <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
                     <input
                       type="checkbox"
