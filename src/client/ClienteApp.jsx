@@ -125,7 +125,8 @@ export default function App({ negocioSlug } = {}) {
           promoPrice: data.promoPrice ? Number(data.promoPrice) : undefined,
           duration: `${data.duration || 30} min`,
           durationMin: Number(data.duration || 30),
-          description: data.description || ''
+          description: data.description || '',
+          availableDays: data.availableDays || []
         };
       }));
     });
@@ -220,6 +221,16 @@ export default function App({ negocioSlug } = {}) {
     const m = (min % 60).toString().padStart(2, '0');
     return `${h}:${m}`;
   };
+
+  // Servicios visibles para el día elegido en el calendario. Si el servicio
+  // no tiene availableDays configurado (o viene vacío), se muestra todos los
+  // días — así no rompemos servicios creados antes de esta función.
+  const servicesForDate = useMemo(() => {
+    if (!selectedDate) return services;
+    const date = new Date(selectedDate + "T12:00:00");
+    const dayName = DAY_NAMES_MON_FIRST[(date.getDay() + 6) % 7];
+    return services.filter(s => !s?.availableDays?.length || s.availableDays.includes(dayName));
+  }, [services, selectedDate]);
 
   const availableHours = useMemo(() => {
     const serviceDuration = selectedServices[0]?.durationMin || 30;
@@ -320,6 +331,41 @@ export default function App({ negocioSlug } = {}) {
     }, 4000);
   };
 
+  // Ahora los servicios se eligen DESPUÉS de la hora, así que recién acá
+  // sabemos la duración real. Revalidamos que el horario elegido siga
+  // alcanzando (que no se cruce con otra cita real del profesional) antes
+  // de dejar avanzar; si no alcanza, se manda de vuelta a elegir otra hora.
+  const handleServicesNext = () => {
+    if (selectedServices.length === 0) return;
+
+    if (selectedBarber && !selectedBarber.isPending && selectedDate && selectedHour) {
+      const totalDuration = selectedServices.reduce((acc, s) => acc + (s?.durationMin || 30), 0);
+      const slotStart = timeToMin(selectedHour);
+      const slotEnd = slotStart + totalDuration;
+
+      const citasDelBarbero = citasNegocio.filter(c =>
+        c?.date === selectedDate &&
+        (c?.professionalId === selectedBarber.id || c?.barberId === selectedBarber.id) &&
+        c?.status !== 'cancelled'
+      );
+
+      const seCruza = citasDelBarbero.some(c => {
+        const cStart = timeToMin(c?.time);
+        const cEnd = cStart + (c?.duration || 30);
+        return slotStart < cEnd && slotEnd > cStart;
+      });
+
+      if (seCruza) {
+        triggerToast('El horario elegido no alcanza para estos servicios. Elige otro horario.', 'error');
+        setSelectedHour(null);
+        setStep(3);
+        return;
+      }
+    }
+
+    setStep(5);
+  };
+
   const handleBooking = async (e) => {
     if (e) e.preventDefault();
     if (!clientName.trim()) {
@@ -400,29 +446,30 @@ export default function App({ negocioSlug } = {}) {
         setSelected={setSelectedBranch}
         onNext={() => setStep(2)}
       />;
-      case 2: return <ServicesStep 
-        services={services}
-        selected={selectedServices} 
-        toggle={toggleService} 
-        onNext={() => setStep(3)} 
-        total={calculateTotal}
-      />;
-      case 3: return <BarberStep 
+      case 2: return <BarberStep 
         barbers={barbers}
         selected={selectedBarber} 
         setSelected={setSelectedBarber} 
-        onNext={() => setStep(4)} 
-        onBack={() => setStep(2)} 
+        onNext={() => setStep(3)} 
+        onBack={() => setStep(1)} 
       />;
-      case 4: return <DateTimeStep 
+      case 3: return <DateTimeStep 
         hours={availableHours}
         date={selectedDate} setDate={setSelectedDate} 
         hour={selectedHour} setHour={setSelectedHour} 
         isTuesday={isTuesday}
         currentMonth={currentCalendarMonth}
         setCurrentMonth={setCurrentCalendarMonth}
-        onNext={() => setStep(5)} 
+        onNext={() => setStep(4)} 
+        onBack={() => setStep(2)} 
+      />;
+      case 4: return <ServicesStep 
+        services={servicesForDate}
+        selected={selectedServices} 
+        toggle={toggleService} 
+        onNext={handleServicesNext} 
         onBack={() => setStep(3)} 
+        total={calculateTotal}
       />;
       case 5: return <PaymentStep 
         method={paymentMethod} setMethod={setPaymentMethod} 
