@@ -11,7 +11,12 @@ export function useServicios(uid) {
 
     const ref = collection(db, 'negocios', uid, 'servicios');
     const unsub = onSnapshot(ref, (snap) => {
-      setServicios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Orden por fecha de creación real, no por el ID del documento
+      // (el ID se reutiliza al borrar servicios, así que no sirve como orden).
+      // Los servicios viejos sin createdAt quedan primero (tratados como más antiguos).
+      lista.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      setServicios(lista);
       setLoading(false);
     });
 
@@ -31,7 +36,7 @@ export function useServicios(uid) {
       shortId = `s${n}`;
     }
 
-    await setDoc(doc(db, 'negocios', uid, 'servicios', shortId), datos);
+    await setDoc(doc(db, 'negocios', uid, 'servicios', shortId), { ...datos, createdAt: Date.now() });
   }
 
   async function editarServicio(id, datos) {

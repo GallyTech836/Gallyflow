@@ -116,7 +116,7 @@ export default function App({ negocioSlug } = {}) {
     if (!negocioId) return;
     const ref = collection(db, 'negocios', negocioId, 'servicios');
     const unsub = onSnapshot(ref, (snap) => {
-      setServices(snap.docs.map(d => {
+      const lista = snap.docs.map(d => {
         const data = d.data();
         return {
           id: d.id,
@@ -126,9 +126,13 @@ export default function App({ negocioSlug } = {}) {
           duration: `${data.duration || 30} min`,
           durationMin: Number(data.duration || 30),
           description: data.description || '',
-          availableDays: data.availableDays || []
+          availableDays: data.availableDays || [],
+          createdAt: data.createdAt || 0
         };
-      }));
+      });
+      // Mismo orden que en Admin: por fecha de creación real, no por el ID.
+      lista.sort((a, b) => a.createdAt - b.createdAt);
+      setServices(lista);
     });
     return () => unsub();
   }, [negocioId]);
