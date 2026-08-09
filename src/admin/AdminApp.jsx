@@ -871,18 +871,6 @@ const [saleForm, setSaleForm] = useState({
     });
   }, [dayReservations, filterBarberId, filterStatus]);
 
-  // Cuenta cuántas reservas del día tiene cada profesional (para mostrar
-  // debajo del nombre en la cabecera de la agenda). Se basa en dayReservations
-  // (no en filteredReservations) para que el contador no cambie al filtrar por status.
-  const barberDayCounts = useMemo(() => {
-    const counts = {};
-    (dayReservations || []).forEach(res => {
-      const key = res?.professionalId || res?.barberId || 'pending';
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return counts;
-  }, [dayReservations]);
-
   const rangeMetrics = useMemo(() => {
     const completed = (rangeReservations || []).filter(r => r?.status === 'completed');
     const totalRevenue = completed.reduce((sum, r) => sum + Number(r?.price || 0), 0);
@@ -977,13 +965,8 @@ const [saleForm, setSaleForm] = useState({
     });
   }, [branchBarbers, selectedDate, agendaView]);
 
-  const hoursRange = Array.from({ length: 28 }, (_, i) => 8 + i * 0.5);
+  const hoursRange = Array.from({ length: 14 }, (_, i) => i + 8);
 
-  const formatHourLabel = (h) => {
-    const hh = Math.floor(h);
-    const mm = h % 1 === 0 ? '00' : '30';
-    return `${hh.toString().padStart(2, '0')}:${mm}`;
-  };
   const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
   const getBarberDayAvailability = (barber, dateStr) => {
@@ -1035,8 +1018,7 @@ const [saleForm, setSaleForm] = useState({
     );
 
     for (const res of activeRes) {
-      const resService = (services || []).find(s => s?.id === res?.serviceId);
-      const resDuration = resService ? Number(resService.duration || 30) : 30;
+      const resDuration = getReservationDuration(res, services);
       const resStart = timeToMin(res?.time);
       const resEnd = resStart + resDuration;
 
@@ -1219,7 +1201,7 @@ const [saleForm, setSaleForm] = useState({
       branchId: currentBranchObj?.id || 'br1',
       clientPhone: draft.phone || clientObj.phone || '',
       countryCode: detectPhoneCountry(draft.phone)?.code || '+591',
-      notes: draft.notes || '', overtime: !!draft.overtime, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      notes: draft.notes || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     };
 
     try {
@@ -2352,23 +2334,17 @@ const [saleForm, setSaleForm] = useState({
                     <div className="overflow-x-auto scrollbar-none">
                       <div className="flex divide-x divide-[#1B2136] min-w-[700px] md:min-w-full">
                         
-                      {filterBarberId === 'all' && (
-                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-[#13152c] flex flex-col items-center justify-center gap-0.5 text-indigo-400 font-bold border-r border-[#1B2136]">
-                            <div className="flex items-center gap-2">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span className="text-[10px] tracking-wider uppercase font-black font-mono font-bold">Pendientes</span>
-                            </div>
-                            <span className="text-[9px] font-mono font-bold text-indigo-300/70">{barberDayCounts['pending'] || 0} reservas</span>
+                        {filterBarberId === 'all' && (
+                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-[#13152c] flex items-center justify-center gap-2 text-indigo-400 font-bold border-r border-[#1B2136]">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span className="text-[10px] tracking-wider uppercase font-black font-mono font-bold">Pendientes</span>
                           </div>
                         )}
 
                         {(branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId).map(b => (
-                          <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5">
-                            <div className="flex items-center gap-2">
-                              <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-[#232A4C]" />
-                              <h5 className="text-[11px] font-bold text-slate-200 truncate">{b?.name}</h5>
-                            </div>
-                            <span className="text-[9px] font-mono font-bold text-slate-500">{barberDayCounts[b?.id] || 0} reservas</span>
+                          <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex items-center justify-center gap-2">
+                            <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-[#232A4C]" />
+                            <h5 className="text-[11px] font-bold text-slate-200 truncate">{b?.name}</h5>
                           </div>
                         ))}
                       </div>
@@ -2380,7 +2356,7 @@ const [saleForm, setSaleForm] = useState({
                     {currentTimeMinutes >= 480 && currentTimeMinutes <= 1320 && (
                       <div 
                         className="absolute left-0 right-0 border-t-2 border-rose-500 z-10 flex items-center pointer-events-none"
-                        style={{ top: `${((currentTimeMinutes - 480) / 840) * 1120}px` }}
+                        style={{ top: `${((currentTimeMinutes - 480) / 840) * 560}px` }}
                       >
                         <div className="w-2.5 h-2.5 rounded-full bg-rose-500 -ml-1" />
                       </div>
@@ -2389,7 +2365,7 @@ const [saleForm, setSaleForm] = useState({
                     <div className="bg-[#0C0E17] border-r border-[#1B2136] divide-y divide-[#1B2136]/30">
                       {hoursRange.map(hour => (
                         <div key={hour} className="h-10 px-1.5 flex items-start justify-end pt-1">
-                          <span className="font-mono text-[9px] text-slate-500 font-bold">{formatHourLabel(hour)}</span>
+                          <span className="font-mono text-[9px] text-slate-500 font-bold">{`${hour.toString().padStart(2, '0')}:00`}</span>
                         </div>
                       ))}
                     </div>
@@ -2402,7 +2378,7 @@ const [saleForm, setSaleForm] = useState({
                             {hoursRange.map(hour => (
                               <div 
                                 key={hour} 
-                                onClick={() => handleEmptySlotClick('pending', formatHourLabel(hour))}
+                                onClick={() => handleEmptySlotClick('pending', `${hour.toString().padStart(2, '0')}:00`)}
                                 className="h-10 w-full hover:bg-slate-800/20 cursor-pointer border-b border-[#1B2136]/10"
                               />
                             ))}
@@ -2412,8 +2388,8 @@ const [saleForm, setSaleForm] = useState({
                               const startMin = h * 60 + m;
                               const duration = getReservationDuration(res, services);
 
-                              const topPx = ((startMin - 480) / 840) * 1120;
-                              const heightPx = (duration / 840) * 1120;
+                              const topPx = ((startMin - 480) / 840) * 560;
+                              const heightPx = (duration / 840) * 560;
 
                               return (
                                 <div 
@@ -2444,7 +2420,7 @@ const [saleForm, setSaleForm] = useState({
                                 isHourWithinAvailability(barberDayAvailability, hour) ? (
                                   <div 
                                     key={hour} 
-                                    onClick={() => handleEmptySlotClick(barber?.id, formatHourLabel(hour))}
+                                    onClick={() => handleEmptySlotClick(barber?.id, `${hour.toString().padStart(2, '0')}:00`)}
                                     className="h-10 w-full hover:bg-slate-800/20 cursor-pointer border-b border-[#1B2136]/10"
                                   />
                                 ) : (
@@ -2460,8 +2436,8 @@ const [saleForm, setSaleForm] = useState({
                                 const startMin = h * 60 + m;
                                 const duration = getReservationDuration(res, services);
 
-                                const topPx = ((startMin - 480) / 840) * 1120;
-                                const heightPx = (duration / 840) * 1120;
+                                const topPx = ((startMin - 480) / 840) * 560;
+                                const heightPx = (duration / 840) * 560;
 
                                 return (
                                   <div 
@@ -2484,8 +2460,8 @@ const [saleForm, setSaleForm] = useState({
                                 const endMin = timeToMin(bl?.endTime);
                                 const duration = endMin - startMin;
 
-                                const topPx = ((startMin - 480) / 840) * 1120;
-                                const heightPx = (duration / 840) * 1120;
+                                const topPx = ((startMin - 480) / 840) * 560;
+                                const heightPx = (duration / 840) * 560;
 
                                 return (
                                   <div 
