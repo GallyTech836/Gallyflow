@@ -72,7 +72,7 @@ export default function AppointmentCreateModal({
     phone: '',
     clientId: null,
     serviceIds: services[0] ? [services[0].id] : [],
-    professionalId: fixedProfessional?.id || 'pending',
+    professionalId: fixedProfessional?.id || initialProfessionalId || 'pending',
     date: initialDate,
     time: initialTime,
     paymentMethod: 'Efectivo',
