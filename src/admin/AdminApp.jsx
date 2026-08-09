@@ -4031,12 +4031,13 @@ const [saleForm, setSaleForm] = useState({
       {/* 1. MODAL: AGENDAR CITA */}
       {activeModal === 'add-reservation' && (
         <AppointmentCreateModal
-          services={services}
-          professionals={branchBarbers}
-          clients={clients}
-          initialDate={newReservation.date || selectedDate}
-          initialTime={newReservation.time || '12:00'}
-          onClose={() => setActiveModal(null)}
+        services={services}
+        professionals={branchBarbers}
+        clients={clients}
+        initialDate={newReservation.date || selectedDate}
+        initialTime={newReservation.time || '12:00'}
+        initialProfessionalId={newReservation.professionalId}   // ← nuevo
+        onClose={() => setActiveModal(null)}
           onSubmit={(draft) => {
             // Reutilizar handleCreateReservation pero alimentado por el draft
             // del componente compartido en lugar del state newReservation.

@@ -61,6 +61,7 @@ export default function AppointmentCreateModal({
   clients = [],
   initialDate = '',
   initialTime = '12:00',
+  initialProfessionalId = null,
   fixedProfessional = null,
   onSubmit,
   onClose,
