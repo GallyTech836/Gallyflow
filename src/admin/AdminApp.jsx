@@ -871,6 +871,18 @@ const [saleForm, setSaleForm] = useState({
     });
   }, [dayReservations, filterBarberId, filterStatus]);
 
+  // Cuenta cuántas reservas del día tiene cada profesional (para mostrar
+  // debajo del nombre en la cabecera de la agenda). Se basa en dayReservations
+  // (no en filteredReservations) para que el contador no cambie al filtrar por status.
+  const barberDayCounts = useMemo(() => {
+    const counts = {};
+    (dayReservations || []).forEach(res => {
+      const key = res?.professionalId || res?.barberId || 'pending';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }, [dayReservations]);
+
   const rangeMetrics = useMemo(() => {
     const completed = (rangeReservations || []).filter(r => r?.status === 'completed');
     const totalRevenue = completed.reduce((sum, r) => sum + Number(r?.price || 0), 0);
@@ -2340,17 +2352,23 @@ const [saleForm, setSaleForm] = useState({
                     <div className="overflow-x-auto scrollbar-none">
                       <div className="flex divide-x divide-[#1B2136] min-w-[700px] md:min-w-full">
                         
-                        {filterBarberId === 'all' && (
-                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-[#13152c] flex items-center justify-center gap-2 text-indigo-400 font-bold border-r border-[#1B2136]">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            <span className="text-[10px] tracking-wider uppercase font-black font-mono font-bold">Pendientes</span>
+                      {filterBarberId === 'all' && (
+                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-[#13152c] flex flex-col items-center justify-center gap-0.5 text-indigo-400 font-bold border-r border-[#1B2136]">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span className="text-[10px] tracking-wider uppercase font-black font-mono font-bold">Pendientes</span>
+                            </div>
+                            <span className="text-[9px] font-mono font-bold text-indigo-300/70">{barberDayCounts['pending'] || 0} reservas</span>
                           </div>
                         )}
 
                         {(branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId).map(b => (
-                          <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex items-center justify-center gap-2">
-                            <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-[#232A4C]" />
-                            <h5 className="text-[11px] font-bold text-slate-200 truncate">{b?.name}</h5>
+                          <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5">
+                            <div className="flex items-center gap-2">
+                              <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-[#232A4C]" />
+                              <h5 className="text-[11px] font-bold text-slate-200 truncate">{b?.name}</h5>
+                            </div>
+                            <span className="text-[9px] font-mono font-bold text-slate-500">{barberDayCounts[b?.id] || 0} reservas</span>
                           </div>
                         ))}
                       </div>
