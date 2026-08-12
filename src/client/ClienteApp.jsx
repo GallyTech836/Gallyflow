@@ -1091,7 +1091,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
   useEffect(() => {
     const timer = setTimeout(() => {
       onReset();
-    }, 8000);
+    }, 10000);
 
     return () => clearTimeout(timer);
   }, [onReset]);
@@ -1121,7 +1121,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
         </h2>
 
         <p className="text-slate-400 text-xs leading-relaxed max-w-xs mx-auto">
-          Tu cita quedó agendada. El staff de profesionales ya recibió la información y se preparará para tu llegada.
+          Tu cita quedó agendada. El profesionales seleccionado ya recibió la información y se preparará para tu llegada.
         </p>
       </div>
 
