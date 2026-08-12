@@ -493,7 +493,14 @@ export default function App({ negocioSlug } = {}) {
         loading={loading}
         onBack={() => setStep(5)} 
       />;
-      case 7: return <SuccessStep onReset={resetBooking} />;
+      case 7: return <SuccessStep 
+        onReset={resetBooking} 
+        selectedDate={selectedDate}
+        selectedHour={selectedHour}
+        selectedBarber={selectedBarber}
+        selectedServices={selectedServices}
+        total={calculateTotal}
+      />;
       default: return <Home heroConfig={heroConfig} />;
     }
   };
@@ -1077,15 +1084,30 @@ const ConfirmStep = ({
   </div>
 );
 
-const SuccessStep = ({ onReset }) => {
+const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total }) => {
 
+  // Se amplía de 3s a 8s: el cliente necesita tiempo real para leer el
+  // resumen de su reserva, no solo ver el ícono de check un instante.
   useEffect(() => {
     const timer = setTimeout(() => {
       onReset();
-    }, 3000);
+    }, 8000);
 
     return () => clearTimeout(timer);
   }, [onReset]);
+
+  // Fecha legible ("miércoles, 12 de agosto") a partir del mismo string
+  // "YYYY-MM-DD" que ya usa el resto del flujo (DateTimeStep/ConfirmStep),
+  // sin tocar el formato que se guarda en Firestore.
+  const fechaLegible = useMemo(() => {
+    if (!selectedDate) return '';
+    const texto = new Date(selectedDate + "T12:00:00").toLocaleDateString('es-ES', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }, [selectedDate]);
 
   return (
     <div className="flex-1 flex flex-col justify-center items-center text-center py-6 space-y-6 animate-scale-up">
@@ -1095,19 +1117,54 @@ const SuccessStep = ({ onReset }) => {
 
       <div className="space-y-2">
         <h2 className="text-3xl font-extrabold text-white tracking-tight">
-          ¡Reserva Asegurada!
+          ¡Reserva Confirmada!
         </h2>
 
         <p className="text-slate-400 text-xs leading-relaxed max-w-xs mx-auto">
-          Tu cita se ha agendado con éxito. El staff de profesionales ha recibido la información y se preparará para tu llegada.
-        </p>
-
-        <p className="text-indigo-400 text-[11px] font-semibold pt-2">
-          Volviendo al inicio...
+          Tu cita quedó agendada. El staff de profesionales ya recibió la información y se preparará para tu llegada.
         </p>
       </div>
 
-      <div className="w-full pt-6">
+      {/* RESUMEN: mismos datos que ConfirmStep, para que el cliente vea de
+          un vistazo que lo que reservó es justo lo que quedó guardado. */}
+      {(selectedDate || selectedHour || selectedBarber) && (
+        <div className="w-full bg-[#111126]/60 border border-[#232343]/50 p-4 rounded-2xl space-y-2.5 text-xs text-slate-300 text-left">
+          {selectedServices?.length > 0 && (
+            <div className="flex justify-between gap-3 pb-2 border-b border-[#232343]/40">
+              <span className="font-semibold text-slate-400 shrink-0">Servicios:</span>
+              <span className="font-bold text-right text-white">
+                {selectedServices.map(s => s.name).join(', ')}
+              </span>
+            </div>
+          )}
+          {selectedBarber && (
+            <div className="flex justify-between pb-2 border-b border-[#232343]/40">
+              <span className="font-semibold text-slate-400">Profesional:</span>
+              <span className="font-bold text-white">{selectedBarber.name}</span>
+            </div>
+          )}
+          {(fechaLegible || selectedHour) && (
+            <div className="flex justify-between gap-3 pb-2 border-b border-[#232343]/40">
+              <span className="font-semibold text-slate-400 shrink-0">Fecha y Hora:</span>
+              <span className="font-bold text-indigo-300 text-right">
+                {fechaLegible}{selectedHour ? ` · ${selectedHour} Hrs` : ''}
+              </span>
+            </div>
+          )}
+          {typeof total === 'number' && (
+            <div className="flex justify-between pt-1">
+              <span className="font-bold text-slate-400">Total a pagar:</span>
+              <span className="text-base font-black text-emerald-400">{total} Bs</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-indigo-400 text-[11px] font-semibold">
+        Volviendo al inicio...
+      </p>
+
+      <div className="w-full">
         <button
           onClick={onReset}
           className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600/15 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-black uppercase text-xs sm:text-sm tracking-widest rounded-2xl transition-all active:scale-[0.97]"
