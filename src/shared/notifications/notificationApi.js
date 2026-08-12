@@ -20,3 +20,14 @@ export async function notify(tipo, negocioId, data, actorUid, targetProfessional
   });
   return res.json();
 }
+
+// Push directo a UN dispositivo (usado por ClienteApp para confirmarle al
+// cliente su propia reserva). No pasa por `usuarios` ni por negocioId/rol.
+export async function notifyDirect(oneSignalId, tipo, data) {
+  const res = await fetch(`${BASE_URL}/notifications/send-direct`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oneSignalId, tipo, data }),
+  });
+  return res.json();
+}

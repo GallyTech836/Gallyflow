@@ -15,6 +15,8 @@ export function buildMessage(tipo, data = {}) {
       return { titulo: '🔔¡Reserva cancelada!', cuerpo: `Se canceló la reserva de ${cliente}${hora}.` };
     case 'RESERVA_MODIFICADA':
       return { titulo: '🔔¡Reserva modificada!', cuerpo: `Se modificó la reserva de ${cliente}${hora}.` };
+    case 'RESERVA_CONFIRMADA_CLIENTE':
+      return { titulo: '✅ ¡Reserva confirmada!', cuerpo: `Tu cita${hora} quedó agendada. ¡Te esperamos!` };
     default:
       return { titulo: 'GallyFlow', cuerpo: 'Tienes una actualización en tus reservas.' };
   }

@@ -47,6 +47,28 @@ export async function getRecipients(negocioId, roles, options = {}) {
   return recipients;
 }
 
+// Envío DIRECTO a un solo subscriptionId de OneSignal, sin pasar por
+// getRecipients() ni por la colección `usuarios` (esa colección y esa
+// función son solo para admin/barber). Pensado para notificar al propio
+// cliente su propia reserva justo después de crearla, en la misma sesión
+// del navegador donde reservó — no requiere guardar nada en Firestore.
+export async function sendDirectNotification({ oneSignalId, tipo, data }) {
+  if (!oneSignalId) {
+    return { sent: 0, skipped: true, reason: 'sin oneSignalId' };
+  }
+
+  const mensaje = buildMessage(tipo, data);
+
+  try {
+    await PROVIDERS.push.send(oneSignalId, mensaje);
+    logger.info(`[notificationService] ${tipo}: push directo enviado a oneSignalId=${oneSignalId}`);
+    return { sent: 1, failed: 0, total: 1 };
+  } catch (err) {
+    logger.warn(`[notificationService] Falló push directo (${tipo}):`, err.message);
+    return { sent: 0, failed: 1, total: 1 };
+  }
+}
+
 export async function sendNotification({ tipo, negocioId, data, actorUid, targetProfessionalId }) {
   const recipients = await getRecipients(negocioId, ['admin', 'barber'], {
     excludeUid: actorUid,

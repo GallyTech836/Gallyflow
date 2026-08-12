@@ -7,6 +7,7 @@ import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
 import { notify, NotificationType } from '../shared/notifications';
 import { calculateTotals } from '../shared/appointments/serviceSelection';
+import { confirmBookingToClient } from './useClientBookingConfirmation';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -432,6 +433,9 @@ export default function App({ negocioSlug } = {}) {
         createdAt: new Date().toISOString()
       });
       notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, professionalId);
+      // Sin "await" a propósito: la confirmación visual (SuccessStep) no
+      // debe esperar al diálogo de permiso de notificaciones del navegador.
+      confirmBookingToClient({ time: selectedHour });
       setStep(7); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);
