@@ -511,38 +511,38 @@ export default function App({ negocioSlug } = {}) {
 
   if (negocioResolving) {
     return (
-      <div className="min-h-screen bg-[#070714] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      <div className="min-h-screen bg-nexus-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-nexus-border border-t-nexus-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   if (negocioNotFound) {
     return (
-      <div className="min-h-screen bg-[#070714] text-[#f1f3f9] font-sans flex items-center justify-center p-6 text-center">
-        <p className="text-sm text-slate-400">No se encontró el negocio solicitado.</p>
+      <div className="min-h-screen bg-nexus-background text-nexus-text font-sans flex items-center justify-center p-6 text-center">
+        <p className="text-sm text-nexus-text-secondary">No se encontró el negocio solicitado.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#070714] text-[#f1f3f9] font-sans selection:bg-[#6366f1] selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-[#6366f1]/10 blur-[140px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#4f46e5]/800 blur-[160px] opacity-10 rounded-full" />
-        <div className="absolute top-[40%] right-[-10%] w-[35%] h-[35%] bg-blue-500/5 blur-[120px] rounded-full" />
+        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
+        <div className="absolute top-[40%] right-[-10%] w-[35%] h-[35%] bg-nexus-accent/5 blur-[120px] rounded-full" />
       </div>
 
       <main className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col p-5 sm:p-6 justify-between">
         
         {step > 0 && step < 7 && (
-          <div className="mb-6 animate-fade-in bg-[#111126]/60 border border-[#232343]/50 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+          <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
             <button 
               onClick={() => {
                 if (step === 1) setStep(0);
                 else setStep(step - 1);
               }}
-              className="p-1.5 rounded-lg bg-[#181835] hover:bg-[#202047] text-slate-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary hover:text-nexus-text transition-colors"
             >
               <ChevronLeft size={16} />
             </button>
@@ -552,15 +552,15 @@ export default function App({ negocioSlug } = {}) {
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     step === s 
-                      ? 'w-6 bg-[#6366f1]' 
+                      ? 'w-6 bg-nexus-primary' 
                       : step > s 
-                        ? 'w-3 bg-[#4f46e5]/60' 
-                        : 'w-2 bg-[#232343]'
+                        ? 'w-3 bg-nexus-primary/50' 
+                        : 'w-2 bg-nexus-border'
                   }`} 
                 />
               ))}
             </div>
-            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">Paso {step}/6</span>
+            <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold font-mono">Paso {step}/6</span>
           </div>
         )}
         
@@ -568,24 +568,24 @@ export default function App({ negocioSlug } = {}) {
           {renderStep()}
         </div>
 
-        <div className="text-center pt-8 pb-2 text-[10px] text-slate-500 tracking-widest font-bold">
-          POTENCIADO POR <span className="text-indigo-400">GALLYFLOW</span>
+        <div className="text-center pt-8 pb-2 text-[10px] text-nexus-text-muted tracking-widest font-bold">
+          POTENCIADO POR <span className="text-nexus-primary">GALLYFLOW</span>
         </div>
       </main>
       <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 max-w-xs">
         {toasts.map(t => (
           <div 
             key={t?.id} 
-            className={`p-3 rounded-xl border shadow-2xl flex items-center gap-2.5 transition-all transform duration-300 ${
+            className={`p-3 rounded-xl border shadow-lg flex items-center gap-2.5 transition-all transform duration-300 ${
               t?.type === 'error' 
-                ? 'bg-[#1F0E13] border-red-500/25 text-red-200 animate-fadeIn' 
-                : 'bg-[#0E1F15] border-indigo-500/25 text-indigo-200 animate-fadeIn'
+                ? 'bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text animate-fadeIn' 
+                : 'bg-nexus-success-bg border-nexus-success/25 text-nexus-success-text animate-fadeIn'
             }`}
           >
             {t?.type === 'error' ? (
-              <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <XCircle className="w-4 h-4 text-nexus-error shrink-0" />
             ) : (
-              <CheckCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+              <CheckCircle className="w-4 h-4 text-nexus-success shrink-0" />
             )}
             <p className="text-[11px] font-bold">{t?.message}</p>
           </div>
@@ -606,11 +606,11 @@ const Home = ({ onNext, heroConfig }) => (
 const BranchStep = ({ branches, selected, setSelected, onNext }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-white mb-1">Selecciona Sucursal</h2>
-      <p className="text-xs text-slate-400 mb-5">Elige el local donde quieres realizar tu cita.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Sucursal</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Elige el local donde quieres realizar tu cita.</p>
 
       {branches.length === 0 ? (
-        <p className="text-center py-8 text-xs text-slate-500">No hay sucursales disponibles por el momento.</p>
+        <p className="text-center py-8 text-xs text-nexus-text-muted">No hay sucursales disponibles por el momento.</p>
       ) : (
         <div className="space-y-3.5">
           {branches.map((b) => (
@@ -622,26 +622,26 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => (
               }}
               className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
                 selected?.id === b.id
-                  ? 'border-indigo-500 bg-indigo-600/5'
-                  : 'border-[#232343]/50 bg-[#111126]/40 hover:border-[#2a2a52]'
+                  ? 'border-nexus-primary bg-nexus-primary-soft'
+                  : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/40'
               }`}
             >
-              <div className="w-10 h-10 rounded-xl bg-[#181835] flex items-center justify-center text-indigo-400 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary shrink-0">
                 <MapPin size={18} />
               </div>
               <div className="text-left flex-1">
-                <h3 className="font-bold text-sm text-white">{b.name}</h3>
+                <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
                 {b.address && (
-                  <p className="text-slate-400 text-[11px] mt-0.5">{b.address}</p>
+                  <p className="text-nexus-text-secondary text-[11px] mt-0.5">{b.address}</p>
                 )}
                 {b.schedule && (
-                  <p className="text-indigo-400 text-[10px] font-bold mt-1 flex items-center gap-1">
+                  <p className="text-nexus-primary text-[10px] font-bold mt-1 flex items-center gap-1">
                     <Clock3 size={10} /> {b.schedule}
                   </p>
                 )}
               </div>
               {selected?.id === b.id && (
-                <div className="w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center text-white shrink-0">
+                <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white shrink-0">
                   <Check size={12} strokeWidth={3} />
                 </div>
               )}
@@ -656,8 +656,8 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => (
 const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-white mb-1">Selecciona Servicios</h2>
-      <p className="text-xs text-slate-400 mb-5">Puedes elegir múltiples tratamientos para tu cita.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Servicios</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir múltiples tratamientos para tu cita.</p>
       
       <div className="space-y-3 max-h-[44vh] overflow-y-auto pr-1 no-scrollbar pb-4">
         {services.map((s) => {
@@ -670,42 +670,42 @@ const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
               onClick={() => toggle(s)}
               className={`p-4 rounded-2xl border-2 transition-all duration-350 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
                 isSelected 
-                  ? 'border-indigo-500 bg-indigo-600/5 shadow-[0_0_15px_rgba(99,102,241,0.1)]' 
-                  : 'border-[#232343]/50 bg-[#111126]/40 hover:border-[#2a2a52]/80'
+                  ? 'border-nexus-primary bg-nexus-primary-soft shadow-sm' 
+                  : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/30'
               }`}
             >
               {isTodayTuesday && s.promoPrice && (
-                <div className="absolute top-2.5 right-2.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider">
+                <div className="absolute top-2.5 right-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/30 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider">
                   Promo Hoy
                 </div>
               )}
 
               <div className="flex justify-between items-start">
                 <div className="space-y-0.5 pr-8">
-                  <h3 className={`font-bold text-sm ${isSelected ? 'text-indigo-300' : 'text-white'}`}>{s.name}</h3>
-                  <p className="text-slate-400 text-[10px] leading-relaxed line-clamp-2">{s.description}</p>
+                  <h3 className={`font-bold text-sm ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</h3>
+                  <p className="text-nexus-text-secondary text-[10px] leading-relaxed line-clamp-2">{s.description}</p>
                 </div>
                 {isSelected ? (
-                  <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white">
+                  <div className="w-5 h-5 rounded-full bg-nexus-primary flex items-center justify-center text-white">
                     <Check size={12} strokeWidth={3} />
                   </div>
                 ) : (
-                  <div className="w-5 h-5 rounded-full border border-slate-600" />
+                  <div className="w-5 h-5 rounded-full border border-nexus-border" />
                 )}
               </div>
 
-              <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#232343]/40">
-                <span className="text-[10px] text-slate-500 flex items-center gap-1">
+              <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-nexus-border">
+                <span className="text-[10px] text-nexus-text-muted flex items-center gap-1">
                   <Clock size={10} /> {s.duration}
                 </span>
                 <div>
                   {isTodayTuesday && s.promoPrice ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-500 line-through">{s.price} Bs</span>
-                      <span className="text-xs font-black text-emerald-400">{s.promoPrice} Bs</span>
+                      <span className="text-[10px] text-nexus-text-muted line-through">{s.price} Bs</span>
+                      <span className="text-xs font-black text-nexus-success-text">{s.promoPrice} Bs</span>
                     </div>
                   ) : (
-                    <span className="text-xs font-bold text-slate-200">{s.price} Bs</span>
+                    <span className="text-xs font-bold text-nexus-text">{s.price} Bs</span>
                   )}
                 </div>
               </div>
@@ -716,21 +716,21 @@ const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
     </div>
 
     {/* CONTENEDOR Y BOTÓN: Máxima altura, padding generoso y presencia de pantalla */}
-    <div className="pt-6 border-t border-[#232343]/50 mt-6">
+    <div className="pt-6 border-t border-nexus-border mt-6">
       <div className="flex justify-between items-center mb-5 px-1">
         <div>
-          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Servicios Seleccionados</span>
-          <span className="text-xs text-indigo-300 font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
+          <span className="text-nexus-text-secondary text-[10px] font-bold uppercase tracking-wider block">Servicios Seleccionados</span>
+          <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
         </div>
         <div className="text-right">
-          <span className="text-slate-500 text-[9px] uppercase block tracking-wider font-semibold">Total Estimado</span>
-          <span className="text-xl font-black text-white">{total} Bs</span>
+          <span className="text-nexus-text-muted text-[9px] uppercase block tracking-wider font-semibold">Total Estimado</span>
+          <span className="text-xl font-black text-nexus-text">{total} Bs</span>
         </div>
       </div>
       <button 
         disabled={selected.length === 0}
         onClick={onNext}
-        className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-[0_0_30px_rgba(99,102,241,0.35)] active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
         <span>Continuar Cita</span>
         <ChevronRight size={16} />
@@ -742,8 +742,8 @@ const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
 const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-white mb-1">Selecciona Especialista</h2>
-      <p className="text-xs text-slate-400 mb-5">Elige un profesional o selecciona la opción pendiente para agilizar tu turno.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Especialista</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Elige un profesional o selecciona la opción pendiente para agilizar tu turno.</p>
       
       <div className="space-y-3.5">
         {barbers.map((b) => (
@@ -752,35 +752,35 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => (
             onClick={() => setSelected(b)}
             className={`p-3.5 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex items-center gap-4 ${
               selected?.id === b.id 
-                ? 'border-indigo-500 bg-indigo-600/5' 
-                : 'border-[#232343]/50 bg-[#111126]/40 hover:border-[#2a2a52]'
+                ? 'border-nexus-primary bg-nexus-primary-soft' 
+                : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/40'
             }`}
           >
             {b.isPending ? (
-              <div className="w-14 h-14 rounded-xl bg-indigo-950 border border-indigo-800 flex items-center justify-center text-indigo-300">
+              <div className="w-14 h-14 rounded-xl bg-nexus-primary-soft border border-nexus-primary/30 flex items-center justify-center text-nexus-primary">
                 <Sparkles size={24} className="animate-pulse" />
               </div>
             ) : (
-              <img src={b.image} className="w-14 h-14 rounded-xl object-cover border border-[#232343]" alt={b.name} />
+              <img src={b.image} className="w-14 h-14 rounded-xl object-cover border border-nexus-border" alt={b.name} />
             )}
             
             <div className="flex-1 text-left">
-              <h3 className="font-bold text-sm text-white">{b.name}</h3>
-              <p className="text-slate-400 text-[11px] mt-0.5">{b.specialty}</p>
+              <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
+              <p className="text-nexus-text-secondary text-[11px] mt-0.5">{b.specialty}</p>
               {!b.isPending && (
                 <div className="flex items-center gap-1 mt-1">
                   <Star size={10} className="text-amber-400 fill-amber-400" />
-                  <span className="text-[9px] text-slate-400 font-semibold">5.0 (Excelente)</span>
+                  <span className="text-[9px] text-nexus-text-secondary font-semibold">5.0 (Excelente)</span>
                 </div>
               )}
             </div>
             
             {selected?.id === b.id ? (
-              <div className="w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center text-white">
+              <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white">
                 <Check size={12} strokeWidth={3} />
               </div>
             ) : (
-              <div className="w-5 h-5 rounded-full border border-slate-700" />
+              <div className="w-5 h-5 rounded-full border border-nexus-border" />
             )}
           </div>
         ))}
@@ -788,11 +788,11 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => (
     </div>
 
     {/* BOTÓN: Reajustado con el nuevo tamaño dominante */}
-    <div className="pt-6 mt-6 border-t border-[#232343]/50">
+    <div className="pt-6 mt-6 border-t border-nexus-border">
       <button 
         disabled={!selected}
         onClick={onNext}
-        className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-[0_0_30px_rgba(99,102,241,0.35)] active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
         <span>Siguiente Paso</span>
         <ChevronRight size={16} />
@@ -847,29 +847,29 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
   return (
     <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
       <div>
-        <h2 className="text-2xl font-extrabold text-white mb-1">Fecha & Hora</h2>
-        <p className="text-xs text-slate-400 mb-4">Elige la fecha de tu preferencia en el calendario.</p>
+        <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Fecha & Hora</h2>
+        <p className="text-xs text-nexus-text-secondary mb-4">Elige la fecha de tu preferencia en el calendario.</p>
         
-        <div className="bg-[#111126]/60 border border-[#232343]/50 rounded-2xl p-4 mb-4">
+        <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-white capitalize">{monthLabel}</span>
+            <span className="text-xs font-bold text-nexus-text capitalize">{monthLabel}</span>
             <div className="flex gap-2">
               <button 
                 onClick={handlePrevMonth} 
-                className="p-1 rounded bg-[#181835] hover:bg-[#202047] text-slate-300 transition-colors"
+                className="p-1 rounded bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary transition-colors"
               >
                 <ChevronLeft size={14} />
               </button>
               <button 
                 onClick={handleNextMonth} 
-                className="p-1 rounded bg-[#181835] hover:bg-[#202047] text-slate-300 transition-colors"
+                className="p-1 rounded bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary transition-colors"
               >
                 <ChevronRight size={14} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 text-center text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+          <div className="grid grid-cols-7 text-center text-[9px] font-bold text-nexus-text-muted uppercase tracking-wider mb-2">
             <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
           </div>
 
@@ -890,15 +890,15 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
                   }}
                   className={`py-2 rounded-lg text-xs font-bold flex flex-col items-center justify-center relative transition-all duration-200 ${
                     isSelected 
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 scale-[1.05]' 
+                      ? 'bg-nexus-primary text-white shadow-md scale-[1.05]' 
                       : isPast
-                        ? 'text-slate-700 cursor-not-allowed opacity-30'
-                        : 'bg-[#181835]/40 hover:bg-[#202047]/60 text-slate-200'
+                        ? 'text-nexus-text-muted cursor-not-allowed opacity-30'
+                        : 'bg-nexus-background hover:bg-nexus-surface-hover text-nexus-text-secondary'
                   }`}
                 >
                   <span>{cell.dayNum}</span>
                   {cell.isTuesday && !isPast && (
-                    <span className={`w-1 h-1 rounded-full absolute bottom-1 ${isSelected ? 'bg-white' : 'bg-indigo-400'}`} />
+                    <span className={`w-1 h-1 rounded-full absolute bottom-1 ${isSelected ? 'bg-white' : 'bg-nexus-primary'}`} />
                   )}
                 </button>
               );
@@ -907,9 +907,9 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         </div>
 
         {isTuesday && (
-          <div className="bg-indigo-600/10 border border-indigo-500/20 p-3 rounded-xl mb-4 flex gap-2.5 items-center animate-pulse">
-            <Info size={16} className="text-indigo-400 shrink-0" />
-            <p className="text-[10px] text-indigo-300 font-semibold uppercase tracking-tight">
+          <div className="bg-nexus-primary-soft border border-nexus-primary/20 p-3 rounded-xl mb-4 flex gap-2.5 items-center animate-pulse">
+            <Info size={16} className="text-nexus-primary shrink-0" />
+            <p className="text-[10px] text-nexus-primary font-semibold uppercase tracking-tight">
               ¡Día de Beneficios! Descuento de Promo Martes activo.
             </p>
           </div>
@@ -918,7 +918,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         {date ? (
           hours.length > 0 ? (
             <div className="space-y-2">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Horas Disponibles</span>
+              <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold block">Horas Disponibles</span>
               <div className="grid grid-cols-4 gap-2">
                 {hours.map((h) => (
                   <button 
@@ -926,8 +926,8 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
                     onClick={() => setHour(h)}
                     className={`py-2.5 rounded-xl font-bold text-xs transition-all border ${
                       hour === h 
-                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' 
-                        : 'bg-[#111126]/45 border-[#232343]/50 text-slate-300 hover:border-[#2a2a52]'
+                        ? 'bg-nexus-primary border-nexus-primary text-white shadow-md' 
+                        : 'bg-nexus-surface border-nexus-border text-nexus-text-secondary hover:border-nexus-primary/40'
                     }`}
                   >
                     {h}
@@ -936,19 +936,19 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
               </div>
             </div>
           ) : (
-            <p className="text-center py-4 text-xs text-slate-500">Este profesional no tiene horario disponible ese día.</p>
+            <p className="text-center py-4 text-xs text-nexus-text-muted">Este profesional no tiene horario disponible ese día.</p>
           )
         ) : (
-          <p className="text-center py-4 text-xs text-slate-500">Selecciona un día del calendario para ver horarios.</p>
+          <p className="text-center py-4 text-xs text-nexus-text-muted">Selecciona un día del calendario para ver horarios.</p>
         )}
       </div>
 
       {/* BOTÓN: Agigantado para alta presencia táctil en cualquier tipo de dispositivo */}
-      <div className="pt-6 mt-6 border-t border-[#232343]/50">
+      <div className="pt-6 mt-6 border-t border-nexus-border">
         <button 
           disabled={!date || !hour}
           onClick={onNext}
-          className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-[0_0_30px_rgba(99,102,241,0.35)] active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+          className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
         >
           <span>Siguiente Paso</span>
           <ChevronRight size={16} />
@@ -961,8 +961,8 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
 const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-white mb-1">Método de Pago</h2>
-      <p className="text-xs text-slate-400 mb-5">Elige tu forma preferida de pago de manera segura.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Método de Pago</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Elige tu forma preferida de pago de manera segura.</p>
       
       <div className="space-y-3.5">
         {PAYMENT_METHODS.map((m) => (
@@ -971,18 +971,18 @@ const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
             onClick={() => setMethod(m)}
             className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-4 ${
               method?.id === m.id 
-                ? 'border-indigo-500 bg-indigo-600/5' 
-                : 'border-[#232343]/50 bg-[#111126]/40 hover:border-[#2a2a52]'
+                ? 'border-nexus-primary bg-nexus-primary-soft' 
+                : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/40'
             }`}
           >
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
-              method?.id === m.id ? 'bg-indigo-500 text-white' : 'bg-[#181835] text-indigo-400'
+              method?.id === m.id ? 'bg-nexus-primary text-white' : 'bg-nexus-primary-soft text-nexus-primary'
             }`}>
               {m.icon}
             </div>
             <div className="text-left">
-              <h3 className="font-bold text-sm text-white">{m.name}</h3>
-              <p className="text-slate-400 text-[10px] uppercase tracking-wider">{m.desc}</p>
+              <h3 className="font-bold text-sm text-nexus-text">{m.name}</h3>
+              <p className="text-nexus-text-secondary text-[10px] uppercase tracking-wider">{m.desc}</p>
             </div>
           </div>
         ))}
@@ -990,11 +990,11 @@ const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
     </div>
 
     {/* BOTÓN: Idéntico tamaño premium del home */}
-    <div className="pt-6 mt-6 border-t border-[#232343]/50">
+    <div className="pt-6 mt-6 border-t border-nexus-border">
       <button 
         disabled={!method}
         onClick={onNext}
-        className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-[0_0_30px_rgba(99,102,241,0.35)] active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
         <span>Detalles Finales</span>
         <ChevronRight size={16} />
@@ -1017,66 +1017,66 @@ const ConfirmStep = ({
 }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-white mb-1">Confirmar Reserva</h2>
-      <p className="text-xs text-slate-400 mb-5">Ingresa tus datos personales de contacto para asegurar el agendamiento.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Confirmar Reserva</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Ingresa tus datos personales de contacto para asegurar el agendamiento.</p>
       
       <form onSubmit={onConfirm} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-[10px] uppercase tracking-wider text-indigo-400 font-bold block">Nombre Completo *</label>
+          <label className="text-[10px] uppercase tracking-wider text-nexus-primary font-bold block">Nombre Completo *</label>
           <input 
             type="text" 
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ej: Alejandro Flores"
-            className="w-full bg-[#111126]/60 border border-[#232343] p-3.5 rounded-xl outline-none focus:border-indigo-500 transition-all text-sm font-bold text-white placeholder-slate-600"
+            className="w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-all text-sm font-bold text-nexus-text placeholder-nexus-text-muted"
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[10px] uppercase tracking-wider text-indigo-400 font-bold block">Teléfono / Celular (Opcional)</label>
+          <label className="text-[10px] uppercase tracking-wider text-nexus-primary font-bold block">Teléfono / Celular (Opcional)</label>
           <input 
             type="tel" 
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Ej: +591 70000000"
-            className="w-full bg-[#111126]/60 border border-[#232343] p-3.5 rounded-xl outline-none focus:border-indigo-500 transition-all text-sm font-bold text-white placeholder-slate-600"
+            className="w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-all text-sm font-bold text-nexus-text placeholder-nexus-text-muted"
           />
         </div>
 
-        <div className="bg-[#111126]/60 border border-[#232343]/50 p-4 rounded-2xl space-y-3 mt-4 text-xs text-slate-300">
-          <div className="flex justify-between pb-2 border-b border-[#232343]/40">
-            <span className="font-semibold text-slate-400">Servicios:</span>
-            <span className="font-bold text-right text-white">
+        <div className="bg-nexus-surface border border-nexus-border p-4 rounded-2xl space-y-3 mt-4 text-xs text-nexus-text-secondary">
+          <div className="flex justify-between pb-2 border-b border-nexus-border">
+            <span className="font-semibold text-nexus-text-secondary">Servicios:</span>
+            <span className="font-bold text-right text-nexus-text">
               {selectedServices.map(s => s.name).join(', ')}
             </span>
           </div>
-          <div className="flex justify-between pb-2 border-b border-[#232343]/40">
-            <span className="font-semibold text-slate-400">Profesional:</span>
-            <span className="font-bold text-white">{selectedBarber?.name}</span>
+          <div className="flex justify-between pb-2 border-b border-nexus-border">
+            <span className="font-semibold text-nexus-text-secondary">Profesional:</span>
+            <span className="font-bold text-nexus-text">{selectedBarber?.name}</span>
           </div>
-          <div className="flex justify-between pb-2 border-b border-[#232343]/40">
-            <span className="font-semibold text-slate-400">Fecha y Hora:</span>
-            <span className="font-bold text-indigo-300">{selectedDate} - {selectedHour} Hrs</span>
+          <div className="flex justify-between pb-2 border-b border-nexus-border">
+            <span className="font-semibold text-nexus-text-secondary">Fecha y Hora:</span>
+            <span className="font-bold text-nexus-primary">{selectedDate} - {selectedHour} Hrs</span>
           </div>
-          <div className="flex justify-between pb-2 border-b border-[#232343]/40">
-            <span className="font-semibold text-slate-400">Método de Pago:</span>
-            <span className="font-bold text-white">{paymentMethod?.name}</span>
+          <div className="flex justify-between pb-2 border-b border-nexus-border">
+            <span className="font-semibold text-nexus-text-secondary">Método de Pago:</span>
+            <span className="font-bold text-nexus-text">{paymentMethod?.name}</span>
           </div>
           <div className="flex justify-between pt-1">
-            <span className="font-bold text-slate-400">Total a pagar:</span>
-            <span className="text-base font-black text-emerald-400">{total} Bs</span>
+            <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
+            <span className="text-base font-black text-nexus-success-text">{total} Bs</span>
           </div>
         </div>
       </form>
     </div>
 
-    {/* CTA FINAL DE PÁGINA (EL BOTÓN DEFINITIVO): Recibe la misma escala de gran tamaño y presencia de un producto SaaS moderno */}
-    <div className="pt-6 mt-6 border-t border-[#232343]/50">
+    {/* CTA FINAL DE PÁGINA */}
+    <div className="pt-6 mt-6 border-t border-nexus-border">
       <button 
         disabled={!name.trim() || loading}
         onClick={onConfirm}
-        className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(99,102,241,0.35)] hover:shadow-[0_0_45px_rgba(99,102,241,0.55)] active:scale-[0.97] transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 flex items-center justify-center gap-3 shadow-md hover:shadow-lg active:scale-[0.97] transform hover:-translate-y-0.5"
       >
         {loading ? (
           <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1090,8 +1090,6 @@ const ConfirmStep = ({
 
 const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total }) => {
 
-  // Se amplía de 3s a 8s: el cliente necesita tiempo real para leer el
-  // resumen de su reserva, no solo ver el ícono de check un instante.
   useEffect(() => {
     const timer = setTimeout(() => {
       onReset();
@@ -1100,9 +1098,6 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
     return () => clearTimeout(timer);
   }, [onReset]);
 
-  // Fecha legible ("miércoles, 12 de agosto") a partir del mismo string
-  // "YYYY-MM-DD" que ya usa el resto del flujo (DateTimeStep/ConfirmStep),
-  // sin tocar el formato que se guarda en Firestore.
   const fechaLegible = useMemo(() => {
     if (!selectedDate) return '';
     const texto = new Date(selectedDate + "T12:00:00").toLocaleDateString('es-ES', {
@@ -1115,67 +1110,65 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
 
   return (
     <div className="flex-1 flex flex-col justify-center items-center text-center py-6 space-y-6 animate-scale-up">
-      <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/30 rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-600/5">
-        <CheckCircle2 className="w-12 h-12 text-[#6366f1]" />
+      <div className="w-20 h-20 bg-nexus-success-bg border border-nexus-success/30 rounded-3xl flex items-center justify-center shadow-sm">
+        <CheckCircle2 className="w-12 h-12 text-nexus-success" />
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="text-3xl font-extrabold text-nexus-text tracking-tight">
           ¡Reserva Confirmada!
         </h2>
 
-        <p className="text-slate-400 text-xs leading-relaxed max-w-xs mx-auto">
+        <p className="text-nexus-text-secondary text-xs leading-relaxed max-w-xs mx-auto">
           Tu cita quedó agendada. El profesionales seleccionado ya recibió la información y se preparará para tu llegada.
         </p>
       </div>
 
-      {/* RESUMEN: mismos datos que ConfirmStep, para que el cliente vea de
-          un vistazo que lo que reservó es justo lo que quedó guardado. */}
       {(selectedDate || selectedHour || selectedBarber) && (
-        <div className="w-full bg-[#111126]/60 border border-[#232343]/50 p-4 rounded-2xl space-y-2.5 text-xs text-slate-300 text-left">
+        <div className="w-full bg-nexus-surface border border-nexus-border p-4 rounded-2xl space-y-2.5 text-xs text-nexus-text-secondary text-left">
           {selectedServices?.length > 0 && (
-            <div className="flex justify-between gap-3 pb-2 border-b border-[#232343]/40">
-              <span className="font-semibold text-slate-400 shrink-0">Servicios:</span>
-              <span className="font-bold text-right text-white">
+            <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
+              <span className="font-semibold text-nexus-text-secondary shrink-0">Servicios:</span>
+              <span className="font-bold text-right text-nexus-text">
                 {selectedServices.map(s => s.name).join(', ')}
               </span>
             </div>
           )}
           {selectedBarber && (
-            <div className="flex justify-between pb-2 border-b border-[#232343]/40">
-              <span className="font-semibold text-slate-400">Profesional:</span>
-              <span className="font-bold text-white">{selectedBarber.name}</span>
+            <div className="flex justify-between pb-2 border-b border-nexus-border">
+              <span className="font-semibold text-nexus-text-secondary">Profesional:</span>
+              <span className="font-bold text-nexus-text">{selectedBarber.name}</span>
             </div>
           )}
           {(fechaLegible || selectedHour) && (
-            <div className="flex justify-between gap-3 pb-2 border-b border-[#232343]/40">
-              <span className="font-semibold text-slate-400 shrink-0">Fecha y Hora:</span>
-              <span className="font-bold text-indigo-300 text-right">
+            <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
+              <span className="font-semibold text-nexus-text-secondary shrink-0">Fecha y Hora:</span>
+              <span className="font-bold text-nexus-primary text-right">
                 {fechaLegible}{selectedHour ? ` · ${selectedHour} Hrs` : ''}
               </span>
             </div>
           )}
           {typeof total === 'number' && (
             <div className="flex justify-between pt-1">
-              <span className="font-bold text-slate-400">Total a pagar:</span>
-              <span className="text-base font-black text-emerald-400">{total} Bs</span>
+              <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
+              <span className="text-base font-black text-nexus-success-text">{total} Bs</span>
             </div>
           )}
         </div>
       )}
 
-      <p className="text-indigo-400 text-[11px] font-semibold">
+      <p className="text-nexus-primary text-[11px] font-semibold">
         Volviendo al inicio...
       </p>
 
       <div className="w-full">
         <button
           onClick={onReset}
-          className="w-full py-5 sm:py-5.5 px-8 bg-indigo-600/15 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-black uppercase text-xs sm:text-sm tracking-widest rounded-2xl transition-all active:scale-[0.97]"
+          className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-black uppercase text-xs sm:text-sm tracking-widest rounded-2xl transition-all active:scale-[0.97]"
         >
           Volver al Inicio
         </button>
       </div>
-    </div>
+      </div>
   );
 };

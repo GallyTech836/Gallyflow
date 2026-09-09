@@ -1,0 +1,159 @@
+/* ============================================================
+   NEXUS · Componentes visuales compartidos
+   Solo lo que realmente se repite entre Admin/Barber/Client.
+   Todo consume tokens de tokens.css — nunca un hex aquí.
+   ============================================================ */
+
+/* ---- Card ---- */
+.nx-card {
+    background: var(--nx-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius);
+    box-shadow: var(--nx-shadow-sm);
+  }
+  
+  .nx-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--nx-border);
+    color: var(--nx-text);
+    font-weight: 600;
+  }
+  
+  .nx-card-body {
+    padding: 20px;
+  }
+  
+  /* ---- Botones ---- */
+  .nx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: var(--nx-radius-sm);
+    font-weight: 600;
+    font-size: 14px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  
+  .nx-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .nx-btn-primary {
+    background: var(--nx-primary);
+    color: var(--nx-text-inverse);
+  }
+  .nx-btn-primary:hover:not(:disabled) {
+    background: var(--nx-primary-hover);
+  }
+  
+  .nx-btn-secondary {
+    background: var(--nx-surface);
+    color: var(--nx-text);
+    border-color: var(--nx-border);
+  }
+  .nx-btn-secondary:hover:not(:disabled) {
+    background: var(--nx-surface-hover);
+  }
+  
+  .nx-btn-danger {
+    background: var(--nx-error);
+    color: #fff;
+  }
+  .nx-btn-danger:hover:not(:disabled) {
+    filter: brightness(0.92);
+  }
+  
+  .nx-btn-ghost {
+    background: transparent;
+    color: var(--nx-text-secondary);
+  }
+  .nx-btn-ghost:hover:not(:disabled) {
+    background: var(--nx-surface-hover);
+    color: var(--nx-text);
+  }
+  
+  /* ---- Inputs ---- */
+  .nx-input {
+    width: 100%;
+    background: var(--nx-surface);
+    border: 1px solid var(--nx-border);
+    border-radius: var(--nx-radius-sm);
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--nx-text);
+  }
+  .nx-input::placeholder {
+    color: var(--nx-text-muted);
+  }
+  .nx-input:focus {
+    outline: none;
+    border-color: var(--nx-primary);
+    box-shadow: 0 0 0 3px var(--nx-primary-soft);
+  }
+  
+  /* ---- Badges (estado de citas, comisiones, etc.) ---- */
+  .nx-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .nx-badge-success { background: var(--nx-success-bg); color: var(--nx-success-text); }
+  .nx-badge-warning { background: var(--nx-warning-bg); color: var(--nx-warning-text); }
+  .nx-badge-error   { background: var(--nx-error-bg);   color: var(--nx-error-text); }
+  .nx-badge-info    { background: var(--nx-info-bg);    color: var(--nx-info-text); }
+  .nx-badge-neutral { background: var(--nx-surface-hover); color: var(--nx-text-secondary); }
+  
+  /* ---- Modal shell (AppointmentCreateModal / AppointmentManageModal) ---- */
+  .nx-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .nx-modal {
+    background: var(--nx-surface);
+    border-radius: var(--nx-radius-lg);
+    box-shadow: var(--nx-shadow);
+    border: 1px solid var(--nx-border);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .nx-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--nx-border);
+    color: var(--nx-text);
+    font-weight: 600;
+    font-size: 16px;
+  }
+  
+  /* ---- Sidebar (AdminApp — navy) ---- */
+  .nx-sidebar {
+    background: var(--nx-navy);
+    color: var(--nx-text-inverse);
+  }
+  .nx-sidebar-item {
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: var(--nx-radius-sm);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .nx-sidebar-item:hover {
+    background: var(--nx-navy-soft);
+    color: #fff;
+  }
+  .nx-sidebar-item-active {
+    background: var(--nx-primary);
+    color: #fff;
+  }

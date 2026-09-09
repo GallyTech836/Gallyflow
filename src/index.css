@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./shared/theme/tokens.css";
+@import "./shared/theme/components.css";
 
 :root {
   --text: #6b6375;
@@ -67,20 +69,24 @@ body {
   box-sizing: border-box;
 }
 
-/* ── Estilos globales de h1/h2 solo cuando NO estén dentro del AdminApp ── */
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-/* ← reducidos y sin margin agresivo para no romper el header del AdminApp */
-h1 {
-  font-size: 2rem;
-  letter-spacing: -0.5px;
-  margin: 0;
-}
+/* ── Estilos globales de h1/h2 solo cuando NO estén dentro del AdminApp ──
+   Envueltos en @layer base para que las clases de Tailwind (text-nexus-*)
+   siempre puedan ganarles — si no, un simple selector "h1" le gana a
+   cualquier className por el orden de capas de Tailwind v4. ── */
+   @layer base {
+    h1,
+    h2 {
+      font-family: var(--heading);
+      font-weight: 500;
+    }
+  
+    /* ← reducidos y sin margin agresivo para no romper el header del AdminApp */
+    h1 {
+      font-size: 2rem;
+      letter-spacing: -0.5px;
+      margin: 0;
+    }
+  }
 
 h2 {
   font-size: 1.25rem;

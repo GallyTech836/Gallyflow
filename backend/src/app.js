@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import notificationsRoutes from '../routes/notifications.routes.js';
+import superadminRoutes from '../routes/superadmin.routes.js';
 import { logger } from '../utils/logger.js';
 
 const app = express();
@@ -34,6 +35,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api', notificationsRoutes);
+app.use('/api/superadmin', superadminRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });

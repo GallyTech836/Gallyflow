@@ -58,9 +58,9 @@ export default function AppointmentManageModal({
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-md p-5 relative shadow-2xl">
+      <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-5 relative shadow-xl">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-base font-bold text-white">Editar o Gestionar Cita</h3>
+          <h3 className="text-base font-bold text-nexus-text">Editar o Gestionar Cita</h3>
           {allowDelete && (
             <button
               type="button"
@@ -68,7 +68,7 @@ export default function AppointmentManageModal({
                 onDelete(appointment.id);
                 onClose();
               }}
-              className="p-1 hover:bg-rose-500/10 text-rose-400 rounded flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+              className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded flex items-center gap-1 text-[10px] font-bold cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Eliminar Cita
@@ -78,26 +78,26 @@ export default function AppointmentManageModal({
 
         <form onSubmit={onSubmit} className="space-y-3.5">
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">Nombre del Cliente *</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Nombre del Cliente *</label>
             <input
               type="text"
               required
               disabled={!canEdit('clientName')}
               value={appointment.clientName}
               onChange={(e) => onChangeField('clientName', e.target.value)}
-              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Profesional Asignado *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Profesional Asignado *</label>
               <select
                 required
                 disabled={!canEdit('professionalId')}
                 value={appointment.professionalId || appointment.barberId || 'pending'}
                 onChange={(e) => onChangeField('professionalId', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="pending">Sin Profesional (PENDIENTE)</option>
                 {(professionals || []).filter(b => b?.active).map(b => (
@@ -107,11 +107,11 @@ export default function AppointmentManageModal({
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicios *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Servicios *</label>
               <button
                 type="button"
                 onClick={() => setShowServicesList(prev => !prev)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-left text-white flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-left text-nexus-text flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={!canEdit('serviceId')}
               >
                 <span className="truncate">
@@ -119,12 +119,12 @@ export default function AppointmentManageModal({
                     ? currentServices.map(s => s.serviceName).join(', ')
                     : 'Selecciona servicios...'}
                 </span>
-                <span className="text-slate-400 ml-2">{showServicesList ? '▲' : '▼'}</span>
+                <span className="text-nexus-text-secondary ml-2">{showServicesList ? '▲' : '▼'}</span>
               </button>
               {showServicesList && (
-                <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
+                <div className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
                   {(services || []).map(s => (
-                    <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                    <label key={s?.id} className="flex items-center gap-2 text-xs text-nexus-text cursor-pointer">
                       <input
                         type="checkbox"
                         disabled={!canEdit('serviceId')}
@@ -141,24 +141,24 @@ export default function AppointmentManageModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Hora de Inicio *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora de Inicio *</label>
               <input
                 type="time"
                 required
                 disabled={!canEdit('time')}
                 value={appointment.time}
                 onChange={(e) => onChangeField('time', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Estatus Actual</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Estatus Actual</label>
               <select
                 disabled={!canEdit('status')}
                 value={appointment.status}
                 onChange={(e) => onChangeField('status', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-bold disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="pending">Por Confirmar</option>
                 <option value="confirmed">Confirmada</option>
@@ -170,13 +170,13 @@ export default function AppointmentManageModal({
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">Notas de la Reserva</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Notas de la Reserva</label>
             <input
               type="text"
               disabled={!canEdit('notes')}
               value={appointment.notes || ''}
               onChange={(e) => onChangeField('notes', e.target.value)}
-              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -189,7 +189,7 @@ export default function AppointmentManageModal({
                     onTransition('in-process');
                     onClose();
                   }}
-                  className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded text-[9px] cursor-pointer font-bold"
+                  className="px-2 py-1 bg-nexus-warning hover:opacity-90 text-black font-extrabold rounded text-[9px] cursor-pointer"
                 >
                   Iniciar Atención
                 </button>
@@ -201,7 +201,7 @@ export default function AppointmentManageModal({
                     onTransition('completed');
                     onClose();
                   }}
-                  className="px-2 py-1 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold rounded text-[9px] cursor-pointer font-bold"
+                  className="px-2 py-1 bg-nexus-success hover:opacity-90 text-black font-extrabold rounded text-[9px] cursor-pointer"
                 >
                   Marcar Finalizado
                 </button>
@@ -212,14 +212,14 @@ export default function AppointmentManageModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-700 cursor-pointer"
+                className="px-3 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
               >
                 Salir
               </button>
               <button
                 type="submit"
                 disabled={!canEdit('clientName') && !canEdit('status') && !canEdit('notes')}
-                className="px-3.5 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Guardar Cambios
               </button>

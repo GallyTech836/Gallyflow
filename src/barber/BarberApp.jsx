@@ -898,15 +898,15 @@ useEffect(() => {
       <div className="flex flex-row items-center justify-between gap-3 flex-wrap">
         <div className="relative flex items-center justify-center w-full">
           {/* Selector de fecha con flechas estilizadas */}
-          <div className="flex items-center bg-[#121422] border border-[#1E2138] rounded-xl px-2 py-1 justify-between shrink-0">
+          <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-xl px-2 py-1 justify-between shrink-0">
             <button 
               onClick={() => handleDateChange(-1)} 
-              className="p-1.5 hover:bg-white/5 rounded-lg text-[#3B3EF4] transition-all"
+              className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-primary transition-all"
             >
               <Icons.ChevronLeft className="w-4 h-4" />
             </button>
             
-            <span className="text-xs font-bold tracking-wide text-white px-4 min-w-[120px] text-center whitespace-nowrap">
+            <span className="text-xs font-bold tracking-wide text-nexus-text px-4 min-w-[120px] text-center whitespace-nowrap">
               {selectedRange === "Año" ? (
                 new Date(selectedDate + "T00:00:00").getFullYear()
               ) : selectedRange === "Mes" ? (
@@ -933,7 +933,7 @@ useEffect(() => {
             
             <button 
               onClick={() => handleDateChange(1)} 
-              className="p-1.5 hover:bg-white/5 rounded-lg text-[#3B3EF4] transition-all"
+              className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-primary transition-all"
             >
               <Icons.ChevronRight className="w-4 h-4" />
             </button>
@@ -941,13 +941,13 @@ useEffect(() => {
 
           {/* ALTERNADOR DE VISTA DÍA (Acoplado al extremo derecho) */}
           {showAlternator && selectedRange === "Día" && (
-            <div className="absolute right-1 flex bg-[#121422] p-1 rounded-xl border border-[#1E2138] items-center gap-1 shrink-0 animate-fade-in">
+            <div className="absolute right-1 flex bg-nexus-surface p-1 rounded-xl border border-nexus-border items-center gap-1 shrink-0 animate-fade-in">
               <button
                 onClick={() => setDiaViewStyle("Calendario")}
                 className={`p-2 rounded-lg transition-all ${
                   diaViewStyle === "Calendario" 
-                    ? "bg-[#3B3EF4] text-white" 
-                    : "text-gray-400 hover:text-gray-200"
+                    ? "bg-nexus-primary text-white" 
+                    : "text-nexus-text-muted hover:text-nexus-text-secondary"
                 }`}
                 title="Vista Calendario"
               >
@@ -959,8 +959,8 @@ useEffect(() => {
                 onClick={() => setDiaViewStyle("Lista")}
                 className={`p-2 rounded-lg transition-all ${
                   diaViewStyle === "Lista" 
-                    ? "bg-[#3B3EF4] text-white" 
-                    : "text-gray-400 hover:text-gray-200"
+                    ? "bg-nexus-primary text-white" 
+                    : "text-nexus-text-muted hover:text-nexus-text-secondary"
                 }`}
                 title="Vista Lista"
               >
@@ -993,24 +993,24 @@ useEffect(() => {
   }
 
   if (!activeBarber) {
-    return <div style={{ background: '#08090E', width: '100vw', height: '100vh' }} />;
+    return <div style={{ background: '#F8FAFC', width: '100vw', height: '100vh' }} />;
   }
 
   return (
-    <div className="min-h-screen bg-[#08090E] text-[#D1D5DB] flex flex-col font-sans select-none pb-24 md:pb-0">
+    <div className="min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none pb-24 md:pb-0">
       
       {/* HEADER SUPERIOR */}
       {activeTab !== "perfil" && (
-        <header className="sticky top-0 z-40 bg-[#0A0B10] border-b border-[#1A1C2C] py-4 px-4 w-full">
-          <div className="w-full max-w-md mx-auto flex bg-[#111322] p-1.5 rounded-2xl border border-[#1E2138] items-center justify-between shadow-inner">
+        <header className="sticky top-0 z-40 bg-nexus-surface border-b border-nexus-border py-4 px-4 w-full">
+          <div className="w-full max-w-md mx-auto flex bg-nexus-background p-1.5 rounded-2xl border border-nexus-border items-center justify-between shadow-inner">
             {["Día", "Semana", "Mes", "Año"].map(range => (
               <button
                 key={range}
                 onClick={() => setSelectedRange(range)}
                 className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 text-center select-none active:scale-[0.98] ${
                   selectedRange === range 
-                    ? "bg-gradient-to-r from-[#3B3EF4] to-[#4D50F7] text-white shadow-[0_3px_12px_rgba(59,62,244,0.35)] font-black" 
-                    : "text-gray-400 hover:text-gray-200"
+                    ? "bg-nexus-primary text-white shadow-md font-black" 
+                    : "text-nexus-text-secondary hover:text-nexus-text"
                 }`}
               >
                 {range}
@@ -1025,12 +1025,12 @@ useEffect(() => {
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
           <div className={`px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-2xl flex items-center gap-2 text-xs font-bold tracking-wide ${
             toast.type === "error" 
-              ? "bg-[#251015] border-red-900/40 text-red-300" 
+              ? "bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text" 
               : toast.type === "info"
-              ? "bg-[#0C1B33] border-blue-900/40 text-blue-300"
-              : "bg-[#092B1B] border-[#10B981]/40 text-emerald-300"
+              ? "bg-nexus-info-bg border-nexus-info/25 text-nexus-info-text"
+              : "bg-nexus-success-bg border-nexus-success/25 text-nexus-success-text"
           }`}>
-            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-red-500" : toast.type === "info" ? "bg-blue-500" : "bg-[#34D399]"}`}></div>
+            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-nexus-error" : toast.type === "info" ? "bg-nexus-info" : "bg-nexus-success"}`}></div>
             {toast.text}
           </div>
         </div>
@@ -1041,14 +1041,14 @@ useEffect(() => {
 
         {loading ? (
           <div className="space-y-4 py-12">
-            <div className="h-10 bg-[#121421] rounded-xl animate-pulse"></div>
+            <div className="h-10 bg-nexus-surface-hover rounded-xl animate-pulse"></div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="h-24 bg-[#121421] rounded-2xl animate-pulse"></div>
-              <div className="h-24 bg-[#121421] rounded-2xl animate-pulse"></div>
-              <div className="h-24 bg-[#121421] rounded-2xl animate-pulse"></div>
-              <div className="h-24 bg-[#121421] rounded-2xl animate-pulse"></div>
+              <div className="h-24 bg-nexus-surface-hover rounded-2xl animate-pulse"></div>
+              <div className="h-24 bg-nexus-surface-hover rounded-2xl animate-pulse"></div>
+              <div className="h-24 bg-nexus-surface-hover rounded-2xl animate-pulse"></div>
+              <div className="h-24 bg-nexus-surface-hover rounded-2xl animate-pulse"></div>
             </div>
-            <div className="h-64 bg-[#121421] rounded-2xl animate-pulse"></div>
+            <div className="h-64 bg-nexus-surface-hover rounded-2xl animate-pulse"></div>
           </div>
         ) : (
           <>
@@ -1064,11 +1064,11 @@ useEffect(() => {
                   
                   /* ================= VISTA ANUAL SIMPLE ================= */
                   <div className="space-y-6 animate-fade-in">
-                    <div className="bg-[#11131E] border border-[#1D2032] p-5 rounded-2xl">
-                      <h3 className="text-sm font-bold text-white mb-1 uppercase tracking-wide">
+                    <div className="bg-nexus-surface border border-nexus-border p-5 rounded-2xl">
+                      <h3 className="text-sm font-bold text-nexus-text mb-1 uppercase tracking-wide">
                         Distribución de Reservas Anuales ({new Date(selectedDate + "T00:00:00").getFullYear()})
                       </h3>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-nexus-text-muted">
                         Cantidad total de reservas completadas y agendadas distribuidas por mes.
                       </p>
 
@@ -1082,11 +1082,11 @@ useEffect(() => {
                           }).length;
 
                           return (
-                            <div key={m.monthIndex} className="bg-[#161826] border border-[#1D2032] p-4 rounded-xl flex flex-col justify-between h-28">
-                              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{MESES_NOMBRES[m.monthIndex]}</span>
+                            <div key={m.monthIndex} className="bg-nexus-surface-hover border border-nexus-border p-4 rounded-xl flex flex-col justify-between h-28">
+                              <span className="text-xs font-black text-nexus-text-secondary uppercase tracking-widest">{MESES_NOMBRES[m.monthIndex]}</span>
                               <div className="mt-2">
-                                <span className="text-2xl font-black text-white">{count}</span>
-                                <span className="text-[10px] text-gray-500 block">Reservas</span>
+                                <span className="text-2xl font-black text-nexus-text">{count}</span>
+                                <span className="text-[10px] text-nexus-text-muted block">Reservas</span>
                               </div>
                             </div>
                           );
@@ -1099,11 +1099,11 @@ useEffect(() => {
                   
                   /* ================= VISTA MENSUAL: CALENDARIO TIPO GRILLA ================= */
                   <div className="space-y-4 animate-fade-in">
-                    <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl p-4 shadow-2xl overflow-hidden">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-4 shadow-lg overflow-hidden">
                       {/* Cabecera de los días de la semana */}
-                      <div className="grid grid-cols-7 gap-1 text-center border-b border-[#1D2032] pb-3 select-none">
+                      <div className="grid grid-cols-7 gap-1 text-center border-b border-nexus-border pb-3 select-none">
                         {DIAS_SEMANA_NOMBRES.map(d => (
-                          <span key={d} className="text-[10px] sm:text-xs font-black text-[#3B3EF4] uppercase tracking-wider">
+                          <span key={d} className="text-[10px] sm:text-xs font-black text-nexus-primary uppercase tracking-wider">
                             {d.slice(0, 3)}
                           </span>
                         ))}
@@ -1125,13 +1125,13 @@ useEffect(() => {
                               }}
                               className={`min-h-[70px] sm:min-h-[85px] p-1.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all duration-200 ${
                                 isSelected 
-                                  ? "bg-[#3B3EF4]/20 border-[#3B3EF4] shadow-[0_0_15px_rgba(59,62,244,0.15)]" 
+                                  ? "bg-nexus-primary-soft border-nexus-primary shadow-sm" 
                                   : gridItem.isCurrentMonth
-                                  ? "bg-[#161826]/40 border-[#1D2032] hover:bg-[#1C1F32]"
+                                  ? "bg-nexus-background border-nexus-border hover:bg-nexus-surface-hover"
                                   : "bg-transparent border-transparent opacity-30 hover:opacity-50"
                               }`}
                             >
-                              <span className={`text-xs font-bold ${isSelected ? "text-white" : "text-gray-400"}`}>
+                              <span className={`text-xs font-bold ${isSelected ? "text-nexus-primary" : "text-nexus-text-secondary"}`}>
                                 {gridItem.dayNum}
                               </span>
 
@@ -1141,9 +1141,9 @@ useEffect(() => {
                                   <div 
                                     key={appt.id}
                                     className={`w-2 h-2 rounded-full ${
-                                      appt.status === "Finalizado" ? "bg-[#34D399]" :
-                                      appt.status === "Confirmado" ? "bg-[#60A5FA]" :
-                                      "bg-[#FBBF24]"
+                                      appt.status === "Finalizado" ? "bg-nexus-success" :
+                                      appt.status === "Confirmado" ? "bg-nexus-info" :
+                                      "bg-nexus-warning"
                                     }`}
                                     title={`${appt.clientName}: ${appt.service}`}
                                   />
@@ -1151,7 +1151,7 @@ useEffect(() => {
                                 {dayBlocks.map((block) => (
                                   <div 
                                     key={block.id}
-                                    className="w-2 h-2 rounded-full bg-red-500"
+                                    className="w-2 h-2 rounded-full bg-nexus-error"
                                     title={`Bloqueado: ${block.reason}`}
                                   />
                                 ))}
@@ -1179,26 +1179,26 @@ useEffect(() => {
                             onClick={() => setSelectedDate(dayStr)}
                             className={`rounded-2xl border p-3 flex flex-col justify-between min-h-[140px] cursor-pointer transition-all duration-200 ${
                               isSelected 
-                                ? "bg-[#3B3EF4]/20 border-[#3B3EF4] shadow-[0_0_12px_rgba(59,62,244,0.15)]"
-                                : "bg-[#11131E] border-[#1D2032] hover:bg-[#161826]"
+                                ? "bg-nexus-primary-soft border-nexus-primary shadow-sm"
+                                : "bg-nexus-surface border-nexus-border hover:bg-nexus-surface-hover"
                             }`}
                           >
-                            <div className="text-center border-b border-[#1D2032] pb-2 select-none">
-                              <span className="block text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">{DIAS_SEMANA_NOMBRES[idx].slice(0,3)}</span>
-                              <span className="block text-base font-black text-white leading-none mt-1">{dateObj.getDate()}</span>
+                            <div className="text-center border-b border-nexus-border pb-2 select-none">
+                              <span className="block text-[10px] text-nexus-primary font-black uppercase tracking-wider">{DIAS_SEMANA_NOMBRES[idx].slice(0,3)}</span>
+                              <span className="block text-base font-black text-nexus-text leading-none mt-1">{dateObj.getDate()}</span>
                             </div>
 
                             <div className="space-y-1.5 mt-2 flex-1 flex flex-col justify-end">
                               {dayAppts.length === 0 ? (
-                                <span className="text-[9px] text-gray-600 block text-center italic">Vacío</span>
+                                <span className="text-[9px] text-nexus-text-muted block text-center italic">Vacío</span>
                               ) : (
                                 dayAppts.slice(0, 3).map((appt) => (
                                   <div 
                                     key={appt.id} 
                                     className={`text-[9px] font-bold p-1 rounded text-center truncate ${
-                                      appt.status === "Finalizado" ? "bg-[#082F1D]/60 text-[#34D399]" :
-                                      appt.status === "Confirmado" ? "bg-[#0B2545]/60 text-[#60A5FA]" :
-                                      "bg-[#3A2208]/60 text-[#FBBF24]"
+                                      appt.status === "Finalizado" ? "bg-nexus-success-bg text-nexus-success-text" :
+                                      appt.status === "Confirmado" ? "bg-nexus-info-bg text-nexus-info-text" :
+                                      "bg-nexus-warning-bg text-nexus-warning-text"
                                     }`}
                                   >
                                     {appt.time} - {appt.clientName.split(" ")[0]}
@@ -1215,9 +1215,9 @@ useEffect(() => {
                 ) : selectedRange === "Día" && diaViewStyle === "Calendario" ? (
                   
                   /* ================= VISTA DÍA: CALENDARIO (GRILLA HORARIA) ================= */
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl overflow-hidden shadow-2xl divide-y divide-[#1D2032] animate-fade-in">
+                  <div className="bg-nexus-surface border border-nexus-border rounded-3xl overflow-hidden shadow-lg divide-y divide-nexus-border animate-fade-in">
                     {visibleHorariosGrid.length === 0 && (
-                      <div className="p-6 text-center text-xs text-slate-500 font-bold">
+                      <div className="p-6 text-center text-xs text-nexus-text-muted font-bold">
                         No disponible este día según tu horario configurado.
                       </div>
                     )}
@@ -1238,16 +1238,16 @@ useEffect(() => {
                       });
 
                       return (
-                        <div key={hourSlot} className="flex min-h-[90px] hover:bg-[#141624]/10 transition-colors">
-                          <div className="w-20 border-r border-[#1D2032] py-4 px-3 flex flex-col items-center justify-start shrink-0 bg-[#0A0B10]/30 select-none">
-                            <span className="text-xs font-black text-[#3B3EF4]">{hourSlot}</span>
+                        <div key={hourSlot} className="flex min-h-[90px] hover:bg-nexus-surface-hover transition-colors">
+                          <div className="w-20 border-r border-nexus-border py-4 px-3 flex flex-col items-center justify-start shrink-0 bg-nexus-background/50 select-none">
+                            <span className="text-xs font-black text-nexus-primary">{hourSlot}</span>
                           </div>
 
                           <div className="flex-1 p-3 flex flex-col gap-2.5 justify-center">
                             {isBlocked ? (
                               /* DISEÑO SLOT BLOQUEADO ADMINISTRATIVAMENTE */
-                              <div className="bg-[#2D161B] text-red-400 border border-red-900/30 rounded-2xl p-4 flex items-center gap-3">
-                                <Icons.Lock className="w-5 h-5 text-red-400" />
+                              <div className="bg-nexus-error-bg text-nexus-error-text border border-nexus-error/25 rounded-2xl p-4 flex items-center gap-3">
+                                <Icons.Lock className="w-5 h-5 text-nexus-error" />
                                 <div>
                                   <span className="font-extrabold text-sm block">Espacio Reservado / Bloqueo Administrativo</span>
                                   <span className="text-xs opacity-75">{isBlocked.reason} ({isBlocked.startTime} - {isBlocked.endTime})</span>
@@ -1259,23 +1259,23 @@ useEffect(() => {
                                 <div 
                                   key={appt.id}
                                   onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
-                                  className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg transition-all duration-300 hover:brightness-105 cursor-pointer ${
-                                    appt.status === "completed" ? "bg-[#082F1D] text-[#34D399] border-[#10B981]/20" :
-                                    appt.status === "confirmed" ? "bg-[#0B2545] text-[#60A5FA] border-[#3B82F6]/20" :
-                                    "bg-[#3A2208] text-[#FBBF24] border-[#F59E0B]/20"
+                                  className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md transition-all duration-300 hover:brightness-105 cursor-pointer ${
+                                    appt.status === "completed" ? "bg-nexus-success-bg text-nexus-success-text border-nexus-success/20" :
+                                    appt.status === "confirmed" ? "bg-nexus-info-bg text-nexus-info-text border-nexus-info/20" :
+                                    "bg-nexus-warning-bg text-nexus-warning-text border-nexus-warning/20"
                                   }`}
                                 >
                                   <div>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-extrabold text-white text-sm">{appt.clientName}</span>
-                                      <span className="text-[9px] font-black tracking-widest uppercase bg-black/35 px-2 py-0.5 rounded-md">
+                                      <span className="font-extrabold text-nexus-text text-sm">{appt.clientName}</span>
+                                      <span className="text-[9px] font-black tracking-widest uppercase bg-black/10 px-2 py-0.5 rounded-md">
                                         {appt.time}
                                       </span>
                                     </div>
                                     <p className="text-xs opacity-90 mt-1 font-semibold">{appt.service}</p>
                                     
                                     {appt.notes && (
-                                      <p className="text-[10px] italic opacity-80 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-white/5">
+                                      <p className="text-[10px] italic opacity-80 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-black/5">
                                         Nota: {appt.notes}
                                       </p>
                                     )}
@@ -1286,7 +1286,7 @@ useEffect(() => {
                                         {getServiceDuration(services, appt)}
                                       </span>
                                       <span>•</span>
-                                      <span className="font-black text-white">${appt.price} USD</span>
+                                      <span className="font-black text-nexus-text">${appt.price} USD</span>
                                     </div>
                                   </div>
 
@@ -1297,14 +1297,14 @@ useEffect(() => {
                               /* DISEÑO SLOT LIBRE (Interactivo para desplegar Gestión de Horario) */
                               <div 
                                 onClick={() => handleSlotClick(hourSlot, isBlocked, hasAppt)}
-                                className="group/btn h-12 border border-dashed border-[#1E2138] hover:border-[#3B3EF4]/50 hover:bg-[#3B3EF4]/5 rounded-2xl flex items-center justify-between px-4 cursor-pointer transition-all duration-300"
+                                className="group/btn h-12 border border-dashed border-nexus-border hover:border-nexus-primary/50 hover:bg-nexus-primary-soft rounded-2xl flex items-center justify-between px-4 cursor-pointer transition-all duration-300"
                               >
-                                <span className="text-[11px] text-gray-500 group-hover/btn:text-purple-400 font-bold transition-colors">
+                                <span className="text-[11px] text-nexus-text-muted group-hover/btn:text-nexus-primary font-bold transition-colors">
                                   Bloque libre para {activeBarber.name}
                               
                                 </span>
-                                <span className="opacity-0 group-hover/btn:opacity-100 text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider flex items-center gap-1">
-                                  <Icons.Plus className="w-3 h-3 text-[#3B3EF4]" />
+                                <span className="opacity-0 group-hover/btn:opacity-100 text-[10px] text-nexus-primary font-black uppercase tracking-wider flex items-center gap-1">
+                                  <Icons.Plus className="w-3 h-3 text-nexus-primary" />
                                   Gestionar horario
                                 </span>
                               </div>
@@ -1318,10 +1318,10 @@ useEffect(() => {
                   /* ================= LISTADO DE CITAS ESTÁNDAR (Día-Lista) ================= */
                   <div className="space-y-3 animate-fade-in">
                     {filteredAppointments.length === 0 ? (
-                      <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-12 text-center flex flex-col items-center justify-center">
-                        <Icons.Calendar className="w-10 h-10 text-gray-600 mb-3" />
-                        <h3 className="text-sm font-bold text-gray-300">No hay citas registradas</h3>
-                        <p className="text-xs text-gray-500 mt-1 max-w-xs">
+                      <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-12 text-center flex flex-col items-center justify-center">
+                        <Icons.Calendar className="w-10 h-10 text-nexus-text-muted mb-3" />
+                        <h3 className="text-sm font-bold text-nexus-text">No hay citas registradas</h3>
+                        <p className="text-xs text-nexus-text-muted mt-1 max-w-xs">
                           {selectedRange === "Día" && "No hay citas programadas para hoy."}
                         </p>
                       </div>
@@ -1330,47 +1330,47 @@ useEffect(() => {
                         <div 
                           key={appt.id} 
                           onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
-                          className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-[#2D314E] transition-all duration-200 shadow-md cursor-pointer"
+                          className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-nexus-primary/40 transition-all duration-200 shadow-sm cursor-pointer"
                         >
                           <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-xl bg-[#161826] border border-[#1D2032] flex flex-col items-center justify-center shrink-0">
-                              <span className="text-[9px] text-[#3B3EF4] font-black uppercase tracking-widest">Hora</span>
-                              <span className="text-base font-black text-white leading-none mt-1">{appt.time}</span>
+                            <div className="w-16 h-16 rounded-xl bg-nexus-background border border-nexus-border flex flex-col items-center justify-center shrink-0">
+                              <span className="text-[9px] text-nexus-primary font-black uppercase tracking-widest">Hora</span>
+                              <span className="text-base font-black text-nexus-text leading-none mt-1">{appt.time}</span>
                             </div>
 
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-white text-sm tracking-wide">{appt.clientName}</h4>
+                                <h4 className="font-bold text-nexus-text text-sm tracking-wide">{appt.clientName}</h4>
                                 
                                 <AppointmentStatusBadge status={appt.status} variant="barber" />
                               </div>
                               
-                              <p className="text-xs text-gray-400 mt-1 font-medium">{appt.service}</p>
+                              <p className="text-xs text-nexus-text-secondary mt-1 font-medium">{appt.service}</p>
                               
                               {appt.notes && (
-                                <p className="text-[10px] italic opacity-85 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-white/5">
+                                <p className="text-[10px] italic opacity-85 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-black/5">
                                   Nota: {appt.notes}
                                 </p>
                               )}
 
-                              <div className="flex items-center gap-3 text-[10px] text-gray-500 mt-2">
-                                <span className="flex items-center gap-1 font-semibold text-gray-400">
-                                  <Icons.Clock className="w-3.5 h-3.5 text-gray-500" />
+                              <div className="flex items-center gap-3 text-[10px] text-nexus-text-muted mt-2">
+                                <span className="flex items-center gap-1 font-semibold text-nexus-text-secondary">
+                                  <Icons.Clock className="w-3.5 h-3.5 text-nexus-text-muted" />
                                   {getServiceDuration(services, appt)}
                                 </span>
                                 <span>•</span>
-                                <span className="text-emerald-400 font-bold">{appt.price} Bs</span>
+                                <span className="text-nexus-success-text font-bold">{appt.price} Bs</span>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between sm:justify-end gap-2 pt-3 sm:pt-0 border-t sm:border-0 border-white/5">
+                          <div className="flex items-center justify-between sm:justify-end gap-2 pt-3 sm:pt-0 border-t sm:border-0 border-nexus-border">
                             {appt.status !== "Finalizado" && (
                               <div className="flex gap-2">
                                 {appt.status === "Confirmado" && (
                                   <button
                                   onClick={(e) => { e.stopPropagation(); updateStatus(appt.id, "completed"); }}
-                                    className="px-4 py-1.5 bg-[#3B3EF4] hover:bg-[#2E31D4] text-white rounded-xl text-[11px] font-bold transition-all shadow-md"
+                                    className="px-4 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-xl text-[11px] font-bold transition-all shadow-md"
                                   >
                                     Finalizar
                                   </button>
@@ -1394,54 +1394,54 @@ useEffect(() => {
                 {renderUnifiedSelector(false)}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-gray-500 font-black uppercase tracking-widest">Servicios</span>
-                    <span className="block text-2.5xl font-black text-white mt-1">{commissionSummary.totalServicios}</span>
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
+                    <span className="block text-[9px] text-nexus-text-muted font-black uppercase tracking-widest">Servicios</span>
+                    <span className="block text-2.5xl font-black text-nexus-text mt-1">{commissionSummary.totalServicios}</span>
                   </div>
 
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-[#3B3EF4] font-black uppercase tracking-widest">Comisión total</span>
-                    <span className="block text-2.5xl font-black text-emerald-400 mt-1">{commissionSummary.comisionTotal} Bs</span>
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
+                    <span className="block text-[9px] text-nexus-primary font-black uppercase tracking-widest">Comisión total</span>
+                    <span className="block text-2.5xl font-black text-nexus-success-text mt-1">{commissionSummary.comisionTotal} Bs</span>
                   </div>
 
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-[#3B3EF4] font-black uppercase tracking-widest">Pagada</span>
-                    <span className="block text-2.5xl font-black text-[#60A5FA] mt-1">{commissionSummary.comisionPagada} Bs</span>
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
+                    <span className="block text-[9px] text-nexus-primary font-black uppercase tracking-widest">Pagada</span>
+                    <span className="block text-2.5xl font-black text-nexus-info-text mt-1">{commissionSummary.comisionPagada} Bs</span>
                   </div>
 
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-gray-500 font-black uppercase tracking-widest">Pendiente</span>
-                    <span className="block text-2.5xl font-black text-[#FBBF24] mt-1">{commissionSummary.comisionPendiente} Bs</span>
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
+                    <span className="block text-[9px] text-nexus-text-muted font-black uppercase tracking-widest">Pendiente</span>
+                    <span className="block text-2.5xl font-black text-nexus-warning-text mt-1">{commissionSummary.comisionPendiente} Bs</span>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-base font-bold text-white">Transacciones & Comisiones</h3>
-                    <p className="text-xs text-gray-500">Historial completo de cortes finalizados para este periodo.</p>
+                    <h3 className="text-base font-bold text-nexus-text">Transacciones & Comisiones</h3>
+                    <p className="text-xs text-nexus-text-muted">Historial completo de cortes finalizados para este periodo.</p>
                   </div>
 
                   <div className="space-y-2.5">
                     {commissionSummary.allFinalized.length === 0 ? (
-                      <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-12 text-center">
-                        <Icons.Dollar className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                        <span className="text-sm font-bold text-gray-400 block">No hay comisiones generadas</span>
-                        <p className="text-xs text-gray-600 mt-1">Completa citas de la agenda para registrar su comisión.</p>
+                      <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-12 text-center">
+                        <Icons.Dollar className="w-10 h-10 text-nexus-text-muted mx-auto mb-2" />
+                        <span className="text-sm font-bold text-nexus-text-secondary block">No hay comisiones generadas</span>
+                        <p className="text-xs text-nexus-text-muted mt-1">Completa citas de la agenda para registrar su comisión.</p>
                       </div>
                     ) : (
                       commissionSummary.allFinalized.map((item) => (
                         <div 
                           key={item.id} 
-                          className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-4 flex items-center justify-between gap-4"
+                          className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between gap-4"
                         >
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-white text-xs">{item.clientName}</span>
-                              <span className="text-[10px] text-[#3B3EF4] bg-[#3B3EF4]/10 px-2 py-0.5 rounded-md font-bold">
+                              <span className="font-bold text-nexus-text text-xs">{item.clientName}</span>
+                              <span className="text-[10px] text-nexus-primary bg-nexus-primary-soft px-2 py-0.5 rounded-md font-bold">
                                 {item.service}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-1">
+                            <div className="flex items-center gap-2 text-[10px] text-nexus-text-muted mt-1">
                               <span>Fecha: {item.date}</span>
                               <span>•</span>
                               <span>Pago: {item.paymentMethod || "Efectivo"}</span>
@@ -1450,8 +1450,8 @@ useEffect(() => {
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <span className="block text-sm font-black text-emerald-400">Bs {item.commission} </span>
-                              <span className={`text-[9px] font-black uppercase tracking-wider ${item.commissionPaid ? "text-[#60A5FA]" : "text-[#FBBF24]"}`}>
+                              <span className="block text-sm font-black text-nexus-success-text">Bs {item.commission} </span>
+                              <span className={`text-[9px] font-black uppercase tracking-wider ${item.commissionPaid ? "text-nexus-info-text" : "text-nexus-warning-text"}`}>
                                 {item.commissionPaid ? "Pagada" : "Pendiente"}
                               </span>
                             </div>
@@ -1459,7 +1459,7 @@ useEffect(() => {
                             {!item.commissionPaid && (
                               <button 
                                 onClick={() => markCommissionPaid(item.id)}
-                                className="px-3.5 py-1.5 bg-[#3B3EF4] hover:bg-[#2E31D4] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1"
+                                className="px-3.5 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1"
                               >
                                 <Icons.Check className="w-3.5 h-3.5" />
                                 Cobrar
@@ -1481,46 +1481,46 @@ useEffect(() => {
                 {renderUnifiedSelector(false)}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-5 flex items-center justify-between">
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Cortes completados</span>
-                      <span className="block text-3xl font-black text-white mt-1">{performanceData.totalServicios}</span>
+                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">Cortes completados</span>
+                      <span className="block text-3xl font-black text-nexus-text mt-1">{performanceData.totalServicios}</span>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-[#3B3EF4]/10 flex items-center justify-center text-[#3B3EF4]">
+                    <div className="w-12 h-12 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary">
                       <Icons.Scissors className="w-6 h-6" />
                     </div>
                   </div>
 
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-5 flex items-center justify-between">
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Facturado Total</span>
-                      <span className="block text-3xl font-black text-emerald-400 mt-1">{performanceData.totalGanado}Bs</span>
+                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">Facturado Total</span>
+                      <span className="block text-3xl font-black text-nexus-success-text mt-1">{performanceData.totalGanado}Bs</span>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <div className="w-12 h-12 rounded-xl bg-nexus-success-bg flex items-center justify-center text-nexus-success-text">
                       <Icons.Dollar className="w-6 h-6" />
                     </div>
                   </div>
 
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-2xl p-5 flex items-center justify-between">
+                  <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Crecimiento Estimado</span>
-                      <span className="block text-3xl font-black text-[#60A5FA] mt-1">+{performanceData.crecimientoPorcentaje}%</span>
+                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">Crecimiento Estimado</span>
+                      <span className="block text-3xl font-black text-nexus-info-text mt-1">+{performanceData.crecimientoPorcentaje}%</span>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                    <div className="w-12 h-12 rounded-xl bg-nexus-info-bg flex items-center justify-center text-nexus-info-text">
                       <Icons.TrendingUp className="w-6 h-6" />
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl p-5 space-y-4">
+                  <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
-                      <h4 className="text-sm font-bold text-white">Ingresos por Método de Pago (Bs)</h4>
-                      <p className="text-[11px] text-gray-500">Monto total facturado por caja.</p>
+                      <h4 className="text-sm font-bold text-nexus-text">Ingresos por Método de Pago (Bs)</h4>
+                      <p className="text-[11px] text-nexus-text-muted">Monto total facturado por caja.</p>
                     </div>
                     <div className="h-64">
                       {performanceData.totalServicios === 0 ? (
-                        <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                        <div className="h-full flex items-center justify-center text-xs text-nexus-text-muted">
                           Sin transacciones en este periodo
                         </div>
                       ) : (
@@ -1528,10 +1528,10 @@ useEffect(() => {
                           <BarChart data={performanceData.barData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                             <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
                             <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
-                            <Tooltip contentStyle={{ backgroundColor: '#11131E', borderColor: '#1D2032', borderRadius: '12px', fontSize: '11px' }} />
-                            <Bar dataKey="monto" fill="#3B3EF4" radius={[8, 8, 0, 0]}>
+                            <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E9EDF2', borderRadius: '12px', fontSize: '11px' }} />
+                            <Bar dataKey="monto" fill="#0F6FFF" radius={[8, 8, 0, 0]}>
                               {performanceData.barData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? '#3B3EF4' : index === 1 ? '#60A5FA' : '#34D399'} />
+                                <Cell key={`cell-${index}`} fill={index === 0 ? '#0F6FFF' : index === 1 ? '#3B82F6' : '#10B981'} />
                               ))}
                             </Bar>
                           </BarChart>
@@ -1540,14 +1540,14 @@ useEffect(() => {
                     </div>
                   </div>
 
-                  <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl p-5 space-y-4">
+                  <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
-                      <h4 className="text-sm font-bold text-white">Servicios más Solicitados</h4>
-                      <p className="text-[11px] text-gray-500">Distribución de servicios realizados.</p>
+                      <h4 className="text-sm font-bold text-nexus-text">Servicios más Solicitados</h4>
+                      <p className="text-[11px] text-nexus-text-muted">Distribución de servicios realizados.</p>
                     </div>
                     <div className="h-64 flex items-center justify-center relative">
                       {performanceData.totalServicios === 0 ? (
-                        <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                        <div className="h-full flex items-center justify-center text-xs text-nexus-text-muted">
                           Sin servicios en este periodo
                         </div>
                       ) : (
@@ -1564,15 +1564,15 @@ useEffect(() => {
                                 dataKey="value"
                               >
                                 {performanceData.pieData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={['#3B3EF4', '#34D399', '#60A5FA', '#FBBF24', '#f472b6', '#fb7185'][index % 6]} />
+                                  <Cell key={`cell-${index}`} fill={['#0F6FFF', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'][index % 6]} />
                                 ))}
                               </Pie>
-                              <Tooltip contentStyle={{ backgroundColor: '#11131E', borderColor: '#1D2032', borderRadius: '12px', fontSize: '11px' }} />
+                              <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E9EDF2', borderRadius: '12px', fontSize: '11px' }} />
                             </PieChart>
                           </ResponsiveContainer>
                           <div className="absolute flex flex-col items-center">
-                            <span className="text-2xl font-black text-white">{performanceData.totalServicios}</span>
-                            <span className="text-[9px] text-[#3B3EF4] font-bold uppercase tracking-widest">Totales</span>
+                            <span className="text-2xl font-black text-nexus-text">{performanceData.totalServicios}</span>
+                            <span className="text-[9px] text-nexus-primary font-bold uppercase tracking-widest">Totales</span>
                           </div>
                         </>
                       )}
@@ -1585,43 +1585,43 @@ useEffect(() => {
 
             {/* ================= TAB 4: PERFIL ================= */}
             {activeTab === "perfil" && (
-              <div className="max-w-md mx-auto bg-[#11131E] border border-[#1D2032] rounded-3xl p-6 space-y-6 text-center animate-fade-in shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-[#3B3EF4]/10 to-transparent"></div>
+              <div className="max-w-md mx-auto bg-nexus-surface border border-nexus-border rounded-3xl p-6 space-y-6 text-center animate-fade-in shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-nexus-primary/10 to-transparent"></div>
 
                 <div className="relative pt-6">
                   <div className="relative inline-block">
                     <img 
                       src={activeBarber.avatar} 
                       alt={activeBarber.name} 
-                      className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-[#3B3EF4]/20 shadow-xl"
+                      className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-nexus-primary/20 shadow-xl"
                     />
-                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-[#11131E] animate-pulse"></div>
+                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-nexus-success border-2 border-nexus-surface animate-pulse"></div>
                   </div>
 
-                  <h3 className="text-xl font-bold tracking-tight text-white mt-4">{activeBarber.name} </h3>
-                  <span className="text-xs text-[#3B3EF4] font-bold uppercase tracking-wider">{activeBarber.role}</span>
-                  <p className="text-[11px] text-gray-500 mt-1">Gallyflow Staff</p>
+                  <h3 className="text-xl font-bold tracking-tight text-nexus-text mt-4">{activeBarber.name} </h3>
+                  <span className="text-xs text-nexus-primary font-bold uppercase tracking-wider">{activeBarber.role}</span>
+                  <p className="text-[11px] text-nexus-text-muted mt-1">Gallyflow Staff</p>
                 </div>
 
                 <div className="space-y-3 pt-4">
                   <button 
                     onClick={() => triggerToast("Tutorial de la App: ¡Prueba agendar una cita o completar un corte!", "info")}
-                    className="w-full py-3 px-4 bg-[#3B3EF4]/10 hover:bg-[#3B3EF4]/20 border border-[#3B3EF4]/30 text-[#60A5FA] font-bold text-xs tracking-wider uppercase rounded-xl transition-all"
+                    className="w-full py-3 px-4 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-xs tracking-wider uppercase rounded-xl transition-all"
                   >
                     Ver Tutorial
                   </button>
 
                   <button 
                     onClick={() => triggerToast("Conexión de seguridad establecida con éxito", "success")}
-                    className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 bg-nexus-surface-hover hover:bg-nexus-border border border-nexus-border text-nexus-text-secondary font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
                   >
-                    <Icons.Shield className="w-4 h-4 text-[#3B3EF4]" />
+                    <Icons.Shield className="w-4 h-4 text-nexus-primary" />
                     Estado del Sistema
                   </button>
 
                   <button
                     onClick={logout}
-                    className="w-full py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 bg-nexus-error-bg hover:opacity-80 border border-nexus-error/30 text-nexus-error-text font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
                    >
                     <LogOut className="w-4 h-4" />
                     Cerrar Sesión
@@ -1640,7 +1640,7 @@ useEffect(() => {
           onClick={() => {
             setIsCreateModalOpen(true); 
           }}
-          className="fixed bottom-24 right-5 md:bottom-8 md:right-8 w-14 h-14 bg-[#3B3EF4] hover:bg-[#2E31D4] text-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(59,62,244,0.4)] active:scale-95 transition-all z-40 border border-white/10"
+          className="fixed bottom-24 right-5 md:bottom-8 md:right-8 w-14 h-14 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all z-40 border border-white/10"
           title="Agendar Nueva Cita"
         >
           <Icons.Plus className="w-7 h-7" />
@@ -1650,10 +1650,10 @@ useEffect(() => {
       {/* ================= MODAL DE GESTIÓN DE HORARIO ================= */}
       {isSlotModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-2xl relative animate-fade-in text-center">
+          <div className="bg-nexus-surface border border-nexus-border rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-xl relative animate-fade-in text-center">
             <div>
-              <h3 className="text-lg font-black text-white">Gestión de Horario</h3>
-              <p className="text-xs text-gray-400 mt-1">Rango seleccionado: <strong className="text-[#3B3EF4]">{tempSelectedTime}</strong></p>
+              <h3 className="text-lg font-black text-nexus-text">Gestión de Horario</h3>
+              <p className="text-xs text-nexus-text-secondary mt-1">Rango seleccionado: <strong className="text-nexus-primary">{tempSelectedTime}</strong></p>
             </div>
 
             <div className="space-y-3 pt-2">
@@ -1662,7 +1662,7 @@ useEffect(() => {
                   setIsModalOpenSlot(false);
                   setIsCreateModalOpen(true); 
                 }}
-                className="w-full py-3 bg-[#3B3EF4] hover:bg-[#2E31D4] text-white font-extrabold text-xs tracking-wider uppercase rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                className="w-full py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold text-xs tracking-wider uppercase rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
               >
                 <Icons.Calendar className="w-4 h-4 text-white" />
                 Crear Nueva Reserva
@@ -1678,17 +1678,17 @@ useEffect(() => {
                   setIsModalOpenSlot(false);
                   setIsBlockModalOpen(true); 
                 }}
-                className="w-full py-3 bg-[#2D161B] hover:bg-[#3d1a21] text-red-400 border border-red-900/30 font-extrabold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 bg-nexus-error-bg hover:opacity-80 text-nexus-error-text border border-nexus-error/25 font-extrabold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
               >
-                <Icons.Lock className="w-4 h-4 text-red-400" />
+                <Icons.Lock className="w-4 h-4 text-nexus-error" />
                 Bloquear este espacio
               </button>
             </div>
 
-            <div className="border-t border-[#1D2032] pt-3">
+            <div className="border-t border-nexus-border pt-3">
               <button
                 onClick={() => setIsModalOpenSlot(false)}
-                className="w-full py-2 bg-transparent text-gray-400 hover:text-white text-xs font-bold transition-all"
+                className="w-full py-2 bg-transparent text-nexus-text-secondary hover:text-nexus-text text-xs font-bold transition-all"
               >
                 Cancelar
               </button>
@@ -1700,15 +1700,15 @@ useEffect(() => {
       {/* ================= MODAL DE BLOQUEO ADMINISTRATIVO ================= */}
       {isBlockModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl relative animate-fade-in">
+          <div className="bg-nexus-surface border border-nexus-border rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-xl relative animate-fade-in">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-base font-bold text-white">Bloquear Horario Administrativo</h3>
-                <p className="text-[11px] text-gray-500">Asignada a: {activeBarber.name}</p>
+                <h3 className="text-base font-bold text-nexus-text">Bloquear Horario Administrativo</h3>
+                <p className="text-[11px] text-nexus-text-muted">Asignada a: {activeBarber.name}</p>
               </div>
               <button 
                 onClick={() => setIsBlockModalOpen(false)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-gray-400 transition-all"
+                className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-text-secondary transition-all"
               >
                 ✕
               </button>
@@ -1716,48 +1716,48 @@ useEffect(() => {
 
             <form onSubmit={handleAddBlockSlot} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">Fecha *</label>
+                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Fecha *</label>
                 <input 
                   type="date"
                   value={blockDate}
                   onChange={(e) => setBlockDate(e.target.value)}
-                  className="w-full bg-[#161826] border border-[#1D2032] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[#3B3EF4] transition-all"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3 py-2 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">Hora Inicio *</label>
+                  <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Hora Inicio *</label>
                   <input 
                     type="time"
                     value={blockStartTime}
                     onChange={(e) => setBlockStartTime(e.target.value)}
-                    className="w-full bg-[#161826] border border-[#1D2032] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[#3B3EF4] transition-all"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3 py-2 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
                     required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">Hora Fin *</label>
+                  <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Hora Fin *</label>
                   <input 
                     type="time"
                     value={blockEndTime}
                     onChange={(e) => setBlockEndTime(e.target.value)}
-                    className="w-full bg-[#161826] border border-[#1D2032] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[#3B3EF4] transition-all"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3 py-2 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
                     required
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">Motivo / Razón del bloqueo *</label>
+                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Motivo / Razón del bloqueo *</label>
                 <input 
                   type="text"
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
                   placeholder="Ej: Reunión, Almuerzo, Descanso"
-                  className="w-full bg-[#161826] border border-[#1D2032] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3EF4] transition-all"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
                   required
                 />
               </div>
@@ -1766,13 +1766,13 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={() => setIsBlockModalOpen(false)}
-                  className="flex-1 py-3 bg-[#161826] border border-[#1D2032] hover:bg-[#1E2138] text-gray-300 font-black text-xs tracking-wider uppercase rounded-xl transition-all"
+                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-black text-xs tracking-wider uppercase rounded-xl transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-[#3B3EF4] hover:bg-[#2E31D4] text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-md"
+                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-md"
                 >
                   Bloquear Horario
                 </button>
@@ -1817,15 +1817,15 @@ useEffect(() => {
       {/* ================= MODAL SECUNDARIO: NUEVO CLIENTE ================= */}
       {isNewClientModalOpen && (
         <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#11131E] border border-[#1D2032] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl relative animate-fade-in">
+          <div className="bg-nexus-surface border border-nexus-border rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-xl relative animate-fade-in">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-base font-bold text-white">Nuevo Cliente</h3>
-                <p className="text-[11px] text-gray-500">Registrar un nuevo perfil en el sistema</p>
+                <h3 className="text-base font-bold text-nexus-text">Nuevo Cliente</h3>
+                <p className="text-[11px] text-nexus-text-muted">Registrar un nuevo perfil en el sistema</p>
               </div>
               <button 
                 onClick={() => setIsNewClientModalOpen(false)}
-                className="p-1.5 hover:bg-white/5 rounded-lg text-gray-400 transition-all"
+                className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-text-secondary transition-all"
               >
                 ✕
               </button>
@@ -1833,24 +1833,24 @@ useEffect(() => {
 
             <form onSubmit={handleCreateNewClient} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">Nombre completo *</label>
+                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Nombre completo *</label>
                 <input 
                   type="text" 
                   value={newClientModalName}
                   onChange={(e) => setNewClientModalName(e.target.value)}
                   placeholder="Ej: Carlos Eduardo Siles"
-                  className="w-full bg-[#161826] border border-[#1D2032] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#3B3EF4] transition-all"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted focus:outline-none focus:border-nexus-primary transition-all"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-[#3B3EF4] font-black uppercase tracking-wider">Teléfono *</label>
+                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Teléfono *</label>
                 <div className="flex gap-2">
                   <select
                     value={newClientModalCountryCode}
                     onChange={(e) => setNewClientModalCountryCode(e.target.value)}
-                    className="bg-[#161826] border border-[#1D2032] rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-[#3B3EF4]"
+                    className="bg-nexus-background border border-nexus-border rounded-xl px-2 py-2 text-xs text-nexus-text focus:outline-none focus:border-nexus-primary"
                   >
                     <option value="+591">🇧🇴 +591</option>
                     <option value="+54">🇦🇷 +54</option>
@@ -1867,7 +1867,7 @@ useEffect(() => {
                     value={newClientModalPhone}
                     onChange={(e) => setNewClientModalPhone(e.target.value.replace(/\D/g, ""))}
                     placeholder="Número de celular"
-                    className="flex-1 bg-[#161826] border border-[#1D2032] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#3B3EF4] transition-all"
+                    className="flex-1 bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted focus:outline-none focus:border-nexus-primary transition-all"
                     required
                   />
                 </div>
@@ -1877,13 +1877,13 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={() => setIsNewClientModalOpen(false)}
-                  className="flex-1 py-3 bg-[#161826] border border-[#1D2032] hover:bg-[#1E2138] text-gray-300 font-black text-xs tracking-wider uppercase rounded-xl transition-all"
+                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-black text-xs tracking-wider uppercase rounded-xl transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-[#3B3EF4] hover:bg-[#2E31D4] text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-lg"
+                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-md"
                 >
                   Guardar Cliente
                 </button>
@@ -1894,7 +1894,7 @@ useEffect(() => {
       )}
 
       {/* BOTTOM NAVIGATION DE ESTILO MÓVIL */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0A0B10] border-t border-[#1A1C2C] flex justify-around py-3 px-4 shadow-[0_-10px_35px_rgba(0,0,0,0.6)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-nexus-surface border-t border-nexus-border flex justify-around py-3 px-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
         {[
           { id: "agenda", label: "Agenda", icon: Icons.Calendar },
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
@@ -1911,11 +1911,11 @@ useEffect(() => {
             >
               <TabIcon className={`w-5 h-5 transition-all ${
                 isActive 
-                  ? "text-[#3B3EF4] scale-110 drop-shadow-[0_0_10px_rgba(59,62,244,0.3)]" 
-                  : "text-gray-500 group-hover:text-gray-300"
+                  ? "text-nexus-primary scale-110" 
+                  : "text-nexus-text-muted group-hover:text-nexus-text-secondary"
               }`} />
               <span className={`text-[9px] font-black tracking-wider transition-all uppercase ${
-                isActive ? "text-white" : "text-gray-500"
+                isActive ? "text-nexus-primary" : "text-nexus-text-muted"
               }`}>
                 {tab.label}
               </span>

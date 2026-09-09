@@ -66,10 +66,10 @@ export function isFinal(status) {
 // pero el resultado visual es idéntico al actual.
 export function getStatusCardClasses(status) {
   if (status === STATUS.COMPLETED) {
-    return 'bg-[#0E3524] border-emerald-500/30 text-emerald-100 hover:bg-[#12422D]';
+    return 'bg-nexus-success-bg border-nexus-success/30 text-nexus-success-text hover:opacity-90';
   }
   if (status === STATUS.IN_PROCESS) {
-    return 'bg-[#3D250D] border-amber-500/40 text-amber-100 hover:bg-[#4C2E11]';
+    return 'bg-nexus-warning-bg border-nexus-warning/40 text-nexus-warning-text hover:opacity-90';
   }
-  return 'bg-indigo-950/40 border-indigo-500/30 text-indigo-100 hover:bg-indigo-900/50';
+  return 'bg-nexus-primary-soft border-nexus-primary/30 text-nexus-primary hover:opacity-90';
 }

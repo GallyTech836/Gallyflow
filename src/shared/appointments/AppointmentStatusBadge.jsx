@@ -17,19 +17,18 @@ const VARIANTS = {
       xs: 'text-[8px] px-1.5 py-0.5',
     },
     colors: {
-      [STATUS.PENDING]: 'bg-slate-800/60 border-slate-500/30 text-slate-200',
-      [STATUS.CONFIRMED]: 'bg-indigo-950/40 border-indigo-500/30 text-indigo-100',
-      [STATUS.IN_PROCESS]: 'bg-[#3D250D] border-amber-500/40 text-amber-100',
-      [STATUS.COMPLETED]: 'bg-[#0E3524] border-emerald-500/30 text-emerald-100',
-      [STATUS.CANCELLED]: 'bg-rose-950/40 border-rose-500/30 text-rose-200',
+      [STATUS.PENDING]: 'bg-nexus-surface-hover border-nexus-border text-nexus-text-secondary',
+      [STATUS.CONFIRMED]: 'bg-nexus-info-bg border-nexus-info/30 text-nexus-info-text',
+      [STATUS.IN_PROCESS]: 'bg-nexus-warning-bg border-nexus-warning/40 text-nexus-warning-text',
+      [STATUS.COMPLETED]: 'bg-nexus-success-bg border-nexus-success/30 text-nexus-success-text',
+      [STATUS.CANCELLED]: 'bg-nexus-error-bg border-nexus-error/30 text-nexus-error-text',
     },
-    defaultColor: 'bg-slate-800/60 border-slate-500/30 text-slate-200',
+    defaultColor: 'bg-nexus-surface-hover border-nexus-border text-nexus-text-secondary',
   },
 
-  // Replica EXACTA del badge que ya existía en BarberApp.jsx
-  // (línea ~1248-1254): mismas clases, mismos hex, mismo fallback
-  // a "ámbar" para cualquier estado que no sea completed/confirmed
-  // (pending, in-process, cancelled) — igual que el ternario original.
+  // Replica del badge que ya existía en BarberApp.jsx, ahora con los
+  // mismos tokens de estado que usa la variante admin — antes tenían
+  // hex propios y coincidían por casualidad; ahora coinciden a propósito.
   barber: {
     wrapperBase: 'font-black uppercase tracking-wider rounded-md',
     sizeClasses: {
@@ -37,10 +36,10 @@ const VARIANTS = {
       xs: 'text-[9px] px-2.5 py-1',
     },
     colors: {
-      [STATUS.COMPLETED]: 'bg-[#082F1D] text-[#34D399] border-[#10B981]/20',
-      [STATUS.CONFIRMED]: 'bg-[#0B2545] text-[#60A5FA] border-[#3B82F6]/20',
+      [STATUS.COMPLETED]: 'bg-nexus-success-bg text-nexus-success-text border-nexus-success/20',
+      [STATUS.CONFIRMED]: 'bg-nexus-info-bg text-nexus-info-text border-nexus-info/20',
     },
-    defaultColor: 'bg-[#3A2208] text-[#FBBF24] border-[#F59E0B]/20',
+    defaultColor: 'bg-nexus-warning-bg text-nexus-warning-text border-nexus-warning/20',
   },
 };
 

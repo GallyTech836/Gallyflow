@@ -6,11 +6,11 @@ import BusinessHeroPreview from './BusinessHeroPreview';
 import HeroLogoUploader from './HeroLogoUploader';
 
 const inputClass =
-  'w-full bg-[#0A0D1A] border border-[#232B4C] text-white rounded-lg text-xs px-3 py-2.5 outline-none focus:border-indigo-500/70 transition-colors placeholder:text-slate-600';
+  'w-full bg-nexus-background border border-nexus-border text-nexus-text rounded-lg text-xs px-3 py-2.5 outline-none focus:border-nexus-primary/70 transition-colors placeholder:text-nexus-text-muted';
 
 function SectionCard({ children, className = '' }) {
   return (
-    <div className={`bg-[#0C0E17] border border-[#1E2442] rounded-2xl p-5 ${className}`}>
+    <div className={`bg-nexus-surface border border-nexus-border rounded-2xl p-5 ${className}`}>
       {children}
     </div>
   );
@@ -18,7 +18,7 @@ function SectionCard({ children, className = '' }) {
 
 function FieldLabel({ children }) {
   return (
-    <span className="block text-[10px] text-slate-500 uppercase tracking-widest font-mono mb-1.5">
+    <span className="block text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono mb-1.5">
       {children}
     </span>
   );
@@ -63,11 +63,11 @@ export default function BusinessHeroSettings({ negocioId }) {
 
       {/* ── Encabezado ──────────────────────────────────────────── */}
       <SectionCard>
-        <div className="flex items-center gap-2.5 mb-0.5">
-          <LayoutTemplate className="w-4 h-4 text-indigo-400 shrink-0" />
-          <h3 className="text-sm font-bold text-white">Pantalla de Bienvenida</h3>
+      <div className="flex items-center gap-2.5 mb-0.5">
+          <LayoutTemplate className="w-4 h-4 text-nexus-primary shrink-0" />
+          <h3 className="text-sm font-bold text-nexus-text">Pantalla de Bienvenida</h3>
         </div>
-        <p className="text-[11px] text-slate-500 ml-6.5">
+        <p className="text-[11px] text-nexus-text-muted ml-6.5">
           Personaliza lo que tus clientes ven antes de reservar una cita.
         </p>
       </SectionCard>
@@ -109,18 +109,18 @@ export default function BusinessHeroSettings({ negocioId }) {
         </SectionCard>
 
         <SectionCard>
-          <FieldLabel>Imagen de portada (próximamente)</FieldLabel>
+        <FieldLabel>Imagen de portada (próximamente)</FieldLabel>
           {/* Placeholder visual idéntico al uploader pero sin funcionalidad */}
-          <div className="flex items-center gap-4 bg-[#0A0D1A] border border-dashed border-[#232B4A] rounded-xl p-4 opacity-50 select-none cursor-not-allowed min-h-[88px]">
-            <div className="w-14 h-14 rounded-xl bg-[#131728] border border-[#232343] flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex items-center gap-4 bg-nexus-background border border-dashed border-nexus-border rounded-xl p-4 opacity-50 select-none cursor-not-allowed min-h-[88px]">
+            <div className="w-14 h-14 rounded-xl bg-nexus-surface border border-nexus-border flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-nexus-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500">Subir imagen de portada</p>
-              <p className="text-[10px] text-slate-600 mt-0.5">Solo se mostrará en futuras versiones</p>
+              <p className="text-[11px] font-bold text-nexus-text-muted">Subir imagen de portada</p>
+              <p className="text-[10px] text-nexus-text-muted mt-0.5">Solo se mostrará en futuras versiones</p>
             </div>
           </div>
         </SectionCard>
@@ -133,14 +133,14 @@ export default function BusinessHeroSettings({ negocioId }) {
           <FieldLabel>Mostrar calificación</FieldLabel>
           <div className="flex items-center justify-between mt-1">
             <div>
-              <p className="text-xs font-semibold text-slate-200 leading-tight">Activa esta opción</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">para mostrar estrellas y rating.</p>
+            <p className="text-xs font-semibold text-nexus-text leading-tight">Activa esta opción</p>
+            <p className="text-[10px] text-nexus-text-muted mt-0.5">para mostrar estrellas y rating.</p>
             </div>
             <button
               type="button"
               onClick={() => update('showRating', !form.showRating)}
               className={`w-11 h-6 rounded-full transition-colors relative shrink-0 overflow-hidden ${
-                form.showRating ? 'bg-indigo-500' : 'bg-[#2A3153]'
+                form.showRating ? 'bg-nexus-primary' : 'bg-nexus-border'
               }`}
               aria-pressed={form.showRating}
             >
@@ -156,8 +156,8 @@ export default function BusinessHeroSettings({ negocioId }) {
         {/* Valor del rating */}
         <SectionCard>
           <FieldLabel>Rating</FieldLabel>
-          <p className="text-[10px] text-slate-500 mb-2">Calificación que verán tus clientes.</p>
-          <div className={`flex items-center gap-2 bg-[#0A0D1A] border border-[#232B4C] rounded-lg px-3 py-2 ${!form.showRating ? 'opacity-40 pointer-events-none' : ''}`}>
+          <p className="text-[10px] text-nexus-text-muted mb-2">Calificación que verán tus clientes.</p>
+          <div className={`flex items-center gap-2 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 ${!form.showRating ? 'opacity-40 pointer-events-none' : ''}`}>
             <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
             <input
               type="number"
@@ -167,7 +167,7 @@ export default function BusinessHeroSettings({ negocioId }) {
               disabled={!form.showRating}
               value={form.rating}
               onChange={(e) => update('rating', parseFloat(e.target.value))}
-              className="flex-1 bg-transparent text-white text-xs font-bold outline-none disabled:cursor-not-allowed w-full"
+              className="flex-1 bg-transparent text-nexus-text text-xs font-bold outline-none disabled:cursor-not-allowed w-full"
             />
           </div>
         </SectionCard>
@@ -175,8 +175,8 @@ export default function BusinessHeroSettings({ negocioId }) {
 
       {/* ── Texto secundario (full width) ───────────────────────── */}
       <SectionCard>
-        <FieldLabel>Texto secundario (opcional)</FieldLabel>
-        <p className="text-[10px] text-slate-500 mb-2">Texto corto que aparecerá debajo del rating.</p>
+      <FieldLabel>Texto secundario (opcional)</FieldLabel>
+        <p className="text-[10px] text-nexus-text-muted mb-2">Texto corto que aparecerá debajo del rating.</p>
         <div className="relative">
           <input
             type="text"
@@ -188,7 +188,7 @@ export default function BusinessHeroSettings({ negocioId }) {
             placeholder="⚡ Reserva en 1 minuto"
             maxLength={40}
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-slate-600 font-mono pointer-events-none">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-nexus-text-muted font-mono pointer-events-none">
             {form.highlightText?.length ?? 0}/40
           </span>
         </div>
@@ -199,11 +199,11 @@ export default function BusinessHeroSettings({ negocioId }) {
 
       {/* ── Botón Guardar (fijo al final) ───────────────────────── */}
       <div className="sticky bottom-0 pb-1 pt-2">
-        <button
+      <button
           type="button"
           onClick={handleSave}
           disabled={saving || logoUploading || !negocioId}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(99,102,241,0.35)] hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(15,111,255,0.35)] hover:shadow-[0_0_30px_rgba(15,111,255,0.5)]"
         >
           {saving
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

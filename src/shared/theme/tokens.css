@@ -1,0 +1,157 @@
+/* ============================================================
+   NEXUS · Design Tokens
+   Única fuente de verdad de la identidad visual.
+   Cambiar el azul de Nexus = cambiar UNA línea aquí.
+   ============================================================ */
+
+/* ---- 1. Tokens crudos (light, valores por defecto) ---- */
+:root,
+[data-theme="light"] {
+  /* Marca */
+  --nx-primary: #0F6FFF;
+  --nx-primary-hover: #0B5CD9;
+  --nx-primary-soft: #E6F0FF;
+
+  --nx-navy: #16233A;
+  --nx-navy-soft: #1F3049;      /* hover de items dentro del sidebar */
+  --nx-navy-border: rgba(255, 255, 255, 0.08);
+
+  --nx-accent: #06B6D4;
+  --nx-accent-hover: #0891B2;
+  --nx-accent-soft: #E0F7FA;
+
+  /* Superficies */
+  --nx-background: #F8FAFC;
+  --nx-surface: #FFFFFF;
+  --nx-surface-hover: #F1F5F9;
+  --nx-border: #E9EDF2;
+
+  /* Texto */
+  --nx-text: #0F172A;
+  --nx-text-secondary: #64748B;
+  --nx-text-muted: #94A3B8;
+  --nx-text-inverse: #FFFFFF;   /* texto sobre navy / primary */
+
+  /* Estados */
+  --nx-success: #10B981;
+  --nx-success-bg: #ECFDF5;
+  --nx-success-text: #047857;
+
+  --nx-warning: #F59E0B;
+  --nx-warning-bg: #FFFBEB;
+  --nx-warning-text: #B45309;
+
+  --nx-error: #EF4444;
+  --nx-error-bg: #FEF2F2;
+  --nx-error-text: #B91C1C;
+
+  --nx-info: #3B82F6;
+  --nx-info-bg: #EFF6FF;
+  --nx-info-text: #1D4ED8;
+
+  /* Forma y elevación (para components.css) */
+  --nx-radius-sm: 8px;
+  --nx-radius: 12px;
+  --nx-radius-lg: 16px;
+  --nx-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --nx-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+/* ---- 2. Dark mode: PREPARADO, no activado todavía ----
+   Nadie llama a esto hoy (nada pone data-theme="dark").
+   El día que quieras Dark Mode: document.documentElement
+   .setAttribute('data-theme', 'dark') y listo, sin tocar
+   ni un componente. Valores puestos a criterio, ajustables
+   cuando llegue esa etapa. */
+[data-theme="dark"] {
+  --nx-primary: #3B82F6;
+  --nx-primary-hover: #60A5FA;
+  --nx-primary-soft: rgba(59, 130, 246, 0.15);
+
+  --nx-navy: #0B1220;
+  --nx-navy-soft: #16233A;
+  --nx-navy-border: rgba(255, 255, 255, 0.06);
+
+  --nx-accent: #22D3EE;
+  --nx-accent-hover: #67E8F9;
+  --nx-accent-soft: rgba(34, 211, 238, 0.15);
+
+  --nx-background: #07080D;
+  --nx-surface: #131728;
+  --nx-surface-hover: #1B2136;
+  --nx-border: #232A4C;
+
+  --nx-text: #F3F4F6;
+  --nx-text-secondary: #94A3B8;
+  --nx-text-muted: #64748B;
+  --nx-text-inverse: #0F172A;
+
+  --nx-success: #34D399;
+  --nx-success-bg: rgba(16, 185, 129, 0.12);
+  --nx-success-text: #6EE7B7;
+
+  --nx-warning: #FBBF24;
+  --nx-warning-bg: rgba(245, 158, 11, 0.12);
+  --nx-warning-text: #FCD34D;
+
+  --nx-error: #F87171;
+  --nx-error-bg: rgba(239, 68, 68, 0.12);
+  --nx-error-text: #FCA5A5;
+
+  --nx-info: #60A5FA;
+  --nx-info-bg: rgba(59, 130, 246, 0.12);
+  --nx-info-text: #93C5FD;
+
+  --nx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --nx-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- 3. Puente hacia Tailwind v4 (CSS-first, sin tailwind.config.js) ----
+   "inline" es la palabra clave: hace que la utilidad generada
+   (bg-nexus-primary, text-nexus-text, etc.) escriba en el CSS
+   final `var(--nx-primary)` en vez de "#0F6FFF" fijo. Así, si
+   activas [data-theme="dark"] más adelante, TODAS las clases
+   ya generadas cambian de color solas, sin recompilar nada. */
+@theme inline {
+  --color-nexus-primary: var(--nx-primary);
+  --color-nexus-primary-hover: var(--nx-primary-hover);
+  --color-nexus-primary-soft: var(--nx-primary-soft);
+
+  --color-nexus-navy: var(--nx-navy);
+  --color-nexus-navy-soft: var(--nx-navy-soft);
+  --color-nexus-navy-border: var(--nx-navy-border);
+
+  --color-nexus-accent: var(--nx-accent);
+  --color-nexus-accent-hover: var(--nx-accent-hover);
+  --color-nexus-accent-soft: var(--nx-accent-soft);
+
+  --color-nexus-background: var(--nx-background);
+  --color-nexus-surface: var(--nx-surface);
+  --color-nexus-surface-hover: var(--nx-surface-hover);
+  --color-nexus-border: var(--nx-border);
+
+  --color-nexus-text: var(--nx-text);
+  --color-nexus-text-secondary: var(--nx-text-secondary);
+  --color-nexus-text-muted: var(--nx-text-muted);
+  --color-nexus-text-inverse: var(--nx-text-inverse);
+
+  --color-nexus-success: var(--nx-success);
+  --color-nexus-success-bg: var(--nx-success-bg);
+  --color-nexus-success-text: var(--nx-success-text);
+
+  --color-nexus-warning: var(--nx-warning);
+  --color-nexus-warning-bg: var(--nx-warning-bg);
+  --color-nexus-warning-text: var(--nx-warning-text);
+
+  --color-nexus-error: var(--nx-error);
+  --color-nexus-error-bg: var(--nx-error-bg);
+  --color-nexus-error-text: var(--nx-error-text);
+
+  --color-nexus-info: var(--nx-info);
+  --color-nexus-info-bg: var(--nx-info-bg);
+  --color-nexus-info-text: var(--nx-info-text);
+
+  --radius-nexus-sm: var(--nx-radius-sm);
+  --radius-nexus: var(--nx-radius);
+  --radius-nexus-lg: var(--nx-radius-lg);
+}

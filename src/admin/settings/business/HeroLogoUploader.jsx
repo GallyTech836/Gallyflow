@@ -37,7 +37,7 @@ export default function HeroLogoUploader({ value, onChange, onUploadingChange })
     <div
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className="flex items-center gap-4 bg-[#0A0D1A] border border-dashed border-[#232B4A] hover:border-indigo-500/50 rounded-xl p-4 transition-colors group"
+      className="flex items-center gap-4 bg-nexus-background border border-dashed border-nexus-border hover:border-nexus-primary/50 rounded-xl p-4 transition-colors group"
     >
       <input
         type="file"
@@ -50,16 +50,16 @@ export default function HeroLogoUploader({ value, onChange, onUploadingChange })
       {/* Preview circular */}
       <div
         onClick={() => fileInputRef.current?.click()}
-        className="relative w-14 h-14 rounded-xl border-2 border-[#1E2442] group-hover:border-indigo-500/40 transition-colors bg-[#131728] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer"
+        className="relative w-14 h-14 rounded-xl border-2 border-nexus-border group-hover:border-nexus-primary/40 transition-colors bg-nexus-surface flex items-center justify-center overflow-hidden shrink-0 cursor-pointer"
       >
         {value ? (
           <img src={value} alt="Logo" className="w-full h-full object-cover" />
         ) : (
-          <ImagePlus className="w-5 h-5 text-slate-600" />
+          <ImagePlus className="w-5 h-5 text-nexus-text-muted" />
         )}
         {uploading && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+            <Loader2 className="w-4 h-4 text-nexus-primary animate-spin" />
           </div>
         )}
       </div>
@@ -70,12 +70,12 @@ export default function HeroLogoUploader({ value, onChange, onUploadingChange })
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/25 text-indigo-400 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-1.5"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/25 text-nexus-primary rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-1.5"
         >
           <Upload className="w-3 h-3" />
           {uploading ? 'Subiendo...' : 'Subir Logo'}
         </button>
-        <p className="text-[9px] text-slate-600 leading-relaxed">
+        <p className="text-[9px] text-nexus-text-muted leading-relaxed">
           PNG, JPG o WEBP. Máx 2MB.<br />
           Recomendado: 512×512px
         </p>

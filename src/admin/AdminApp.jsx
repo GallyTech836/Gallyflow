@@ -507,14 +507,12 @@ const [saleForm, setSaleForm] = useState({
 
       const customPinIcon = window.L.divIcon({
         html: `
-          <div class="relative flex items-center justify-center">
-            <span class="absolute inline-flex h-10 w-10 rounded-full bg-indigo-500/30 animate-ping"></span>
-            <div class="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white shadow-xl flex items-center justify-center">
+        <span class="absolute inline-flex h-10 w-10 rounded-full bg-blue-500/30 animate-ping"></span>
+        <div class="w-8 h-8 rounded-full bg-[#0F6FFF] border-2 border-white shadow-xl flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-4 h-4">
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
               </svg>
             </div>
-          </div>
         `,
         className: 'custom-leaflet-marker',
         iconSize: [40, 40],
@@ -1840,7 +1838,7 @@ const [saleForm, setSaleForm] = useState({
   };
 
   return (
-    <div className="min-h-screen bg-[#07080D] text-[#E2E8F0] font-sans antialiased flex flex-col md:flex-row selection:bg-indigo-500 selection:text-white overflow-x-hidden relative">
+    <div className="min-h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
       
       {isMobileSidebarOpen && (
         <div 
@@ -1851,40 +1849,42 @@ const [saleForm, setSaleForm] = useState({
 
       {}
       <aside 
-        className={`fixed md:relative inset-y-0 left-0 bg-[#0C0E17] border-r border-[#1B2136] flex flex-col shrink-0 z-50 transition-all duration-300 ease-in-out ${
+        className={`fixed md:relative inset-y-0 left-0 bg-nexus-navy border-r border-nexus-navy-border flex flex-col shrink-0 z-50 transition-all duration-300 ease-in-out ${
           isMobileSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'
         } ${
           isSidebarCollapsed ? 'md:w-20' : 'md:w-60'
         }`}
       >
-        <div className="p-5 border-b border-[#1A1E2E] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-          <img
+        <div className={`p-5 border-b border-nexus-navy-border flex items-center justify-between gap-2 ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
+          <div className={`items-center gap-2.5 overflow-hidden flex ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
+            <img 
               src="/favicon.svg"
               alt="GallyFlow"
-              className="w-9 h-9 rounded-lg shadow-lg shadow-indigo-950/40 shrink-0 object-contain"
+              className="w-9 h-9 rounded-lg shadow-md shrink-0 object-contain"
             />
             {!isSidebarCollapsed && (
               <div className="transition-all duration-300 ease-in-out opacity-100 animate-fadeIn">
-                <h1 className="text-xs font-extrabold tracking-wider bg-gradient-to-r from-white via-slate-200 to-indigo-400 bg-clip-text text-transparent">
+                <h1 className="text-xs font-extrabold tracking-wider text-nexus-text-inverse" style={{ color: '#FFFFFF' }}>
                   GallyFlow
                 </h1>
-                <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">Multi-Business SaaS</p>
+                <p className="text-[9px] text-white/40 font-bold tracking-widest uppercase">Multi-Business SaaS</p>
               </div>
             )}
           </div>
-          
-          <button
+
+          <button 
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="hidden md:flex p-1.5 hover:bg-[#1A1F36] text-slate-400 hover:text-white rounded-lg transition-colors"
+            className="hidden md:flex p-1.5 hover:bg-nexus-navy-soft text-white/70 hover:text-white rounded-lg transition-colors"
             title={isSidebarCollapsed ? "Expandir" : "Contraer"}
           >
-            <Menu className="w-4 h-4" />
+            <span className={`inline-flex transition-transform duration-300 ${isSidebarCollapsed ? 'rotate-0' : 'rotate-180'}`}>
+              {isSidebarCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
+            </span>
           </button>
 
-          <button
+          <button 
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="md:hidden p-1.5 hover:bg-[#1A1F36] text-slate-400 hover:text-white rounded-lg transition-colors"
+            className="md:hidden p-1.5 hover:bg-nexus-navy-soft text-white/70 hover:text-white rounded-lg"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1892,9 +1892,9 @@ const [saleForm, setSaleForm] = useState({
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {!isSidebarCollapsed ? (
-            <p className="px-2.5 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">Principal</p>
+            <p className="px-2.5 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Principal</p>
           ) : (
-            <div className="border-t border-[#1A1E2E] my-2 mx-2" />
+            <div className="border-t border-nexus-navy-border my-2 mx-2" />
           )}
           
           <button 
@@ -1906,11 +1906,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'dashboard' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <LayoutDashboard className="w-4 h-4 text-indigo-500 shrink-0" />
+            <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'dashboard' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Dashboard</span>}
           </button>
 
@@ -1923,16 +1923,16 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'agenda' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <CalendarIcon className="w-4 h-4 text-indigo-500 shrink-0" />
+            <CalendarIcon className={`w-4 h-4 shrink-0 ${activeTab === 'agenda' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && (
               <>
                 <span className="truncate">Agenda del Staff</span>
                 {(dayReservations || []).filter(r => r?.status === 'pending').length > 0 && (
-                  <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500 text-white rounded-full">
+                  <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-nexus-primary text-white rounded-full">
                     {(dayReservations || []).filter(r => r?.status === 'pending').length}
                   </span>
                 )}
@@ -1941,9 +1941,9 @@ const [saleForm, setSaleForm] = useState({
           </button>
 
           {!isSidebarCollapsed ? (
-            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">Gestión</p>
+            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Gestión</p>
           ) : (
-            <div className="border-t border-[#1A1E2E] my-3 mx-2" />
+            <div className="border-t border-nexus-navy-border my-3 mx-2" />
           )}
 
           <button 
@@ -1955,11 +1955,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'barbers' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Users className="w-4 h-4 text-indigo-500 shrink-0" />
+            <Users className={`w-4 h-4 shrink-0 ${activeTab === 'barbers' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Staff</span>}
           </button>
 
@@ -1972,11 +1972,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'services' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Scissors className="w-4 h-4 text-indigo-500 shrink-0" />
+            <Scissors className={`w-4 h-4 shrink-0 ${activeTab === 'services' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Servicios</span>}
           </button>
 
@@ -1989,11 +1989,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'clients' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <UserCheck className="w-4 h-4 text-indigo-500 shrink-0" />
+            <UserCheck className={`w-4 h-4 shrink-0 ${activeTab === 'clients' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Clientes</span>}
           </button>
 
@@ -2006,11 +2006,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'branches' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Building2 className="w-4 h-4 text-indigo-500 shrink-0" />
+            <Building2 className={`w-4 h-4 shrink-0 ${activeTab === 'branches' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Sucursales</span>}
           </button>
 
@@ -2024,11 +2024,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'inventory' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Package className="w-4 h-4 text-indigo-500 shrink-0" />
+            <Package className={`w-4 h-4 shrink-0 ${activeTab === 'inventory' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Inventario</span>}
           </button>
          )}
@@ -2042,19 +2042,19 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'automatizaciones' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-emerald-400 border-l-2 border-emerald-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-success text-white border-l-2 border-nexus-success shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Globe className={`w-4 h-4 shrink-0 ${activeTab === 'automatizaciones' ? 'text-white' : 'text-nexus-success'}`} />
             {!isSidebarCollapsed && <span className="truncate">WhatsApp & Bots</span>}
           </button>
          )}
 
           {!isSidebarCollapsed ? (
-            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">Finanzas</p>
+            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Finanzas</p>
           ) : (
-            <div className="border-t border-[#1A1E2E] my-3 mx-2" />
+            <div className="border-t border-nexus-navy-border my-3 mx-2" />
           )}
 
           <button 
@@ -2066,11 +2066,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'commissions' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <DollarSign className="w-4 h-4 text-indigo-500 shrink-0" />
+            <DollarSign className={`w-4 h-4 shrink-0 ${activeTab === 'commissions' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Comisiones</span>}
           </button>
 
@@ -2083,11 +2083,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'assistance' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
+            <Clock className={`w-4 h-4 shrink-0 ${activeTab === 'assistance' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Asistencia</span>}
           </button>
 
@@ -2100,18 +2100,18 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'reports' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <BarChart3 className="w-4 h-4 text-indigo-500 shrink-0" />
+            <BarChart3 className={`w-4 h-4 shrink-0 ${activeTab === 'reports' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Analíticas</span>}
           </button>
 
           {!isSidebarCollapsed ? (
-            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-slate-500 uppercase">Sistema</p>
+            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Sistema</p>
           ) : (
-            <div className="border-t border-[#1A1E2E] my-3 mx-2" />
+            <div className="border-t border-nexus-navy-border my-3 mx-2" />
           )}
 
          <button 
@@ -2128,11 +2128,11 @@ const [saleForm, setSaleForm] = useState({
               isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
             } ${
               activeTab === 'settings' 
-                ? 'bg-gradient-to-r from-[#1E243A] to-[#121626] text-indigo-400 border-l-2 border-indigo-400 shadow-md shadow-indigo-950/25' 
-                : 'text-slate-400 hover:text-white hover:bg-[#131728]'
+                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
+                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Settings className="w-4 h-4 text-indigo-500 shrink-0" />
+            <Settings className={`w-4 h-4 shrink-0 ${activeTab === 'settings' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && (
               <>
                 <span className="truncate flex-1 text-left">Configuración</span>
@@ -2144,7 +2144,7 @@ const [saleForm, setSaleForm] = useState({
           </button>
 
           {!isSidebarCollapsed && isSettingsMenuOpen && (
-            <div className="ml-3 pl-2.5 border-l border-[#1E2442] space-y-0.5 py-1">
+            <div className="ml-3 pl-2.5 border-l border-nexus-navy-border space-y-0.5 py-1">
               {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -2155,8 +2155,8 @@ const [saleForm, setSaleForm] = useState({
                   }}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-150 ${
                     activeTab === 'settings' && settingsSection === id
-                      ? 'bg-[#161B2E] text-indigo-400'
-                      : 'text-slate-500 hover:text-white hover:bg-[#131728]'
+                      ? 'bg-nexus-navy-soft text-nexus-primary'
+                      : 'text-white/40 hover:text-white hover:bg-nexus-navy-soft'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -2171,11 +2171,11 @@ const [saleForm, setSaleForm] = useState({
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {}
-        <header className="sticky top-0 bg-[#07080D]/95 backdrop-blur-md border-b border-[#1A1F36] py-3.5 px-4 md:px-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 z-25">
+        <header className="sticky top-0 bg-nexus-background/95 backdrop-blur-md border-b border-nexus-border py-3.5 px-4 md:px-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 z-25">
           <div className="flex items-center gap-3 w-full lg:w-auto">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden p-1.5 hover:bg-[#1A1F36] text-slate-300 hover:text-white rounded-lg transition-all shrink-0 border border-[#1B2136]"
+              className="md:hidden p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded-lg transition-all shrink-0 border border-nexus-border"
               title="Abrir Menú"
             >
               <Menu className="w-5 h-5" />
@@ -2183,12 +2183,13 @@ const [saleForm, setSaleForm] = useState({
 
             <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 font-mono font-bold">Plataforma GallyFlow Configurada</span>
+                <span className="w-2 h-2 rounded-full bg-nexus-primary animate-pulse
+                  bg-nexus-primary animate-pulse"></span>
+                <span className="text-[10px] uppercase font-black tracking-widest text-nexus-primary font-mono font-bold">Plataforma GallyFlow Configurada</span>
               </div>
-              <h2 className="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
-                <span className="text-slate-400 font-normal">{businessName}</span>
-                <span className="text-slate-600">/</span>
+              <h2 className="text-lg font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
+                <span className="text-nexus-text-secondary font-normal">{businessName}</span>
+                <span className="text-nexus-text-muted">/</span>
                 <span>
                   {activeTab === 'dashboard' && 'Panel General'}
                   {activeTab === 'agenda' && 'Agenda del Staff'}
@@ -2210,15 +2211,15 @@ const [saleForm, setSaleForm] = useState({
           {['agenda', 'dashboard', 'commissions', 'assistance', 'reports', 'automatizaciones'].includes(activeTab) && (
             <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
               
-              <div className="flex items-center bg-[#101424] border border-[#1E2442] rounded-lg p-0.5 shadow-inner">
+              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg p-0.5 shadow-inner">
                 {['dia', 'semana', 'mes', 'año'].map((view) => (
                   <button
                     key={view}
                     onClick={() => setAgendaView(view)}
                     className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
                       agendaView === view
-                        ? 'bg-indigo-500 text-white shadow-md'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-nexus-primary text-white shadow-md'
+                        : 'text-nexus-text-secondary hover:text-nexus-text'
                     }`}
                   >
                     {view.toUpperCase()}
@@ -2226,35 +2227,35 @@ const [saleForm, setSaleForm] = useState({
                 ))}
               </div>
 
-              <div className="flex items-center bg-[#0F1221] border border-[#232A4C] rounded-lg overflow-hidden shrink-0 shadow-md">
+              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg overflow-hidden shrink-0 shadow-md">
                 <button 
                   onClick={handlePrevPeriod}
-                  className="p-1.5 hover:bg-[#1A213D] text-slate-400 hover:text-white transition-colors border-r border-[#232A4C]"
+                  className="p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-r border-nexus-border"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 
-                <div className="flex items-center px-3.5 py-1 text-xs text-slate-300 gap-2 font-mono font-bold select-none min-w-[120px] justify-center">
+                <div className="flex items-center px-3.5 py-1 text-xs text-nexus-text gap-2 font-mono font-bold select-none min-w-[120px] justify-center">
                   <span>{getFormattedDateLabel(selectedDate, agendaView)}</span>
                 </div>
 
                 <button 
                   onClick={handleNextPeriod}
-                  className="p-1.5 hover:bg-[#1A213D] text-slate-400 hover:text-white transition-colors border-l border-[#232A4C]"
+                  className="p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-l border-nexus-border"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="flex items-center bg-[#0F1221] border border-[#232A4C] rounded-lg px-2.5 py-1 text-xs text-slate-300 gap-1.5 shrink-0 shadow-md">
-                <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-2.5 py-1 text-xs text-nexus-text gap-1.5 shrink-0 shadow-md">
+              <MapPin className="w-3.5 h-3.5 text-nexus-primary" />
                 <select 
                   value={selectedBranch || 'Equipetrol'}
                   onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="bg-transparent border-0 outline-none text-slate-200 font-bold cursor-pointer text-xs"
+                  className="bg-transparent border-0 outline-none text-nexus-text font-bold cursor-pointer text-xs"
                 >
                   {(branches || []).map(b => (
-                    <option key={b?.id || b?.name} value={b?.name} className="bg-[#0F1221]">{b?.name}</option>
+                    <option key={b?.id || b?.name} value={b?.name} className="bg-nexus-surface">{b?.name}</option>
                   ))}
                 </select>
               </div>
@@ -2265,7 +2266,7 @@ const [saleForm, setSaleForm] = useState({
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Abrir página pública"
-                  className="flex items-center justify-center bg-[#0F1221] border border-[#232A4C] hover:border-indigo-500/60 hover:bg-[#1A213D] text-slate-400 hover:text-white p-1.5 rounded-lg shrink-0 shadow-md transition-all cursor-pointer"
+                  className="flex items-center justify-center bg-nexus-surface border border-nexus-border hover:border-nexus-primary/60 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text p-1.5 rounded-lg shrink-0 shadow-md transition-all cursor-pointer"
                 >
                   <Globe className="w-3.5 h-3.5" />
                 </a>
@@ -2277,7 +2278,7 @@ const [saleForm, setSaleForm] = useState({
                     setNewReservation(prev => ({ ...prev, date: selectedDate }));
                     setActiveModal('add-reservation');
                   }}
-                  className="ml-auto lg:ml-0 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md shadow-indigo-950/20 transition-all flex items-center gap-1"
+                  className="ml-auto lg:ml-0 px-3 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md transition-all flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Nueva Cita
@@ -2295,40 +2296,40 @@ const [saleForm, setSaleForm] = useState({
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg">
-                  <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Ventas periodo</span>
-                  <h3 className="text-xl font-black text-white font-mono mt-1">{formatBs(rangeMetrics?.totalRevenue)}</h3>
-                  <div className="flex items-center gap-1 mt-1 text-[10px] text-indigo-400 font-bold">
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
+                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Ventas periodo</span>
+                  <h3 className="text-xl font-black text-nexus-text font-mono mt-1">{formatBs(rangeMetrics?.totalRevenue)}</h3>
+                  <div className="flex items-center gap-1 mt-1 text-[10px] text-nexus-primary font-bold">
                     <TrendingUp className="w-3 h-3" />
                     <span>+12.4% vs anterior</span>
                   </div>
                 </div>
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg">
-                  <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Citas Agendadas</span>
-                  <h3 className="text-xl font-black text-white font-mono mt-1">{(rangeReservations || []).length}</h3>
-                  <p className="text-[9px] text-slate-400 mt-1">Total acumuladas en rango</p>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
+                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Citas Agendadas</span>
+                  <h3 className="text-xl font-black text-nexus-text font-mono mt-1">{(rangeReservations || []).length}</h3>
+                  <p className="text-[9px] text-nexus-text-muted mt-1">Total acumuladas en rango</p>
                 </div>
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg">
-                  <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Clientes Atendidos</span>
-                  <h3 className="text-xl font-black text-indigo-400 font-mono mt-1">{rangeMetrics?.clientsServed}</h3>
-                  <p className="text-[9px] text-indigo-400 mt-1">Fidelización premium activa</p>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
+                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Clientes Atendidos</span>
+                  <h3 className="text-xl font-black text-nexus-primary font-mono mt-1">{rangeMetrics?.clientsServed}</h3>
+                  <p className="text-[9px] text-nexus-primary mt-1">Fidelización premium activa</p>
                 </div>
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg">
-                  <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Comisión Estimada</span>
-                  <h3 className="text-xl font-black text-rose-400 font-mono mt-1">{formatBs(rangeMetrics?.pendingCommissions)}</h3>
-                  <p className="text-[9px] text-rose-400/80 mt-1">Acumulado liquidación periodo</p>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
+                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Comisión Estimada</span>
+                  <h3 className="text-xl font-black text-nexus-error-text font-mono mt-1">{formatBs(rangeMetrics?.pendingCommissions)}</h3>
+                  <p className="text-[9px] text-nexus-error-text/80 mt-1">Acumulado liquidación periodo</p>
                 </div>
               </div>
 
-              <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 shadow-lg">
+              <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Estimación Gráfica de Productividad ({agendaView.toUpperCase()})</h4>
-                  <span className="text-[9px] font-bold bg-[#141B30] text-indigo-400 px-2.5 py-0.5 rounded border border-[#1B2136]">Tiempo Real</span>
+                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Estimación Gráfica de Productividad ({agendaView.toUpperCase()})</h4>
+                  <span className="text-[9px] font-bold bg-nexus-primary-soft text-nexus-primary px-2.5 py-0.5 rounded border border-nexus-border">Tiempo Real</span>
                 </div>
-                <div className="relative h-44 w-full bg-[#080A12]/30 rounded-lg p-2 overflow-hidden border border-[#1A2136]/40 flex items-end">
+                <div className="relative h-44 w-full bg-nexus-background rounded-lg p-2 overflow-hidden border border-nexus-border flex items-end">
                   <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
                     <path d="M0,130 Q120,110 250,50 T500,20 L500,150 L0,150 Z" fill="url(#chartGrad)" />
-                    <path d="M0,130 Q120,110 250,50 T500,20" fill="none" stroke="#6366f1" strokeWidth="3" />
+                    <path d="M0,130 Q120,110 250,50 T500,20" fill="none" stroke="var(--nx-primary)" strokeWidth="3" />
                   </svg>
                 </div>
               </div>
@@ -2342,33 +2343,33 @@ const [saleForm, setSaleForm] = useState({
             <div className="space-y-4">
               
               {agendaView === 'dia' && (
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-2xl flex flex-col">
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg flex flex-col">
                   
                   {}
-                  <div className="grid grid-cols-[60px_1fr] border-b border-[#1B2136] bg-[#0E111E]">
-                    <div className="border-r border-[#1B2136] flex items-center justify-center p-2.5">
-                      <Clock className="w-4 h-4 text-slate-500" />
+                  <div className="grid grid-cols-[60px_1fr] border-b border-nexus-border bg-nexus-background">
+                    <div className="border-r border-nexus-border flex items-center justify-center p-2.5">
+                      <Clock className="w-4 h-4 text-nexus-text-muted" />
                     </div>
                     <div className="overflow-x-auto scrollbar-none">
-                      <div className="flex divide-x divide-[#1B2136] min-w-[700px] md:min-w-full">
+                      <div className="flex divide-x divide-nexus-border min-w-[700px] md:min-w-full">
                         
                       {filterBarberId === 'all' && (
-                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-[#13152c] flex flex-col items-center justify-center gap-0.5 text-indigo-400 font-bold border-r border-[#1B2136]">
+                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-nexus-primary-soft flex flex-col items-center justify-center gap-0.5 text-nexus-primary font-bold border-r border-nexus-border">
                             <div className="flex items-center gap-2">
                               <AlertCircle className="w-3.5 h-3.5" />
                               <span className="text-[10px] tracking-wider uppercase font-black font-mono font-bold">Pendientes</span>
                             </div>
-                            <span className="text-[9px] font-mono font-bold text-indigo-300/70">{barberDayCounts['pending'] || 0} reservas</span>
+                            <span className="text-[9px] font-mono font-bold text-nexus-primary/70">{barberDayCounts['pending'] || 0} reservas</span>
                           </div>
                         )}
 
                         {(branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId).map(b => (
                           <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5">
                             <div className="flex items-center gap-2">
-                              <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-[#232A4C]" />
-                              <h5 className="text-[11px] font-bold text-slate-200 truncate">{b?.name}</h5>
+                              <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border" />
+                              <h5 className="text-[11px] font-bold text-nexus-text truncate">{b?.name}</h5>
                             </div>
-                            <span className="text-[9px] font-mono font-bold text-slate-500">{barberDayCounts[b?.id] || 0} reservas</span>
+                            <span className="text-[9px] font-mono font-bold text-nexus-text-muted">{barberDayCounts[b?.id] || 0} reservas</span>
                           </div>
                         ))}
                       </div>
@@ -2379,31 +2380,31 @@ const [saleForm, setSaleForm] = useState({
                     
                     {currentTimeMinutes >= 480 && currentTimeMinutes <= 1320 && (
                       <div 
-                        className="absolute left-0 right-0 border-t-2 border-rose-500 z-10 flex items-center pointer-events-none"
+                        className="absolute left-0 right-0 border-t-2 border-nexus-error z-10 flex items-center pointer-events-none"
                         style={{ top: `${((currentTimeMinutes - 480) / 840) * 1120}px` }}
                       >
-                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 -ml-1" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-nexus-error -ml-1" />
                       </div>
                     )}
 
-                    <div className="bg-[#0C0E17] border-r border-[#1B2136] divide-y divide-[#1B2136]/30">
+                    <div className="bg-nexus-surface border-r border-nexus-border divide-y divide-nexus-border">
                     {hoursRange.map(hour => (
                         <div key={hour} className="h-10 px-1.5 flex items-start justify-end pt-1">
-                          <span className="font-mono text-[9px] text-slate-500 font-bold">{formatHourLabel(hour)}</span>
+                          <span className="font-mono text-[9px] text-nexus-text-muted font-bold">{formatHourLabel(hour)}</span>
                         </div>
                       ))}
                     </div>
 
-                    <div className="overflow-x-auto min-w-[700px] md:min-w-full relative bg-[#07080D]">
-                      <div className="absolute inset-0 flex divide-x divide-[#1B2136]">
+                    <div className="overflow-x-auto min-w-[700px] md:min-w-full relative bg-nexus-background">
+                      <div className="absolute inset-0 flex divide-x divide-nexus-border">
                         
                         {filterBarberId === 'all' && (
-                          <div className="flex-1 relative min-w-[150px] h-full bg-[#11132b]/20 border-r border-[#1B2136]">
+                          <div className="flex-1 relative min-w-[150px] h-full bg-nexus-surface-hover border-r border-nexus-border">
                             {hoursRange.map(hour => (
                               <div 
                                 key={hour} 
                                 onClick={() => handleEmptySlotClick('pending', formatHourLabel(hour))}
-                                className="h-10 w-full hover:bg-slate-800/20 cursor-pointer border-b border-[#1B2136]/10"
+                                className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
                               />
                             ))}
 
@@ -2420,11 +2421,11 @@ const [saleForm, setSaleForm] = useState({
                                   key={res?.id}
                                   onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
                                   style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                  className="absolute left-1 right-1 px-2.5 py-1 rounded border shadow bg-indigo-950/60 border-indigo-500/40 text-indigo-200 hover:bg-indigo-900/60 transition-all cursor-pointer flex flex-col justify-between overflow-hidden"
+                                  className="absolute left-1 right-1 px-2.5 py-1 rounded border shadow bg-nexus-primary-soft border-nexus-primary/40 text-nexus-primary hover:opacity-80 transition-all cursor-pointer flex flex-col justify-between overflow-hidden"
                                 >
                                   <div className="min-w-0">
                                     <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
-                                    <p className="text-[9px] truncate text-slate-300">{res?.serviceName}</p>
+                                    <p className="text-[9px] truncate text-nexus-text-secondary">{res?.serviceName}</p>
                                   </div>
                                 </div>
                               );
@@ -2445,12 +2446,12 @@ const [saleForm, setSaleForm] = useState({
                                   <div 
                                     key={hour} 
                                     onClick={() => handleEmptySlotClick(barber?.id, formatHourLabel(hour))}
-                                    className="h-10 w-full hover:bg-slate-800/20 cursor-pointer border-b border-[#1B2136]/10"
+                                    className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
                                   />
                                 ) : (
                                   <div 
                                     key={hour}
-                                    className="h-10 w-full bg-[#07080D]/60 border-b border-[#1B2136]/10 cursor-not-allowed"
+                                    className="h-10 w-full bg-nexus-border/30 border-b border-nexus-border/50 cursor-not-allowed"
                                   />
                                 )
                               ))}
@@ -2472,9 +2473,9 @@ const [saleForm, setSaleForm] = useState({
                                   >
                                     <div className="min-w-0">
                                       <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
-                                      <p className="text-[9px] text-slate-300 truncate">{res?.serviceName}</p>
+                                      <p className="text-[9px] text-nexus-text-secondary truncate">{res?.serviceName}</p>
                                     </div>
-                                    <span className="font-mono text-[8px] font-bold text-slate-400">{res?.time}</span>
+                                    <span className="font-mono text-[8px] font-bold text-nexus-text-muted">{res?.time}</span>
                                   </div>
                                 );
                               })}
@@ -2491,20 +2492,20 @@ const [saleForm, setSaleForm] = useState({
                                   <div 
                                     key={bl?.id}
                                     style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                    className="absolute left-1 right-1 px-2 py-1 rounded border shadow bg-slate-900/90 border-rose-500/30 text-rose-300 flex flex-col justify-between overflow-hidden cursor-default z-20"
+                                    className="absolute left-1 right-1 px-2 py-1 rounded border shadow bg-nexus-error-bg border-nexus-error/30 text-nexus-error-text flex flex-col justify-between overflow-hidden cursor-default z-20"
                                   >
                                     <div className="min-w-0">
                                       <p className="font-extrabold text-[9px] leading-tight flex items-center gap-1">
-                                        <XCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                                        <XCircle className="w-3 h-3 text-nexus-error shrink-0" />
                                         BLOQUEADO
                                       </p>
-                                      <p className="text-[9px] truncate text-rose-400/80">{bl?.reason}</p>
+                                      <p className="text-[9px] truncate text-nexus-error-text/80">{bl?.reason}</p>
                                     </div>
-                                    <div className="flex items-center justify-between text-[8px] text-slate-500 mt-1">
+                                    <div className="flex items-center justify-between text-[8px] text-nexus-text-muted mt-1">
                                       <span>{bl?.startTime} - {bl?.endTime}</span>
                                       <button 
                                         onClick={() => handleDeleteBlockout(bl?.id)}
-                                        className="text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
+                                        className="text-nexus-error hover:opacity-80 font-bold underline cursor-pointer"
                                       >
                                         Eliminar
                                       </button>
@@ -2529,10 +2530,10 @@ const [saleForm, setSaleForm] = useState({
                   {getWeekDates(selectedDate).map(day => {
                     const dayRes = (branchReservations || []).filter(r => r?.date === day?.dateStr);
                     return (
-                      <div key={day?.dateStr} className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-3 flex flex-col h-72">
-                        <div className="border-b border-[#242A4A] pb-2 mb-2 flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-400">{day?.dayName}</span>
-                          <span className="w-6 h-6 rounded-full bg-indigo-950 flex items-center justify-center text-xs font-bold text-indigo-400 font-mono">
+                      <div key={day?.dateStr} className="bg-nexus-surface border border-nexus-border rounded-xl p-3 flex flex-col h-72">
+                        <div className="border-b border-nexus-border pb-2 mb-2 flex justify-between items-center">
+                          <span className="text-xs font-bold text-nexus-text-secondary">{day?.dayName}</span>
+                          <span className="w-6 h-6 rounded-full bg-nexus-primary-soft flex items-center justify-center text-xs font-bold text-nexus-primary font-mono">
                             {day?.dayNum}
                           </span>
                         </div>
@@ -2541,17 +2542,17 @@ const [saleForm, setSaleForm] = useState({
                             <div 
                               key={res?.id} 
                               onClick={() => handleOpenEditReservation(res)}
-                              className="p-1.5 bg-[#12162B] border border-[#232B4A] rounded text-[10px] cursor-pointer hover:border-indigo-400 transition-colors"
+                              className="p-1.5 bg-nexus-background border border-nexus-border rounded text-[10px] cursor-pointer hover:border-nexus-primary transition-colors"
                             >
                               <div className="flex justify-between">
-                                <span className="font-extrabold text-white truncate max-w-[80px]">{res?.clientName}</span>
-                                <span className="text-[8px] font-mono text-indigo-400 font-bold">{res?.time}</span>
+                                <span className="font-extrabold text-nexus-text truncate max-w-[80px]">{res?.clientName}</span>
+                                <span className="text-[8px] font-mono text-nexus-primary font-bold">{res?.time}</span>
                               </div>
-                              <p className="text-[9px] text-slate-400 truncate mt-0.5">{res?.serviceName}</p>
+                              <p className="text-[9px] text-nexus-text-secondary truncate mt-0.5">{res?.serviceName}</p>
                             </div>
                           ))}
                           {dayRes.length === 0 && (
-                            <p className="text-[9px] text-slate-600 text-center py-8 font-semibold">Sin citas</p>
+                            <p className="text-[9px] text-nexus-text-muted text-center py-8 font-semibold">Sin citas</p>
                           )}
                         </div>
                         <button
@@ -2559,7 +2560,7 @@ const [saleForm, setSaleForm] = useState({
                             setNewReservation(prev => ({ ...prev, date: day?.dateStr }));
                             setActiveModal('add-reservation');
                           }}
-                          className="w-full py-1 mt-2 border border-dashed border-[#232B4A] hover:border-indigo-500/50 rounded text-[9px] font-bold text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1 cursor-pointer"
+                          className="w-full py-1 mt-2 border border-dashed border-nexus-border hover:border-nexus-primary/50 rounded text-[9px] font-bold text-nexus-text-secondary hover:text-nexus-text transition-all flex items-center justify-center gap-1 cursor-pointer"
                         >
                           <Plus className="w-3 h-3" /> Agregar Cita
                         </button>
@@ -2570,10 +2571,10 @@ const [saleForm, setSaleForm] = useState({
               )}
 
               {agendaView === 'mes' && (
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4">
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4">
                   <div className="grid grid-cols-7 gap-1.5 text-center mb-2">
                     {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, idx) => (
-                      <span key={idx} className="text-xs font-bold text-slate-500 py-1">{d}</span>
+                      <span key={idx} className="text-xs font-bold text-nexus-text-muted py-1">{d}</span>
                     ))}
                   </div>
                   <div className="grid grid-cols-7 gap-1.5">
@@ -2591,15 +2592,15 @@ const [saleForm, setSaleForm] = useState({
                           }}
                           className={`h-16 rounded-lg p-1.5 flex flex-col justify-between border ${
                             day?.isCurrentMonth 
-                              ? 'bg-[#12162B]/50 border-[#232B4A] hover:border-indigo-500 cursor-pointer' 
+                              ? 'bg-nexus-background border-nexus-border hover:border-nexus-primary cursor-pointer' 
                               : 'bg-transparent border-transparent pointer-events-none'
                           }`}
                         >
                           {day?.isCurrentMonth && (
                             <>
-                              <span className="text-[10px] font-extrabold text-slate-400 font-mono">{day?.dayNum}</span>
+                              <span className="text-[10px] font-extrabold text-nexus-text-secondary font-mono">{day?.dayNum}</span>
                               {dayRes.length > 0 && (
-                                <span className="text-[9px] bg-[#141A30] text-indigo-400 border border-indigo-500/20 px-1 rounded self-end font-bold font-mono">
+                                <span className="text-[9px] bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 px-1 rounded self-end font-bold font-mono">
                                   {dayRes.length} C
                                 </span>
                               )}
@@ -2612,22 +2613,22 @@ const [saleForm, setSaleForm] = useState({
                 </div>
               )}
 
-              {agendaView === 'año' && (
+             {agendaView === 'año' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, idx) => {
                     const yearVal = parseDate(selectedDate).getFullYear();
                     const monthId = (idx + 1).toString().padStart(2, '0');
                     const monthRes = (branchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`));
                     return (
-                      <div key={m} className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 text-center hover:border-[#1E2442] transition-colors cursor-pointer" onClick={() => {
+                      <div key={m} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 text-center hover:border-nexus-primary/40 transition-colors cursor-pointer" onClick={() => {
                         const targetDate = `${yearVal}-${monthId}-01`;
                         setSelectedDate(targetDate);
                         setAgendaView('mes');
                       }}>
-                        <h4 className="text-xs font-black text-white uppercase mb-2 tracking-wider font-mono">{m}</h4>
-                        <div className="p-4 bg-[#12162B] border border-[#232B4A] rounded-xl inline-block mt-1">
-                          <span className="text-base font-black text-indigo-400 font-mono block">{monthRes.length}</span>
-                          <span className="text-[8px] text-slate-500 uppercase tracking-widest block mt-0.5 font-mono font-bold">Reservas</span>
+                        <h4 className="text-xs font-black text-nexus-text uppercase mb-2 tracking-wider font-mono">{m}</h4>
+                        <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl inline-block mt-1">
+                          <span className="text-base font-black text-nexus-primary font-mono block">{monthRes.length}</span>
+                          <span className="text-[8px] text-nexus-text-muted uppercase tracking-widest block mt-0.5 font-mono font-bold">Reservas</span>
                         </div>
                       </div>
                     );
@@ -2642,17 +2643,17 @@ const [saleForm, setSaleForm] = useState({
               ========================================== */}
           {activeTab === 'barbers' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0C0E17] p-4 border border-[#1B2136] rounded-xl">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
                 <div className="relative w-full sm:w-72">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="w-4 h-4 text-slate-500" />
+                    <Search className="w-4 h-4 text-nexus-text-muted" />
                   </span>
                   <input 
                     type="text" 
                     placeholder="Buscar profesional por nombre o sucursal..." 
                     value={searchBarberQuery}
                     onChange={(e) => setSearchBarberQuery(e.target.value)}
-                    className="w-full bg-[#131728] border border-[#232B4C] rounded-lg pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                   />
                 </div>
                 <button
@@ -2661,18 +2662,18 @@ const [saleForm, setSaleForm] = useState({
                     setEditingBarberId(null);
                     setActiveModal('add-barber');
                   }}
-                  className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
+                  className="w-full sm:w-auto px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
                   <Plus className="w-4 h-4" />
                   Registrar Profesional
                 </button>
               </div>
 
-              <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-xl">
+              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
+                      <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
                         <th className="p-4">Foto</th>
                         <th className="p-4">Nombre Completo</th>
                         <th className="p-4">Usuario Comercial</th>
@@ -2682,21 +2683,21 @@ const [saleForm, setSaleForm] = useState({
                         <th className="p-4 text-right">Acciones</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#1B2136]/40">
+                    <tbody className="divide-y divide-nexus-border">
                       {filteredBarbersList.map(b => (
-                        <tr key={b?.id} className="hover:bg-[#12162B]/35 transition-colors">
+                        <tr key={b?.id} className="hover:bg-nexus-surface-hover transition-colors">
                           <td className="p-4">
-                            <img src={b?.avatar} alt={b?.name} className="w-10 h-10 rounded-xl object-cover border-2 border-[#1E2442] shadow" />
+                            <img src={b?.avatar} alt={b?.name} className="w-10 h-10 rounded-xl object-cover border-2 border-nexus-border shadow" />
                           </td>
-                          <td className="p-4 font-bold text-white text-xs">{b?.name}</td>
-                          <td className="p-4 font-mono text-slate-400">@{b?.username}</td>
-                          <td className="p-4 font-semibold text-slate-300">{b?.branch}</td>
-                          <td className="p-4 font-mono font-black text-indigo-400 tracking-widest font-bold">{b?.pin}</td>
+                          <td className="p-4 font-bold text-nexus-text text-xs">{b?.name}</td>
+                          <td className="p-4 font-mono text-nexus-text-secondary">@{b?.username}</td>
+                          <td className="p-4 font-semibold text-nexus-text">{b?.branch}</td>
+                          <td className="p-4 font-mono font-black text-nexus-primary tracking-widest font-bold">{b?.pin}</td>
                           <td className="p-4 text-center">
                             <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase font-mono border font-bold ${
                               b?.active 
-                                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/25' 
-                                : 'bg-rose-500/10 text-rose-400 border-rose-500/25'
+                                ? 'bg-nexus-success-bg text-nexus-success-text border-nexus-success/25' 
+                                : 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25'
                             }`}>
                               {b?.active ? 'Activo' : 'Inactivo'}
                             </span>
@@ -2705,14 +2706,14 @@ const [saleForm, setSaleForm] = useState({
                             <div className="inline-flex gap-2">
                               <button 
                                 onClick={() => handleEditBarber(b)}
-                                className="p-1.5 hover:bg-indigo-500/10 text-indigo-400 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 hover:bg-nexus-primary-soft text-nexus-primary rounded-lg transition-colors cursor-pointer"
                                 title="Editar Perfil"
                               >
                                 <Edit3 className="w-4 h-4" />
                               </button>
                               <button 
                                 onClick={() => handleDeleteBarber(b?.id)}
-                                className="p-1.5 hover:bg-rose-500/10 text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 hover:bg-nexus-error-bg text-nexus-error-text rounded-lg transition-colors cursor-pointer"
                                 title="Eliminar Perfil"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2723,7 +2724,7 @@ const [saleForm, setSaleForm] = useState({
                       ))}
                       {filteredBarbersList.length === 0 && (
                         <tr>
-                          <td colSpan="7" className="p-8 text-center text-slate-500">No se encontraron profesionales registrados.</td>
+                          <td colSpan="7" className="p-8 text-center text-nexus-text-muted">No se encontraron profesionales registrados.</td>
                         </tr>
                       )}
                     </tbody>
@@ -2738,11 +2739,11 @@ const [saleForm, setSaleForm] = useState({
               ========================================== */}
           {activeTab === 'services' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0C0E17] p-4 border border-[#1B2136] rounded-xl">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Tratamientos y Servicios Disponibles</h4>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
+                <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Tratamientos y Servicios Disponibles</h4>
                 <button
                   onClick={() => setActiveModal('add-service')}
-                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
+                  className="px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
                   <Plus className="w-4 h-4" />
                   Agregar Servicio
@@ -2751,22 +2752,22 @@ const [saleForm, setSaleForm] = useState({
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {(services || []).map(s => (
-                  <div key={s?.id} className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 flex flex-col justify-between shadow-lg relative group overflow-hidden">
+                  <div key={s?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 flex flex-col justify-between shadow-lg relative group overflow-hidden">
                     <div>
                       <div className="flex justify-between items-start mb-2">
-                        <h5 className="font-bold text-slate-200 text-sm">{s?.name}</h5>
+                        <h5 className="font-bold text-nexus-text text-sm">{s?.name}</h5>
                         <button 
                           onClick={() => handleDeleteService(s?.id)}
-                          className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer"
+                          className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <p className="text-slate-500 text-xs mb-3 font-mono">Duración: {s?.duration} minutos</p>
+                      <p className="text-nexus-text-muted text-xs mb-3 font-mono">Duración: {s?.duration} minutos</p>
                     </div>
-                    <div className="flex justify-between items-center border-t border-[#1B2136] pt-3 mt-1">
-                      <span className="text-xs font-bold text-slate-400 font-bold">Precio General</span>
-                      <span className="text-indigo-400 font-mono font-extrabold text-sm">{s?.price} Bs</span>
+                    <div className="flex justify-between items-center border-t border-nexus-border pt-3 mt-1">
+                      <span className="text-xs font-bold text-nexus-text-secondary font-bold">Precio General</span>
+                      <span className="text-nexus-primary font-mono font-extrabold text-sm">{s?.price} Bs</span>
                     </div>
                   </div>
                 ))}
@@ -2779,25 +2780,25 @@ const [saleForm, setSaleForm] = useState({
               ========================================== */}
           {activeTab === 'clients' && (
             <div className="space-y-4">
-              <div className="bg-[#0C0E17] p-4 border border-[#1B2136] rounded-xl">
+              <div className="bg-nexus-surface p-4 border border-nexus-border rounded-xl">
                 <div className="relative w-full sm:w-72">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="w-4 h-4 text-slate-500" />
+                    <Search className="w-4 h-4 text-nexus-text-muted" />
                   </span>
                   <input 
                     type="text" 
                     placeholder="Buscar cliente por nombre o teléfono..." 
                     value={searchClientQuery}
                     onChange={(e) => setSearchClientQuery(e.target.value)}
-                    className="w-full bg-[#131728] border border-[#232B4C] rounded-lg pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                   />
                 </div>
               </div>
 
-              <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-xl">
+              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
+                    <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
                       <th className="p-4">Nombre Completo</th>
                       <th className="p-4">Teléfono</th>
                       <th className="p-4 text-center">Visitas</th>
@@ -2805,18 +2806,18 @@ const [saleForm, setSaleForm] = useState({
                       <th className="p-4">Servicio Favorito</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#1B2136]/40">
+                  <tbody className="divide-y divide-nexus-border">
                     {filteredClientsList.map(c => (
-                      <tr key={c?.id} className="hover:bg-[#12162B]/35 transition-colors">
-                        <td className="p-4 font-bold text-white text-xs">{c?.name}</td>
-                        <td className="p-4 font-mono text-slate-300">{c?.phone}</td>
+                      <tr key={c?.id} className="hover:bg-nexus-surface-hover transition-colors">
+                        <td className="p-4 font-bold text-nexus-text text-xs">{c?.name}</td>
+                        <td className="p-4 font-mono text-nexus-text-secondary">{c?.phone}</td>
                         <td className="p-4 text-center">
-                          <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-bold font-mono">
+                          <span className="px-2.5 py-0.5 rounded-full bg-nexus-primary-soft text-nexus-primary font-bold font-mono">
                             {c?.visits}
                           </span>
                         </td>
-                        <td className="p-4 font-mono text-slate-400">{c?.lastVisit}</td>
-                        <td className="p-4 text-slate-300">{c?.favoriteService}</td>
+                        <td className="p-4 font-mono text-nexus-text-muted">{c?.lastVisit}</td>
+                        <td className="p-4 text-nexus-text-secondary">{c?.favoriteService}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2830,17 +2831,17 @@ const [saleForm, setSaleForm] = useState({
               ========================================== */}
           {activeTab === 'branches' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0C0E17] p-4 border border-[#1B2136] rounded-xl">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
                 <div className="relative w-full sm:w-72">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="w-4 h-4 text-slate-500" />
+                    <Search className="w-4 h-4 text-nexus-text-muted" />
                   </span>
                   <input 
                     type="text" 
                     placeholder="Buscar sucursal por dirección..." 
                     value={searchBranchQuery}
                     onChange={(e) => setSearchBranchQuery(e.target.value)}
-                    className="w-full bg-[#131728] border border-[#232B4C] rounded-lg pl-9 pr-3 py-2 text-xs text-white outline-none"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none"
                   />
                 </div>
                 <button
@@ -2850,7 +2851,7 @@ const [saleForm, setSaleForm] = useState({
                     setLocationSearch('');
                     setActiveModal('add-branch');
                   }}
-                  className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
+                  className="w-full sm:w-auto px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
                   <Plus className="w-4 h-4" />
                   Nueva Sucursal
@@ -2859,29 +2860,29 @@ const [saleForm, setSaleForm] = useState({
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredBranchesList.map(b => (
-                  <div key={b?.id} className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 flex flex-col justify-between shadow-lg relative overflow-hidden">
+                  <div key={b?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-5 flex flex-col justify-between shadow-lg relative overflow-hidden">
                     <div>
                       <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-sm font-extrabold text-white tracking-tight">{b?.name}</h4>
+                        <h4 className="text-sm font-extrabold text-nexus-text tracking-tight">{b?.name}</h4>
                         <div className="flex gap-1">
                           <button 
                             onClick={() => handleEditBranch(b)}
-                            className="p-1 hover:bg-indigo-500/10 text-indigo-400 rounded transition-colors cursor-pointer"
+                            className="p-1 hover:bg-nexus-primary-soft text-nexus-primary rounded transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button 
                             onClick={() => handleDeleteBranch(b?.id)}
-                            className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer"
+                            className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-400 font-mono mb-2">{b?.phone}</p>
-                      <p className="text-xs text-slate-500 leading-relaxed mb-4">{b?.address}</p>
+                      <p className="text-xs text-nexus-text-secondary font-mono mb-2">{b?.phone}</p>
+                      <p className="text-xs text-nexus-text-muted leading-relaxed mb-4">{b?.address}</p>
                     </div>
-                    <div className="border-t border-[#1E2442]/60 pt-3 flex justify-between items-center text-[10px] text-slate-500 font-mono font-bold">
+                    <div className="border-t border-nexus-border pt-3 flex justify-between items-center text-[10px] text-nexus-text-muted font-mono font-bold">
                       <span>Coordenadas</span>
                       <span>{b?.lat?.toFixed(3)}, {b?.lng?.toFixed(3)}</span>
                     </div>
@@ -3548,10 +3549,10 @@ const [saleForm, setSaleForm] = useState({
               ========================================== */}
           {activeTab === 'commissions' && (
             <div className="space-y-4">
-              <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-xl">
+              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
+                    <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
                       <th className="p-4">Profesional</th>
                       <th className="p-4 text-right">Servicios</th>
                       <th className="p-4 text-right">Comisión Total</th>
@@ -3560,29 +3561,29 @@ const [saleForm, setSaleForm] = useState({
                       <th className="p-4 text-right">Acción</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#1B2136]/40">
+                  <tbody className="divide-y divide-nexus-border">
                     {barberCommissionsList.map(barb => (
-                      <tr key={barb?.id} className="hover:bg-[#12162B]/35 transition-colors">
+                      <tr key={barb?.id} className="hover:bg-nexus-surface-hover transition-colors">
                         <td className="p-4 flex items-center gap-2.5">
-                          <img src={barb?.avatar} alt={barb?.name} className="w-8 h-8 rounded-full object-cover border border-[#232A4C]" />
-                          <span className="font-bold text-white">{barb?.name}</span>
+                          <img src={barb?.avatar} alt={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" />
+                          <span className="font-bold text-nexus-text">{barb?.name}</span>
                         </td>
-                        <td className="p-4 text-right font-mono text-slate-300">{barb?.serviciosCount}</td>
-                        <td className="p-4 text-right font-mono font-black text-indigo-400 text-sm font-bold">{formatBs(barb?.comisionTotal)}</td>
-                        <td className="p-4 text-right font-mono font-bold text-emerald-400">{formatBs(barb?.comisionPagada)}</td>
-                        <td className="p-4 text-right font-mono font-bold text-rose-400">{formatBs(barb?.comisionPendiente)}</td>
+                        <td className="p-4 text-right font-mono text-nexus-text-secondary">{barb?.serviciosCount}</td>
+                        <td className="p-4 text-right font-mono font-black text-nexus-primary text-sm font-bold">{formatBs(barb?.comisionTotal)}</td>
+                        <td className="p-4 text-right font-mono font-bold text-nexus-success-text">{formatBs(barb?.comisionPagada)}</td>
+                        <td className="p-4 text-right font-mono font-bold text-nexus-error-text">{formatBs(barb?.comisionPendiente)}</td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => setCommissionDetailBarberId(barb?.id)}
-                              className="px-3 py-1.5 rounded-lg bg-[#12162B] border border-[#232A4C] text-slate-300 text-[10px] font-bold uppercase tracking-wide hover:bg-[#181D35] transition-colors"
+                              className="px-3 py-1.5 rounded-lg bg-nexus-background border border-nexus-border text-nexus-text-secondary text-[10px] font-bold uppercase tracking-wide hover:bg-nexus-surface-hover transition-colors"
                             >
                               Ver Detalle
                             </button>
                             <button
                               onClick={() => handleLiquidarComisiones(barb)}
                               disabled={!(barb?.comisionPendiente > 0)}
-                              className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wide hover:bg-indigo-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="px-3 py-1.5 rounded-lg bg-nexus-primary text-white text-[10px] font-bold uppercase tracking-wide hover:bg-nexus-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Liquidar
                             </button>
@@ -3592,7 +3593,7 @@ const [saleForm, setSaleForm] = useState({
                     ))}
                     {barberCommissionsList.length === 0 && (
                       <tr>
-                        <td colSpan="6" className="p-8 text-center text-slate-500">Sin profesionales asignados en esta sucursal.</td>
+                        <td colSpan="6" className="p-8 text-center text-nexus-text-muted">Sin profesionales asignados en esta sucursal.</td>
                       </tr>
                     )}
                   </tbody>
@@ -3604,32 +3605,32 @@ const [saleForm, setSaleForm] = useState({
                 if (!detailBarber) return null;
                 return (
                   <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-lg p-5 relative shadow-2xl max-h-[80vh] flex flex-col">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-lg p-5 relative shadow-xl max-h-[80vh] flex flex-col">
                       <button
                         onClick={() => setCommissionDetailBarberId(null)}
-                        className="absolute top-3 right-3 text-slate-400 hover:text-white"
+                        className="absolute top-3 right-3 text-nexus-text-muted hover:text-nexus-text"
                       >
                         <X className="w-5 h-5" />
                       </button>
-                      <h3 className="text-base font-bold text-white mb-1">Detalle de Comisiones</h3>
-                      <p className="text-xs text-slate-400 mb-4">{detailBarber?.name}</p>
+                      <h3 className="text-base font-bold text-nexus-text mb-1">Detalle de Comisiones</h3>
+                      <p className="text-xs text-nexus-text-secondary mb-4">{detailBarber?.name}</p>
                       <div className="overflow-y-auto space-y-2 pr-1">
                         {(detailBarber?.detalle || []).map(item => (
-                          <div key={item.id} className="flex items-center justify-between bg-[#12162B] border border-[#1B2136] rounded-lg p-3">
+                          <div key={item.id} className="flex items-center justify-between bg-nexus-background border border-nexus-border rounded-lg p-3">
                             <div>
-                              <p className="text-xs font-bold text-white">{item.serviceName}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">{item.date}</p>
+                              <p className="text-xs font-bold text-nexus-text">{item.serviceName}</p>
+                              <p className="text-[10px] text-nexus-text-secondary font-mono">{item.date}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-xs font-mono font-black text-indigo-400">{formatBs(item.amount)}</p>
-                              <span className={`text-[9px] font-bold uppercase tracking-wide ${item.paid ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              <p className="text-xs font-mono font-black text-nexus-primary">{formatBs(item.amount)}</p>
+                              <span className={`text-[9px] font-bold uppercase tracking-wide ${item.paid ? 'text-nexus-success-text' : 'text-nexus-error-text'}`}>
                                 {item.paid ? 'Pagada' : 'Pendiente'}
                               </span>
                             </div>
                           </div>
                         ))}
                         {(detailBarber?.detalle || []).length === 0 && (
-                          <p className="text-center text-slate-500 text-xs py-6">Sin servicios completados en este periodo.</p>
+                          <p className="text-center text-nexus-text-muted text-xs py-6">Sin servicios completados en este periodo.</p>
                         )}
                       </div>
                     </div>
@@ -3644,20 +3645,20 @@ const [saleForm, setSaleForm] = useState({
               ========================================== */}
           {activeTab === 'assistance' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0C0E17] p-4 border border-[#1B2136] rounded-xl">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Control Biométrico de Asistencias</h4>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
+                <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Control Biométrico de Asistencias</h4>
                 <button
                   onClick={() => setActiveModal('assistance')}
-                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white font-extrabold rounded-lg text-xs shadow-md cursor-pointer font-bold"
+                  className="px-4 py-2 bg-nexus-primary text-white font-extrabold rounded-lg text-xs shadow-md cursor-pointer font-bold"
                 >
                   Marcar PIN Asistencia
                 </button>
               </div>
 
-              <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-xl">
+              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
+                    <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
                       <th className="p-4">Profesional</th>
                       <th className="p-4 text-center">Asistido</th>
                       <th className="p-4 text-center">Retrasos</th>
@@ -3666,28 +3667,28 @@ const [saleForm, setSaleForm] = useState({
                       <th className="p-4 text-right">Hoy (Entrada / Salida)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#1B2136]/40">
+                  <tbody className="divide-y divide-nexus-border">
                     {attendanceSummaryList.map(barb => (
-                      <tr key={barb?.id} className="hover:bg-[#12162B]/35 transition-colors">
+                      <tr key={barb?.id} className="hover:bg-nexus-surface-hover transition-colors">
                         <td className="p-4 flex items-center gap-2.5">
-                          <img src={barb?.avatar} alt={barb?.name} className="w-8 h-8 rounded-full object-cover border border-[#232A4C]" />
-                          <span className="font-bold text-white">{barb?.name}</span>
+                          <img src={barb?.avatar} alt={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" />
+                          <span className="font-bold text-nexus-text">{barb?.name}</span>
                         </td>
-                        <td className="p-4 text-center font-mono font-bold text-slate-200">{barb?.attended} días</td>
-                        <td className="p-4 text-center font-mono text-rose-400 font-bold">{barb?.delayed} días</td>
-                        <td className="p-4 text-center font-mono text-indigo-400 font-bold">{barb?.ontime} días</td>
-                        <td className="p-4 text-center font-mono text-slate-500">{barb?.absent} días</td>
+                        <td className="p-4 text-center font-mono font-bold text-nexus-text">{barb?.attended} días</td>
+                        <td className="p-4 text-center font-mono text-nexus-error-text font-bold">{barb?.delayed} días</td>
+                        <td className="p-4 text-center font-mono text-nexus-primary font-bold">{barb?.ontime} días</td>
+                        <td className="p-4 text-center font-mono text-nexus-text-muted">{barb?.absent} días</td>
                         <td className="p-4 text-right font-mono text-xs">
                           {barb?.attendance?.in ? (
-                            <span className="text-indigo-400 font-bold">{barb?.attendance?.in}</span>
+                            <span className="text-nexus-primary font-bold">{barb?.attendance?.in}</span>
                           ) : (
-                            <span className="text-slate-600">--:--</span>
+                            <span className="text-nexus-text-muted">--:--</span>
                           )}
-                          <span className="text-slate-500 mx-1.5">/</span>
+                          <span className="text-nexus-text-muted mx-1.5">/</span>
                           {barb?.attendance?.out ? (
-                            <span className="text-indigo-400 font-bold">{barb?.attendance?.out}</span>
+                            <span className="text-nexus-primary font-bold">{barb?.attendance?.out}</span>
                           ) : (
-                            <span className="text-slate-600">--:--</span>
+                            <span className="text-nexus-text-muted">--:--</span>
                           )}
                         </td>
                       </tr>
@@ -3704,19 +3705,19 @@ const [saleForm, setSaleForm] = useState({
           {activeTab === 'reports' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 shadow-lg">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono mb-4">Servicios Más Rentables</h4>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg">
+                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-4">Servicios Más Rentables</h4>
                   <div className="space-y-3.5">
                     {(services || []).slice(0, 4).map((s, idx) => {
                       const percentages = [85, 65, 45, 25];
                       return (
                         <div key={s?.id}>
                           <div className="flex justify-between items-center text-xs mb-1">
-                            <span className="text-slate-300 font-semibold">{s?.name}</span>
-                            <span className="text-indigo-400 font-mono font-bold">{percentages[idx]}% de ventas</span>
+                            <span className="text-nexus-text-secondary font-semibold">{s?.name}</span>
+                            <span className="text-nexus-primary font-mono font-bold">{percentages[idx]}% de ventas</span>
                           </div>
-                          <div className="w-full bg-[#181C30] h-2 rounded-full overflow-hidden">
-                            <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${percentages[idx]}%` }} />
+                          <div className="w-full bg-nexus-background h-2 rounded-full overflow-hidden">
+                            <div className="bg-nexus-primary h-full rounded-full" style={{ width: `${percentages[idx]}%` }} />
                           </div>
                         </div>
                       );
@@ -3724,12 +3725,12 @@ const [saleForm, setSaleForm] = useState({
                   </div>
                 </div>
 
-                <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 shadow-lg">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono mb-4">Canales de Reserva (%)</h4>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg">
+                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-4">Canales de Reserva (%)</h4>
                   <div className="relative h-44 w-full flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-3xl font-black text-indigo-400 font-mono">75%</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono font-bold">Reserva Online</p>
+                      <p className="text-3xl font-black text-nexus-primary font-mono">75%</p>
+                      <p className="text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono font-bold">Reserva Online</p>
                     </div>
                   </div>
                 </div>
@@ -3995,8 +3996,8 @@ const [saleForm, setSaleForm] = useState({
 
         </div>
 
-      <footer className="py-4 px-6 border-t border-[#161A2B] bg-[#07080D] flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 gap-2.5 font-mono">
-        <p>© 2026 GallyFlow Inc. Plataforma SaaS de Control & Reservas.</p>
+        <footer className="py-4 px-6 border-t border-nexus-border bg-nexus-background flex flex-col sm:flex-row items-center justify-between text-[10px] text-nexus-text-muted gap-2.5 font-mono">
+        <p>© 2026 GallyCorp Inc. Plataforma SaaS de Control & Reservas.</p>
       </footer>
 
     </main>
@@ -4010,14 +4011,14 @@ const [saleForm, setSaleForm] = useState({
             key={t?.id} 
             className={`p-3 rounded-xl border shadow-2xl flex items-center gap-2.5 transition-all transform duration-300 ${
               t?.type === 'error' 
-                ? 'bg-[#1F0E13] border-red-500/25 text-red-200 animate-fadeIn' 
-                : 'bg-[#0E1F15] border-indigo-500/25 text-indigo-200 animate-fadeIn'
+                ? 'bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text animate-fadeIn' 
+                : 'bg-nexus-success-bg border-nexus-success/25 text-nexus-success-text animate-fadeIn'
             }`}
           >
             {t?.type === 'error' ? (
-              <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <XCircle className="w-4 h-4 text-nexus-error shrink-0" />
             ) : (
-              <CheckCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+              <CheckCircle className="w-4 h-4 text-nexus-success shrink-0" />
             )}
             <p className="text-[11px] font-bold">{t?.message}</p>
           </div>
@@ -4086,18 +4087,18 @@ const [saleForm, setSaleForm] = useState({
       {/* 3. MODAL EXCLUSIVO: BLOQUEAR HORARIO ADMINISTRATIVO */}
       {activeModal === 'add-blockout' && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-sm p-5 relative shadow-2xl">
-            <h3 className="text-base font-bold text-rose-400 mb-1 font-mono">Bloquear Horario Administrativo</h3>
-            <p className="text-[10px] text-slate-400 mb-4">Evita que se agenden reservas en este rango de tiempo.</p>
+          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-sm p-5 relative shadow-xl">
+            <h3 className="text-base font-bold text-nexus-error-text mb-1 font-mono">Bloquear Horario Administrativo</h3>
+            <p className="text-[10px] text-nexus-text-secondary mb-4">Evita que se agenden reservas en este rango de tiempo.</p>
 
             <form onSubmit={handleCreateBlockout} className="space-y-3.5">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 font-sans">Profesional Staff *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 font-sans">Profesional Staff *</label>
                 <select 
                   required
                   value={blockoutForm.barberId}
                   onChange={(e) => setBlockoutForm(prev => ({ ...prev, barberId: e.target.value }))}
-                  className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none"
                 >
                   <option value="">Seleccione Profesional...</option>
                   {(branchBarbers || []).filter(b => b?.active).map(b => (
@@ -4107,37 +4108,37 @@ const [saleForm, setSaleForm] = useState({
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Motivo / Razón del Bloqueo *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Motivo / Razón del Bloqueo *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="Ej. Limpieza, Almuerzo, Reunión"
                   value={blockoutForm.reason}
                   onChange={(e) => setBlockoutForm(prev => ({ ...prev, reason: e.target.value }))}
-                  className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Hora Inicio *</label>
+                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora Inicio *</label>
                   <input 
                     type="time" 
                     required
                     value={blockoutForm.startTime}
                     onChange={(e) => setBlockoutForm(prev => ({ ...prev, startTime: e.target.value }))}
-                    className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none font-mono"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1">Hora Fin *</label>
+                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora Fin *</label>
                   <input 
                     type="time" 
                     required
                     value={blockoutForm.endTime}
                     onChange={(e) => setBlockoutForm(prev => ({ ...prev, endTime: e.target.value }))}
-                    className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none font-mono"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono"
                   />
                 </div>
               </div>
@@ -4146,13 +4147,13 @@ const [saleForm, setSaleForm] = useState({
                 <button 
                   type="button" 
                   onClick={() => setActiveModal(null)}
-                  className="px-3.5 py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-700 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-3.5 py-1.5 bg-rose-500 text-black text-xs font-bold rounded-lg hover:bg-rose-400 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-nexus-error text-white text-xs font-bold rounded-lg hover:opacity-90 cursor-pointer"
                 >
                   Bloquear Horario
                 </button>
@@ -4165,26 +4166,26 @@ const [saleForm, setSaleForm] = useState({
       {/* 4. MODAL CONTEXTUAL: ACCIONES AL CLICAR ESPACIO VACÍO */}
       {activeModal === 'slot-actions' && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-xs p-5 relative shadow-2xl text-center">
-            <h4 className="text-sm font-bold text-white mb-1">Gestión de Horario</h4>
-            <p className="text-[10px] text-slate-400 font-mono mb-4">Bloque: {clickedSlot?.time} ({selectedDate})</p>
+          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-xs p-5 relative shadow-xl text-center">
+            <h4 className="text-sm font-bold text-nexus-text mb-1">Gestión de Horario</h4>
+            <p className="text-[10px] text-nexus-text-secondary font-mono mb-4">Bloque: {clickedSlot?.time} ({selectedDate})</p>
 
             <div className="space-y-2">
               <button 
                 onClick={startResFromSlot}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
+                className="w-full py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
               >
                 Crear nueva reserva
               </button>
               <button 
                 onClick={startBlockoutFromSlot}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                className="w-full py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-error-text text-xs font-bold rounded-lg transition-all cursor-pointer"
               >
                 Bloquear este espacio
               </button>
               <button 
                 onClick={() => setActiveModal(null)}
-                className="w-full py-1.5 text-slate-500 hover:text-slate-400 text-[10px] font-bold cursor-pointer"
+                className="w-full py-1.5 text-nexus-text-muted hover:text-nexus-text-secondary text-[10px] font-bold cursor-pointer"
               >
                 Cancelar
               </button>
@@ -4198,15 +4199,15 @@ const [saleForm, setSaleForm] = useState({
           ========================================== */}
       {activeModal === 'add-barber' && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-4xl p-0 relative shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-4xl p-0 relative shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
             
-            <div className="bg-[#0E111E] border-b border-[#1B2136] px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="bg-nexus-background border-b border-nexus-border px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-nexus-primary" />
                   {editingBarberId ? 'Editar Perfil del Profesional' : 'Registrar Nuevo Profesional'}
                 </h3>
-                <p className="text-[10px] text-slate-400">Complete los pasos para configurar el perfil profesional del staff.</p>
+                <p className="text-[10px] text-nexus-text-secondary">Complete los pasos para configurar el perfil profesional del staff.</p>
               </div>
 
               <div className="flex items-center gap-2.5 font-mono text-[11px] self-stretch md:self-auto justify-between md:justify-start">
@@ -4215,14 +4216,14 @@ const [saleForm, setSaleForm] = useState({
                   onClick={() => setBarberStep(1)}
                   className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
                     barberStep === 1 
-                      ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/25' 
-                      : 'bg-[#181C30] text-slate-400 hover:text-white'
+                      ? 'bg-nexus-primary text-white shadow-md' 
+                      : 'bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
                   <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">1</span>
                   Básico
                 </button>
-                <div className="w-6 h-[1.5px] bg-[#1E2442] hidden sm:block" />
+                <div className="w-6 h-[1.5px] bg-nexus-border hidden sm:block" />
                 <button 
                   type="button"
                   onClick={() => {
@@ -4232,14 +4233,14 @@ const [saleForm, setSaleForm] = useState({
                   }}
                   className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
                     barberStep === 2 
-                      ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/25' 
-                      : 'bg-[#181C30] text-slate-400 hover:text-white'
+                      ? 'bg-nexus-primary text-white shadow-md' 
+                      : 'bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
                   <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">2</span>
                   Servicios
                 </button>
-                <div className="w-6 h-[1.5px] bg-[#1E2442] hidden sm:block" />
+                <div className="w-6 h-[1.5px] bg-nexus-border hidden sm:block" />
                 <button 
                   type="button"
                   onClick={() => {
@@ -4249,8 +4250,8 @@ const [saleForm, setSaleForm] = useState({
                   }}
                   className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
                     barberStep === 3 
-                      ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/25' 
-                      : 'bg-[#181C30] text-slate-400 hover:text-white'
+                      ? 'bg-nexus-primary text-white shadow-md' 
+                      : 'bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
                   <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">3</span>
@@ -4268,7 +4269,7 @@ const [saleForm, setSaleForm] = useState({
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    className="bg-[#0E111E] border border-dashed border-[#232B4A] hover:border-indigo-500/60 rounded-xl p-5 flex flex-col items-center justify-center gap-4 shadow-inner text-center cursor-pointer group transition-all"
+                    className="bg-nexus-background border border-dashed border-nexus-border hover:border-nexus-primary/60 rounded-xl p-5 flex flex-col items-center justify-center gap-4 shadow-inner text-center cursor-pointer group transition-all"
                   >
                     <input 
                       type="file"
@@ -4277,19 +4278,19 @@ const [saleForm, setSaleForm] = useState({
                       accept="image/*"
                       className="hidden"
                     />
-                    <span className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-bold block mb-1">Fotografía del Staff</span>
+                    <span className="text-[10px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold block mb-1">Fotografía del Staff</span>
                     <div className="relative">
                       <img 
                         src={newBarber.avatar} 
                         alt="Preview Avatar" 
-                        className="w-32 h-32 rounded-xl object-cover border-4 border-[#1E2442] group-hover:border-indigo-500 transition-all duration-300 shadow-md shadow-black"
+                        className="w-32 h-32 rounded-xl object-cover border-4 border-nexus-border group-hover:border-nexus-primary transition-all duration-300 shadow-md"
                       />
                       <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <Upload className="w-6 h-6 text-indigo-400" />
+                        <Upload className="w-6 h-6 text-white" />
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-2">
-                      <span className="text-indigo-400 font-bold block mb-1">Subir Archivo</span>
+                    <div className="text-[11px] text-nexus-text-secondary mt-2">
+                      <span className="text-nexus-primary font-bold block mb-1">Subir Archivo</span>
                       Suelte su imagen aquí o haga clic para buscar.
                     </div>
                   </div>
@@ -4297,49 +4298,49 @@ const [saleForm, setSaleForm] = useState({
                   <div className="md:col-span-2 space-y-4">
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Nombre *</label>
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Nombre *</label>
                         <input 
                           type="text" 
                           required
                           placeholder="Ej. Sofía"
                           value={newBarber.firstName}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, firstName: e.target.value }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Apellido *</label>
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Apellido *</label>
                         <input 
                           type="text" 
                           required
                           placeholder="Ej. Méndez"
                           value={newBarber.lastName}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, lastName: e.target.value }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Nombre de Usuario Comercial</label>
-                        <div className="flex items-center bg-[#0C0E17] border border-[#1E2442] rounded-lg px-3 py-2 text-xs text-slate-400 font-mono font-bold select-none">
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Nombre de Usuario Comercial</label>
+                        <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text-secondary font-mono font-bold select-none">
                           <span>@</span>
                           <input 
                             type="text"
                             readOnly
                             value={newBarber.username}
                             placeholder="sofia.mendez"
-                            className="bg-transparent border-none outline-none text-indigo-400 ml-1 w-full font-bold"
+                            className="bg-transparent border-none outline-none text-nexus-primary ml-1 w-full font-bold"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Sucursal Activa *</label>
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Sucursal Activa *</label>
                         <select 
                           value={newBarber.branch}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, branch: e.target.value }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                         >
                           {(branches || []).map(b => (
                             <option key={b?.id} value={b?.name}>{b?.name}</option>
@@ -4350,8 +4351,8 @@ const [saleForm, setSaleForm] = useState({
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">PIN de Asistencia Biométrica</label>
-                        <div className="flex items-center bg-[#131728] border border-[#1E2442] rounded-lg overflow-hidden pr-1.5">
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">PIN de Asistencia Biométrica</label>
+                        <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg overflow-hidden pr-1.5">
                           <input 
                             type="text"
                             required
@@ -4361,45 +4362,45 @@ const [saleForm, setSaleForm] = useState({
                               const val = e.target.value.replace(/[^0-9]/g, '');
                               setNewBarber(prev => ({ ...prev, pin: val }));
                             }}
-                            className="w-full bg-transparent border-none p-2.5 text-xs text-white outline-none font-mono font-bold tracking-widest"
+                            className="w-full bg-transparent border-none p-2.5 text-xs text-nexus-text outline-none font-mono font-bold tracking-widest"
                           />
                           <button 
                             type="button"
                             onClick={handleRegeneratePin}
-                            className="p-1.5 hover:bg-[#1E2442] text-slate-400 hover:text-white rounded transition-colors"
+                            className="p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded transition-colors"
                             title="Regenerar PIN Aleatorio"
                           >
-                            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+                            <RefreshCw className="w-3.5 h-3.5 text-nexus-primary" />
                           </button>
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Estado de Incorporación</label>
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Estado de Incorporación</label>
                         <div className="flex items-center gap-2 mt-2">
                           <button 
                             type="button"
                             onClick={() => setNewBarber(prev => ({ ...prev, active: !prev.active }))}
-                            className="p-1 hover:bg-[#1A1F36] rounded-md transition-colors"
+                            className="p-1 hover:bg-nexus-surface-hover rounded-md transition-colors"
                           >
                             {newBarber.active ? (
-                              <ToggleRight className="w-8 h-8 text-indigo-400" />
+                              <ToggleRight className="w-8 h-8 text-nexus-primary" />
                             ) : (
-                              <ToggleLeft className="w-8 h-8 text-slate-500" />
+                              <ToggleLeft className="w-8 h-8 text-nexus-text-muted" />
                             )}
                           </button>
-                          <span className="text-[11px] font-bold text-slate-300 font-mono">
+                          <span className="text-[11px] font-bold text-nexus-text font-mono">
                             {newBarber.active ? 'Habilitado para trabajar' : 'Suspendido / No activo'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3.5 pt-2 border-t border-[#1E2442]/55">
+                    <div className="grid grid-cols-2 gap-3.5 pt-2 border-t border-nexus-border">
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Contraseña de Portal *</label>
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Contraseña de Portal *</label>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Lock className="w-3.5 h-3.5 text-slate-500" />
+                            <Lock className="w-3.5 h-3.5 text-nexus-text-muted" />
                           </span>
                           <input 
                             type={showPassword ? "text" : "password"} 
@@ -4407,22 +4408,22 @@ const [saleForm, setSaleForm] = useState({
                             placeholder="••••••••"
                             value={newBarber.password}
                             onChange={(e) => setNewBarber(prev => ({ ...prev, password: e.target.value }))}
-                            className="w-full bg-[#131728] border border-[#1E2442] rounded-lg pl-9 pr-10 py-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                            className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono"
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-nexus-text-muted hover:text-nexus-text-secondary transition-colors"
                           >
                             {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 font-bold block mb-1">Confirmar Contraseña *</label>
+                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Confirmar Contraseña *</label>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                            <KeyRound className="w-3.5 h-3.5 text-nexus-text-muted" />
                           </span>
                           <input 
                             type={showConfirmPassword ? "text" : "password"} 
@@ -4430,12 +4431,12 @@ const [saleForm, setSaleForm] = useState({
                             placeholder="••••••••"
                             value={newBarber.confirmPassword}
                             onChange={(e) => setNewBarber(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                            className="w-full bg-[#131728] border border-[#1E2442] rounded-lg pl-9 pr-10 py-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                            className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono"
                           />
                           <button
                             type="button"
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-nexus-text-muted hover:text-nexus-text-secondary transition-colors"
                           >
                             {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                           </button>
@@ -4446,16 +4447,16 @@ const [saleForm, setSaleForm] = useState({
                 </div>
               )}
 
-              {barberStep === 2 && (
+{barberStep === 2 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                   
-                  <div className="bg-[#0E111E] border border-[#1B2136] rounded-xl p-5 flex flex-col h-[380px] shadow-lg">
+                  <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 flex flex-col h-[380px] shadow-sm">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-[11px] font-black uppercase text-indigo-400 tracking-wider font-mono font-bold">Servicios Seleccionados ({newBarber.services.length})</h4>
+                      <h4 className="text-[11px] font-black uppercase text-nexus-primary tracking-wider font-mono font-bold">Servicios Seleccionados ({newBarber.services.length})</h4>
                       <button 
                         type="button" 
                         onClick={() => setNewBarber(prev => ({ ...prev, services: [] }))}
-                        className="text-[10px] text-rose-400 font-bold hover:underline"
+                        className="text-[10px] text-nexus-error-text font-bold hover:underline"
                       >
                         Limpiar Selección
                       </button>
@@ -4467,11 +4468,11 @@ const [saleForm, setSaleForm] = useState({
                         if (!original) return null;
 
                         return (
-                          <div key={assigned.serviceId} className="bg-[#131728] border border-[#232B4A] rounded-xl p-3 space-y-2">
+                          <div key={assigned.serviceId} className="bg-nexus-surface border border-nexus-border rounded-xl p-3 space-y-2">
                             <div className="flex justify-between items-start">
                               <div>
-                                <h5 className="text-[11px] font-bold text-white leading-tight">{original.name}</h5>
-                                <p className="text-[9px] text-slate-500 font-mono">Precio: {original.price} Bs</p>
+                                <h5 className="text-[11px] font-bold text-nexus-text leading-tight">{original.name}</h5>
+                                <p className="text-[9px] text-nexus-text-muted font-mono">Precio: {original.price} Bs</p>
                               </div>
                               <button
                                 type="button"
@@ -4481,15 +4482,15 @@ const [saleForm, setSaleForm] = useState({
                                     services: prev.services.filter(s => s.serviceId !== assigned.serviceId)
                                   }));
                                 }}
-                                className="p-1 hover:bg-rose-500/10 text-rose-400 rounded-lg animate-pulse"
+                                className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded-lg"
                                 title="Quitar Servicio"
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
                             </div>
 
-                            <div className="pt-2 border-t border-[#1E2442]/60 flex items-center justify-between">
-                              <span className="text-[10px] text-slate-400 font-bold font-mono">Personalizar Comisión</span>
+                            <div className="pt-2 border-t border-nexus-border flex items-center justify-between">
+                              <span className="text-[10px] text-nexus-text-secondary font-bold font-mono">Personalizar Comisión</span>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4502,7 +4503,7 @@ const [saleForm, setSaleForm] = useState({
                                     )
                                   }));
                                 }}
-                                className="text-[10px] font-extrabold text-indigo-400 hover:underline"
+                                className="text-[10px] font-extrabold text-nexus-primary hover:underline"
                               >
                                 {assigned.commissionEnabled ? 'ACTIVADA' : 'DESACTIVADA'}
                               </button>
@@ -4511,7 +4512,7 @@ const [saleForm, setSaleForm] = useState({
                             {assigned.commissionEnabled && (
                               <div className="grid grid-cols-2 gap-2 pt-1.5 animate-fadeIn">
                                 <div>
-                                  <label className="text-[8px] text-slate-500 font-bold uppercase tracking-widest font-mono">Tipo</label>
+                                  <label className="text-[8px] text-nexus-text-muted font-bold uppercase tracking-widest font-mono">Tipo</label>
                                   <select
                                     value={assigned.type}
                                     onChange={(e) => {
@@ -4524,14 +4525,14 @@ const [saleForm, setSaleForm] = useState({
                                         )
                                       }));
                                     }}
-                                    className="w-full bg-[#0C0E17] border border-[#1E2442] rounded-md p-1.5 text-[10px] text-white"
+                                    className="w-full bg-nexus-background border border-nexus-border rounded-md p-1.5 text-[10px] text-nexus-text"
                                   >
                                     <option value="%">Porcentaje %</option>
                                     <option value="Bs">Monto Fijo (Bs)</option>
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="text-[8px] text-slate-500 font-bold uppercase tracking-widest font-mono">Valor Comisión</label>
+                                  <label className="text-[8px] text-nexus-text-muted font-bold uppercase tracking-widest font-mono">Valor Comisión</label>
                                   <input 
                                     type="number"
                                     value={assigned.value}
@@ -4545,7 +4546,7 @@ const [saleForm, setSaleForm] = useState({
                                         )
                                       }));
                                     }}
-                                    className="w-full bg-[#0C0E17] border border-[#1E2442] rounded-md p-1.5 text-[10px] text-white font-mono"
+                                    className="w-full bg-nexus-background border border-nexus-border rounded-md p-1.5 text-[10px] text-nexus-text font-mono"
                                   />
                                 </div>
                               </div>
@@ -4554,19 +4555,19 @@ const [saleForm, setSaleForm] = useState({
                         );
                       })}
                       {newBarber.services.length === 0 && (
-                        <div className="text-center text-slate-500 py-16">
+                        <div className="text-center text-nexus-text-muted py-16">
                           <Scissors className="w-8 h-8 mx-auto mb-2 opacity-35" />
                           <p className="text-[10px] font-bold">No hay servicios seleccionados</p>
-                          <p className="text-[9px] text-slate-600">Agrégar de la lista de disponibles a la derecha.</p>
+                          <p className="text-[9px] text-nexus-text-muted">Agrégar de la lista de disponibles a la derecha.</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="bg-[#0E111E] border border-[#1B2136] rounded-xl p-5 flex flex-col h-[380px] shadow-lg">
+                  <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 flex flex-col h-[380px] shadow-sm">
                     <div className="space-y-3.5 mb-3">
                       <div className="flex justify-between items-center">
-                        <h4 className="text-[11px] font-black uppercase text-slate-300 tracking-wider font-mono font-bold">Servicios Disponibles</h4>
+                        <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Servicios Disponibles</h4>
                         <button 
                           type="button"
                           onClick={() => {
@@ -4576,7 +4577,7 @@ const [saleForm, setSaleForm] = useState({
                               .map(s => ({ serviceId: s.id, commissionEnabled: false, type: '%', value: 40 }));
                             setNewBarber(prev => ({ ...prev, services: [...prev.services, ...toAdd] }));
                           }}
-                          className="text-[10px] text-indigo-400 font-bold hover:underline cursor-pointer"
+                          className="text-[10px] text-nexus-primary font-bold hover:underline cursor-pointer"
                         >
                           Seleccionar Todos
                         </button>
@@ -4584,25 +4585,25 @@ const [saleForm, setSaleForm] = useState({
 
                       <div className="relative">
                         <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                          <Search className="w-3.5 h-3.5 text-slate-500" />
+                          <Search className="w-3.5 h-3.5 text-nexus-text-muted" />
                         </span>
                         <input 
                           type="text" 
                           placeholder="Buscar tratamiento..." 
                           value={serviceSearch}
                           onChange={(e) => setServiceSearch(e.target.value)}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-slate-200 outline-none"
+                          className="w-full bg-nexus-surface border border-nexus-border rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-nexus-text outline-none"
                         />
                       </div>
 
-                      <div className="flex bg-[#0C0E17] border border-[#1E2442] rounded-lg p-0.5">
+                      <div className="flex bg-nexus-surface border border-nexus-border rounded-lg p-0.5">
                         {['Todos', 'Públicos', 'Internos'].map(tab => (
                           <button
                             key={tab}
                             type="button"
                             onClick={() => setServiceTab(tab)}
                             className={`flex-1 py-1 text-[9px] font-bold rounded-md transition-all cursor-pointer ${
-                              serviceTab === tab ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                              serviceTab === tab ? 'bg-nexus-primary text-white shadow-md' : 'text-nexus-text-secondary hover:text-nexus-text'
                             }`}
                           >
                             {tab}
@@ -4633,16 +4634,16 @@ const [saleForm, setSaleForm] = useState({
                             }}
                             className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between ${
                               isSelected 
-                                ? 'bg-indigo-500/10 border-indigo-500/40 hover:bg-indigo-500/15' 
-                                : 'bg-[#131728]/70 border-[#1E2442] hover:bg-[#1C2036]'
+                                ? 'bg-nexus-primary-soft border-nexus-primary/40 hover:opacity-90' 
+                                : 'bg-nexus-surface border-nexus-border hover:bg-nexus-surface-hover'
                             }`}
                           >
                             <div>
-                              <p className="font-bold text-slate-200">{s.name}</p>
-                              <p className="text-[9px] text-slate-500 font-mono">{s.duration} min — {s.price} Bs</p>
+                              <p className="font-bold text-nexus-text">{s.name}</p>
+                              <p className="text-[9px] text-nexus-text-muted font-mono">{s.duration} min — {s.price} Bs</p>
                             </div>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold font-mono ${
-                              isSelected ? 'bg-indigo-500 text-white' : 'bg-[#1A1F36] text-slate-400'
+                              isSelected ? 'bg-nexus-primary text-white' : 'bg-nexus-surface-hover text-nexus-text-secondary'
                             }`}>
                               {isSelected ? 'Agregado' : 'Añadir'}
                             </span>
@@ -4654,19 +4655,19 @@ const [saleForm, setSaleForm] = useState({
                 </div>
               )}
 
-              {barberStep === 3 && (
-                <div className="bg-[#0E111E] border border-[#1B2136] rounded-xl p-5 shadow-lg space-y-4 animate-fadeIn">
+{barberStep === 3 && (
+                <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h4 className="text-[11px] font-black uppercase text-slate-300 tracking-wider font-mono font-bold">Configuración de Horarios Laborales</h4>
-                      <p className="text-[9px] text-slate-500">Ajuste la disponibilidad semanal que se mostrará en los turnos de la agenda.</p>
+                      <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Configuración de Horarios Laborales</h4>
+                      <p className="text-[9px] text-nexus-text-muted">Ajuste la disponibilidad semanal que se mostrará en los turnos de la agenda.</p>
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-lg border border-[#1E2442] bg-[#0C0E17]">
+                  <div className="overflow-x-auto rounded-lg border border-nexus-border bg-nexus-surface">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
-                        <tr className="border-b border-[#1E2442] bg-[#141829] text-[9px] text-slate-400 uppercase tracking-widest font-mono font-bold">
+                        <tr className="border-b border-nexus-border bg-nexus-background text-[9px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold">
                           <th className="py-2.5 px-4">Día de la semana</th>
                           <th className="py-2.5 px-4 text-center">Estado</th>
                           <th className="py-2.5 px-4 text-center">Hora de Inicio</th>
@@ -4674,12 +4675,12 @@ const [saleForm, setSaleForm] = useState({
                           <th className="py-2.5 px-4 text-right">Acciones de Plantilla</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#1E2442]/50">
+                      <tbody className="divide-y divide-nexus-border">
                         {newBarber.availability.map((av, idx) => {
                           const isRest = av.status === 'Descanso';
                           return (
-                            <tr key={av.day} className="hover:bg-[#131728]/30 transition-colors">
-                              <td className="py-2 px-4 font-bold text-slate-200">
+                            <tr key={av.day} className="hover:bg-nexus-surface-hover transition-colors">
+                              <td className="py-2 px-4 font-bold text-nexus-text">
                                 {av.day}
                               </td>
                               <td className="py-2 px-4 text-center">
@@ -4697,8 +4698,8 @@ const [saleForm, setSaleForm] = useState({
                                   }}
                                   className={`px-2 py-0.5 rounded text-[9px] font-extrabold font-mono tracking-wider transition-colors border cursor-pointer font-bold ${
                                     isRest 
-                                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/25 hover:bg-rose-500/15' 
-                                      : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/25 hover:bg-indigo-500/15'
+                                      ? 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25 hover:opacity-80' 
+                                      : 'bg-nexus-primary-soft text-nexus-primary border-nexus-primary/25 hover:opacity-80'
                                   }`}
                                 >
                                   {av.status.toUpperCase()}
@@ -4717,7 +4718,7 @@ const [saleForm, setSaleForm] = useState({
                                       )
                                     }));
                                   }}
-                                  className={`bg-[#131728] border border-[#1E2442] rounded px-2 py-1 text-[11px] outline-none text-white font-mono text-center transition-opacity ${
+                                  className={`bg-nexus-surface border border-nexus-border rounded px-2 py-1 text-[11px] outline-none text-nexus-text font-mono text-center transition-opacity ${
                                     isRest ? 'opacity-40 pointer-events-none' : ''
                                   }`}
                                 />
@@ -4735,7 +4736,7 @@ const [saleForm, setSaleForm] = useState({
                                       )
                                     }));
                                   }}
-                                  className={`bg-[#131728] border border-[#1E2442] rounded px-2 py-1 text-[11px] outline-none text-white font-mono text-center transition-opacity ${
+                                  className={`bg-nexus-surface border border-nexus-border rounded px-2 py-1 text-[11px] outline-none text-nexus-text font-mono text-center transition-opacity ${
                                     isRest ? 'opacity-40 pointer-events-none' : ''
                                   }`}
                                 />
@@ -4744,9 +4745,9 @@ const [saleForm, setSaleForm] = useState({
                                 <button
                                   type="button"
                                   onClick={() => handleCopyAvailabilityToAll(idx)}
-                                  className="px-2 py-1 bg-[#1A1F36] border border-[#232B4A] hover:border-indigo-500 rounded text-[9px] font-bold text-slate-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                  className="px-2 py-1 bg-nexus-surface border border-nexus-border hover:border-nexus-primary rounded text-[9px] font-bold text-nexus-text-secondary transition-colors inline-flex items-center gap-1 cursor-pointer"
                                 >
-                                  <Copy className="w-3 h-3 text-indigo-400" /> Copiar horarios a todos
+                                  <Copy className="w-3 h-3 text-nexus-primary" /> Copiar horarios a todos
                                 </button>
                               </td>
                             </tr>
@@ -4760,7 +4761,7 @@ const [saleForm, setSaleForm] = useState({
 
             </div>
 
-            <div className="bg-[#0E111E] border-t border-[#1B2136] px-6 py-4 flex items-center justify-between">
+            <div className="bg-nexus-background border-t border-nexus-border px-6 py-4 flex items-center justify-between">
               <button 
                 type="button" 
                 onClick={() => {
@@ -4768,7 +4769,7 @@ const [saleForm, setSaleForm] = useState({
                   setEditingBarberId(null);
                   resetBarberForm();
                 }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                className="px-4 py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-bold rounded-lg text-xs transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
@@ -4778,7 +4779,7 @@ const [saleForm, setSaleForm] = useState({
                   <button 
                     type="button"
                     onClick={() => setBarberStep(prev => prev - 1)}
-                    className="px-4 py-2 bg-[#1A1F36] hover:bg-[#252B4E] border border-[#232B4A] text-slate-300 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                    className="px-4 py-2 bg-nexus-surface hover:bg-nexus-surface-hover border border-nexus-border text-nexus-text-secondary font-bold rounded-lg text-xs transition-colors cursor-pointer"
                   >
                     Anterior
                   </button>
@@ -4788,7 +4789,7 @@ const [saleForm, setSaleForm] = useState({
                   <button 
                     type="button"
                     onClick={handleNextStep}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer font-bold"
+                    className="px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer font-bold"
                   >
                     Siguiente paso
                   </button>
@@ -4796,7 +4797,7 @@ const [saleForm, setSaleForm] = useState({
                   <button 
                     type="button"
                     onClick={handleSaveBarber}
-                    className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer font-bold"
+                    className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md transition-all cursor-pointer font-bold"
                   >
                     {editingBarberId ? 'Guardar Cambios' : 'Crear Profesional'}
                   </button>
@@ -4813,33 +4814,33 @@ const [saleForm, setSaleForm] = useState({
           ========================================== */}
       {activeModal === 'add-branch' && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-lg p-6 relative shadow-2xl overflow-hidden">
-            <h3 className="text-base font-extrabold text-white mb-1 tracking-tight flex items-center gap-2 font-bold">
-              <Building2 className="w-5 h-5 text-indigo-400" />
+          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-lg p-6 relative shadow-xl overflow-hidden">
+            <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
+              <Building2 className="w-5 h-5 text-nexus-primary" />
               {editingBranchId ? 'Editar Sucursal' : 'Crear Nueva Sucursal'}
             </h3>
-            <p className="text-[10px] text-slate-400 mb-4">Complete la información física y de contacto comercial.</p>
+            <p className="text-[10px] text-nexus-text-secondary mb-4">Complete la información física y de contacto comercial.</p>
 
             <form onSubmit={handleCreateBranch} className="space-y-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Nombre de la Sucursal *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Nombre de la Sucursal *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="Ej. Equipetrol Premium"
                   value={newBranch.name}
                   onChange={(e) => setNewBranch(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Teléfono de Sucursal</label>
-                <div className="flex items-center bg-[#131728] border border-[#232A4C] rounded-lg px-2.5 gap-2">
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Teléfono de Sucursal</label>
+                <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg px-2.5 gap-2">
                   {detectedBranchCountry && (
                     <div className="flex items-center gap-1 shrink-0 text-xs">
                       <span>{detectedBranchCountry?.flag}</span>
-                      <span className="text-[9px] font-mono text-slate-400 font-bold">{detectedBranchCountry?.code}</span>
+                      <span className="text-[9px] font-mono text-nexus-text-secondary font-bold">{detectedBranchCountry?.code}</span>
                     </div>
                   )}
                   <input 
@@ -4850,32 +4851,32 @@ const [saleForm, setSaleForm] = useState({
                       setNewBranch(prev => ({ ...prev, phone: val }));
                     }}
                     placeholder="+591 71234567"
-                    className="w-full bg-transparent border-0 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-transparent border-0 py-2.5 text-xs text-nexus-text outline-none"
                   />
                 </div>
                 {detectedBranchCountry && (
-                  <span className="text-[8px] text-indigo-400 font-bold mt-1 block">
+                  <span className="text-[8px] text-nexus-primary font-bold mt-1 block">
                     Ubicación del prefijo comercial detectado ({detectedBranchCountry?.country})
                   </span>
                 )}
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Horario de Atención</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Horario de Atención</label>
                 <input 
                   type="text" 
                   placeholder="Ej. Lunes a Sábado, 09:00 - 20:00"
                   value={newBranch.schedule}
                   onChange={(e) => setNewBranch(prev => ({ ...prev, schedule: e.target.value }))}
-                  className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 />
               </div>
 
               <div className="relative">
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Ubicación / Dirección Física *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Ubicación / Dirección Física *</label>
                 <div className="relative flex items-center">
                   <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                    <MapPin className="w-4 h-4 text-rose-500" />
+                    <MapPin className="w-4 h-4 text-nexus-error" />
                   </span>
                   <input 
                     type="text" 
@@ -4888,12 +4889,12 @@ const [saleForm, setSaleForm] = useState({
                       setShowLocationList(true);
                     }}
                     onFocus={() => setShowLocationList(true)}
-                    className="w-full bg-[#131728] border border-[#232A4C] rounded-lg pl-8 pr-2.5 py-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-8 pr-2.5 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                   />
                 </div>
 
                 {showLocationList && (
-                  <div className="absolute left-0 right-0 mt-1.5 bg-[#0F1221] border border-[#232A4C] rounded-xl shadow-2xl max-h-40 overflow-y-auto z-50 divide-y divide-[#232A4C]/30 scrollbar-thin">
+                  <div className="absolute left-0 right-0 mt-1.5 bg-nexus-surface border border-nexus-border rounded-xl shadow-xl max-h-40 overflow-y-auto z-50 divide-y divide-nexus-border scrollbar-thin">
                     {filteredSimulatedLocations.map((l, i) => (
                       <div
                         key={i}
@@ -4907,17 +4908,17 @@ const [saleForm, setSaleForm] = useState({
                           setLocationSearch(l?.address);
                           setShowLocationList(false);
                         }}
-                        className="p-2.5 hover:bg-[#1C2036] cursor-pointer flex items-center gap-2.5 text-xs text-slate-300 transition-colors"
+                        className="p-2.5 hover:bg-nexus-surface-hover cursor-pointer flex items-center gap-2.5 text-xs text-nexus-text-secondary transition-colors"
                       >
-                        <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-nexus-error shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-bold text-white text-[11px] truncate">{l?.name}</p>
-                          <p className="text-[9px] text-slate-500 truncate">{l?.address}</p>
+                          <p className="font-bold text-nexus-text text-[11px] truncate">{l?.name}</p>
+                          <p className="text-[9px] text-nexus-text-muted truncate">{l?.address}</p>
                         </div>
                       </div>
                     ))}
                     {filteredSimulatedLocations.length === 0 && (
-                      <p className="p-3 text-[10px] text-slate-500 text-center">No hay sugerencias con esa dirección. Intente otra calle.</p>
+                      <p className="p-3 text-[10px] text-nexus-text-muted text-center">No hay sugerencias con esa dirección. Intente otra calle.</p>
                     )}
                   </div>
                 )}
@@ -4925,21 +4926,21 @@ const [saleForm, setSaleForm] = useState({
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Mapa Interactivo de Coordenadas</label>
-                  <span className="text-[8px] text-indigo-400 font-mono">Zoom, arrastra el pin o haz clic para reubicar</span>
+                  <label className="text-[9px] text-nexus-text-muted font-bold uppercase tracking-widest">Mapa Interactivo de Coordenadas</label>
+                  <span className="text-[8px] text-nexus-primary font-mono">Zoom, arrastra el pin o haz clic para reubicar</span>
                 </div>
                 
-                <div className="relative h-48 w-full rounded-xl overflow-hidden border border-[#232A4C] bg-[#090b13] z-10">
+                <div className="relative h-48 w-full rounded-xl overflow-hidden border border-nexus-border bg-nexus-background z-10">
                   <div ref={mapContainerRef} className="w-full h-full text-black" />
                   
-                  <div className="absolute bottom-2 left-2 bg-[#0C0E17]/90 border border-[#1E2442] px-2 py-1 rounded text-[8px] text-slate-400 font-mono z-25 flex gap-2 select-none pointer-events-none">
+                  <div className="absolute bottom-2 left-2 bg-nexus-surface/90 border border-nexus-border px-2 py-1 rounded text-[8px] text-nexus-text-secondary font-mono z-25 flex gap-2 select-none pointer-events-none">
                     <span>Lat: {newBranch?.lat?.toFixed(5)}</span>
                     <span>Lng: {newBranch?.lng?.toFixed(5)}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#1E2442]/50">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-nexus-border">
                 <button 
                   type="button" 
                   onClick={() => {
@@ -4947,13 +4948,13 @@ const [saleForm, setSaleForm] = useState({
                     setNewBranch({ name: '', phone: '', address: '', schedule: '', lat: -17.7732, lng: -63.1821, createdDate: '' });
                     setLocationSearch('');
                   }} 
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                  className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
                   {editingBranchId ? 'Guardar Cambios' : 'Crear Sucursal'}
                 </button>
@@ -4964,31 +4965,32 @@ const [saleForm, setSaleForm] = useState({
       )}
 
       {/* 7. MODAL: AGREGAR SERVICIOS */}
+      {/* 7. MODAL: AGREGAR SERVICIOS */}
       {activeModal === 'add-service' && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-md p-6 relative shadow-2xl">
-            <h3 className="text-base font-extrabold text-white mb-1 tracking-tight flex items-center gap-2 font-bold">
-              <Scissors className="w-5 h-5 text-indigo-400" />
+          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl">
+            <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
+              <Scissors className="w-5 h-5 text-nexus-primary" />
               Crear Nuevo Servicio
             </h3>
-            <p className="text-[10px] text-slate-400 mb-4">Ingrese los detalles y la disponibilidad semanal del tratamiento.</p>
+            <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal del tratamiento.</p>
             
             <form onSubmit={handleCreateService} className="space-y-4">
               <div>
-                <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Nombre del Servicio *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Nombre del Servicio *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="Ej. Sesión GallyFlow Express"
                   value={newService.name}
                   onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Precio *</label>
+                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Precio *</label>
                   <div className="relative">
                     <input 
                       type="number" 
@@ -4996,19 +4998,19 @@ const [saleForm, setSaleForm] = useState({
                       placeholder="100"
                       value={newService.price}
                       onChange={(e) => setNewService(prev => ({ ...prev, price: e.target.value }))}
-                      className="w-full bg-[#131728] border border-[#232A4C] rounded-lg pl-3 pr-8 p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono font-bold"
+                      className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-3 pr-8 p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono font-bold"
                     />
-                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-slate-500 select-none font-bold">Bs</span>
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-nexus-text-muted select-none font-bold">Bs</span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">Tiempo de Duración *</label>
+                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Tiempo de Duración *</label>
                   <select 
                     required
                     value={newService.duration}
                     onChange={(e) => setNewService(prev => ({ ...prev, duration: e.target.value }))}
-                    className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-bold font-sans"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-bold font-sans"
                   >
                     <option value="15">15 min</option>
                     <option value="30">30 min</option>
@@ -5023,27 +5025,27 @@ const [saleForm, setSaleForm] = useState({
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Disponibilidad por Días *</label>
+                  <label className="text-[10px] text-nexus-text-secondary font-bold uppercase tracking-wider">Disponibilidad por Días *</label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setNewService(prev => ({ ...prev, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] }))}
-                      className="text-[9px] text-indigo-400 hover:underline font-bold cursor-pointer"
+                      className="text-[9px] text-nexus-primary hover:underline font-bold cursor-pointer"
                     >
                       Todos
                     </button>
-                    <span className="text-slate-600 text-[9px] font-bold">|</span>
+                    <span className="text-nexus-text-muted text-[9px] font-bold">|</span>
                     <button
                       type="button"
                       onClick={() => setNewService(prev => ({ ...prev, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'] }))}
-                      className="text-[9px] text-indigo-400 hover:underline font-bold cursor-pointer"
+                      className="text-[9px] text-nexus-primary hover:underline font-bold cursor-pointer"
                     >
                       Lun-Sáb
                     </button>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-7 gap-1.5 p-2 bg-[#090B12] border border-[#1E2442] rounded-xl">
+                <div className="grid grid-cols-7 gap-1.5 p-2 bg-nexus-background border border-nexus-border rounded-xl">
                   {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map(day => {
                     const isSelected = newService.availableDays.includes(day);
                     const label = day.charAt(0);
@@ -5062,8 +5064,8 @@ const [saleForm, setSaleForm] = useState({
                         }}
                         className={`h-9 w-full rounded-lg text-xs font-extrabold flex items-center justify-center transition-all border cursor-pointer ${
                           isSelected 
-                            ? 'bg-indigo-500/15 border-indigo-500 text-indigo-400 shadow-md shadow-indigo-500/10' 
-                            : 'bg-[#131728] border-[#232B4C] text-slate-500 hover:text-white hover:border-slate-500'
+                            ? 'bg-nexus-primary-soft border-nexus-primary text-nexus-primary shadow-sm' 
+                            : 'bg-nexus-surface border-nexus-border text-nexus-text-muted hover:text-nexus-text hover:border-nexus-text-muted'
                         }`}
                         title={day}
                       >
@@ -5074,17 +5076,17 @@ const [saleForm, setSaleForm] = useState({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-[#1E2442]/50">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-nexus-border">
                 <button 
                   type="button" 
                   onClick={() => setActiveModal(null)} 
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                  className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
                   Crear Servicio
                 </button>
@@ -5095,15 +5097,16 @@ const [saleForm, setSaleForm] = useState({
       )}
 
       {/* 8. MODAL: ASISTENCIA BIOMÉTRICO */}
+      {/* 8. MODAL: ASISTENCIA BIOMÉTRICO */}
       {activeModal === 'assistance' && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-sm p-5 relative shadow-2xl">
-            <h3 className="text-base font-bold text-white mb-1">Biométrico de Asistencia</h3>
-            <p className="text-[11px] text-slate-400 mb-4">Ingresa tu PIN personal para autorizar el marcaje de hoy.</p>
+          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-sm p-5 relative shadow-xl">
+            <h3 className="text-base font-bold text-nexus-text mb-1">Biométrico de Asistencia</h3>
+            <p className="text-[11px] text-nexus-text-secondary mb-4">Ingresa tu PIN personal para autorizar el marcaje de hoy.</p>
             <form onSubmit={handleRegisterAttendance} className="space-y-3.5">
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#141624] rounded-lg border border-[#242A4A] mb-3">
-                <button type="button" onClick={() => setAssistType('in')} className={`py-1 rounded text-xs font-bold transition-all cursor-pointer ${assistType === 'in' ? 'bg-[#141A30] text-indigo-400' : 'text-slate-400'}`}>Entrada</button>
-                <button type="button" onClick={() => setAssistType('out')} className={`py-1 rounded text-xs font-bold transition-all cursor-pointer ${assistType === 'out' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Salida</button>
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-nexus-background rounded-lg border border-nexus-border mb-3">
+                <button type="button" onClick={() => setAssistType('in')} className={`py-1 rounded text-xs font-bold transition-all cursor-pointer ${assistType === 'in' ? 'bg-nexus-primary-soft text-nexus-primary' : 'text-nexus-text-secondary'}`}>Entrada</button>
+                <button type="button" onClick={() => setAssistType('out')} className={`py-1 rounded text-xs font-bold transition-all cursor-pointer ${assistType === 'out' ? 'bg-nexus-primary text-white' : 'text-nexus-text-secondary'}`}>Salida</button>
               </div>
               <input 
                 type="password" 
@@ -5113,11 +5116,11 @@ const [saleForm, setSaleForm] = useState({
                 required 
                 value={assistPin} 
                 onChange={(e) => setAssistPin(e.target.value)} 
-                className="w-full bg-[#131728] border border-[#232B4C] text-center tracking-widest text-lg rounded-lg p-2.5 text-white outline-none font-mono" 
+                className="w-full bg-nexus-background border border-nexus-border text-center tracking-widest text-lg rounded-lg p-2.5 text-nexus-text outline-none font-mono" 
               />
               <div className="flex justify-end gap-2.5 pt-2">
-                <button type="button" onClick={() => { setActiveModal(null); setAssistPin(''); }} className="px-3.5 py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg font-mono font-bold cursor-pointer">Cerrar</button>
-                <button type="submit" className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white text-xs font-bold rounded-lg font-mono font-bold cursor-pointer">Registrar</button>
+                <button type="button" onClick={() => { setActiveModal(null); setAssistPin(''); }} className="px-3.5 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg font-mono font-bold cursor-pointer">Cerrar</button>
+                <button type="submit" className="px-3.5 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg font-mono font-bold cursor-pointer">Registrar</button>
               </div>
             </form>
           </div>
@@ -5127,8 +5130,8 @@ const [saleForm, setSaleForm] = useState({
       <svg className="absolute w-0 h-0" width="0" height="0">
         <defs>
           <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25"/>
-            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0"/>
+            <stop offset="0%" stopColor="var(--nx-primary)" stopOpacity="0.15"/>
+            <stop offset="100%" stopColor="var(--nx-primary)" stopOpacity="0.0"/>
           </linearGradient>
         </defs>
       </svg>

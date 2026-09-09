@@ -12,7 +12,7 @@ export async function identifyRequester(req, res, next) {
   if (scheme === 'Bearer' && token) {
     try {
       const decoded = await getAuth().verifyIdToken(token);
-      req.actor = { uid: decoded.uid, rol: 'admin', verified: true };
+      req.actor = { uid: decoded.uid, email: decoded.email, rol: 'admin', verified: true };
       return next();
     } catch (err) {
       logger.warn('[auth] Token de Firebase inválido:', err.message);

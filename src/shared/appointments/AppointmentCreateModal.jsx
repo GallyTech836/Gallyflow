@@ -166,18 +166,18 @@ export default function AppointmentCreateModal({
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-md p-5 relative shadow-2xl">
-        <h3 className="text-base font-bold text-white mb-1">Agendar Nueva Cita</h3>
+      <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-5 relative shadow-xl">
+        <h3 className="text-base font-bold text-nexus-text mb-1">Agendar Nueva Cita</h3>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
 
           {/* ── Cliente ─────────────────────────────────────────── */}
           <div className="relative">
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">Cliente *</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Cliente *</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                  <Search className="w-3.5 h-3.5 text-slate-500" />
+                  <Search className="w-3.5 h-3.5 text-nexus-text-muted" />
                 </span>
                 <input
                   type="text"
@@ -185,13 +185,13 @@ export default function AppointmentCreateModal({
                   value={clientSearch}
                   onChange={(e) => { setClientSearch(e.target.value); setShowClientList(true); }}
                   onFocus={() => setShowClientList(true)}
-                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg pl-8 pr-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-8 pr-2.5 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => { setIsNewClient(v => !v); change('clientName', ''); change('phone', ''); }}
-                className="px-2.5 py-2 bg-indigo-950 text-indigo-400 border border-indigo-500/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
+                className="px-2.5 py-2 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
               >
                 {isNewClient ? 'Elegir Existente' : '+ Nuevo Cliente'}
               </button>
@@ -199,7 +199,7 @@ export default function AppointmentCreateModal({
 
             {/* Dropdown de búsqueda */}
             {!isNewClient && showClientList && clients.length > 0 && (
-              <div className="absolute left-0 right-0 mt-1.5 bg-[#0F1221] border border-[#232A4C] rounded-xl shadow-2xl max-h-40 overflow-y-auto z-50 divide-y divide-[#232A4C]/30">
+              <div className="absolute left-0 right-0 mt-1.5 bg-nexus-surface border border-nexus-border rounded-xl shadow-xl max-h-40 overflow-y-auto z-50 divide-y divide-nexus-border">
                 {filteredClients.map(c => (
                   <div
                     key={c?.id}
@@ -210,19 +210,19 @@ export default function AppointmentCreateModal({
                       setClientSearch(c?.name);
                       setShowClientList(false);
                     }}
-                    className="p-2.5 hover:bg-[#1C2036] cursor-pointer flex justify-between items-center text-xs"
+                    className="p-2.5 hover:bg-nexus-surface-hover cursor-pointer flex justify-between items-center text-xs"
                   >
                     <div>
-                      <p className="font-bold text-white">{c?.name}</p>
-                      <p className="text-[10px] text-slate-500">{c?.phone}</p>
+                      <p className="font-bold text-nexus-text">{c?.name}</p>
+                      <p className="text-[10px] text-nexus-text-muted">{c?.phone}</p>
                     </div>
-                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded font-bold font-mono">
+                    <span className="text-[9px] bg-nexus-primary-soft text-nexus-primary px-1.5 py-0.5 rounded font-bold font-mono">
                       {c?.visits ?? 0} Visitas
                     </span>
                   </div>
                 ))}
                 {filteredClients.length === 0 && (
-                  <p className="p-3 text-[10px] text-slate-500 text-center">No se encontraron clientes</p>
+                  <p className="p-3 text-[10px] text-nexus-text-muted text-center">No se encontraron clientes</p>
                 )}
               </div>
             )}
@@ -230,25 +230,25 @@ export default function AppointmentCreateModal({
 
           {/* ── Datos de nuevo cliente ───────────────────────── */}
           {isNewClient && (
-            <div className="p-3 bg-[#131728] border border-indigo-500/10 rounded-xl space-y-3">
+            <div className="p-3 bg-nexus-background border border-nexus-primary/10 rounded-xl space-y-3">
               <div>
-                <label className="text-[9px] text-indigo-400 font-bold block mb-1">Nombre Completo *</label>
+                <label className="text-[9px] text-nexus-primary font-bold block mb-1">Nombre Completo *</label>
                 <input
                   type="text"
                   required={isNewClient}
                   value={draft.clientName}
                   onChange={(e) => change('clientName', e.target.value)}
                   placeholder="Ej. Sebastián Mendoza"
-                  className="w-full bg-[#0C0E17] border border-[#232B4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-nexus-surface border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 />
               </div>
               <div>
-                <label className="text-[9px] text-indigo-400 font-bold block mb-1">Número de Teléfono</label>
-                <div className="flex items-center bg-[#0C0E17] border border-[#232B4C] rounded-lg px-2.5 gap-2">
+                <label className="text-[9px] text-nexus-primary font-bold block mb-1">Número de Teléfono</label>
+                <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-2.5 gap-2">
                   {detectedCountry && (
                     <div className="flex items-center gap-1 shrink-0 text-xs">
                       <span>{detectedCountry.flag}</span>
-                      <span className="text-[9px] font-mono text-slate-400 font-bold">{detectedCountry.code}</span>
+                      <span className="text-[9px] font-mono text-nexus-text-secondary font-bold">{detectedCountry.code}</span>
                     </div>
                   )}
                   <input
@@ -256,11 +256,11 @@ export default function AppointmentCreateModal({
                     value={draft.phone}
                     onChange={(e) => change('phone', e.target.value.replace(/[^0-9+]/g, ''))}
                     placeholder="70231122"
-                    className="w-full bg-transparent border-0 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-transparent border-0 py-2.5 text-xs text-nexus-text outline-none"
                   />
                 </div>
                 {detectedCountry?.isInternational && (
-                  <span className="text-[8px] text-indigo-400 font-bold mt-1 block">
+                  <span className="text-[8px] text-nexus-primary font-bold mt-1 block">
                     Cliente internacional detectado ({detectedCountry.country})
                   </span>
                 )}
@@ -271,26 +271,26 @@ export default function AppointmentCreateModal({
           {/* ── Servicio y Profesional ───────────────────────── */}
           <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">Servicios *</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Servicios *</label>
             <button
               type="button"
               onClick={() => setShowServicesList(prev => !prev)}
-              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-left text-white flex items-center justify-between"
+              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-left text-nexus-text flex items-center justify-between"
             >
               <span className="truncate">
                 {draft.serviceIds.length > 0
                   ? servicesForDate.filter(s => draft.serviceIds.includes(s.id)).map(s => s.name).join(', ')
                   : 'Selecciona servicios...'}
               </span>
-              <span className="text-slate-400 ml-2">{showServicesList ? '▲' : '▼'}</span>
+              <span className="text-nexus-text-secondary ml-2">{showServicesList ? '▲' : '▼'}</span>
             </button>
             {showServicesList && (
-              <div className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
+              <div className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
                 {servicesForDate.length === 0 && (
-                  <p className="text-[10px] text-slate-500 p-1">No hay servicios disponibles para el día seleccionado.</p>
+                  <p className="text-[10px] text-nexus-text-muted p-1">No hay servicios disponibles para el día seleccionado.</p>
                 )}
                 {servicesForDate.map(s => (
-                  <label key={s?.id} className="flex items-center gap-2 text-xs text-white cursor-pointer">
+                  <label key={s?.id} className="flex items-center gap-2 text-xs text-nexus-text cursor-pointer">
                     <input
                       type="checkbox"
                       checked={draft.serviceIds.includes(s?.id)}
@@ -304,20 +304,20 @@ export default function AppointmentCreateModal({
           </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Profesional *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Profesional *</label>
               {fixedProfessional ? (
                 <input
                   type="text"
                   value={fixedProfessional.name}
                   disabled
-                  className="w-full bg-[#131728]/40 border border-[#232A4C]/40 rounded-lg p-2 text-xs text-slate-500 outline-none disabled:cursor-not-allowed"
+                  className="w-full bg-nexus-background/40 border border-nexus-border/40 rounded-lg p-2 text-xs text-nexus-text-muted outline-none disabled:cursor-not-allowed"
                 />
               ) : (
                 <select
                   required
                   value={draft.professionalId}
                   onChange={(e) => change('professionalId', e.target.value)}
-                  className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 >
                   <option value="pending">Sin Profesional (PENDIENTE)</option>
                   {professionals.filter(b => b?.active).map(b => (
@@ -329,32 +329,32 @@ export default function AppointmentCreateModal({
           </div>
 
           {/* ── Sobre Horario ─────────────────────────────────── */}
-          <div className="flex items-center gap-2 bg-[#131728] border border-[#232A4C] rounded-lg p-2.5">
+          <div className="flex items-center gap-2 bg-nexus-background border border-nexus-border rounded-lg p-2.5">
             <input
               type="checkbox"
               id="overtime-toggle"
               checked={draft.overtime}
               onChange={(e) => change('overtime', e.target.checked)}
-              className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+              className="w-3.5 h-3.5 accent-nexus-warning cursor-pointer"
             />
-            <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-amber-400 cursor-pointer select-none">
+            <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-nexus-warning-text cursor-pointer select-none">
               Sobre Horario (permite editar la duración de los servicios)
             </label>
           </div>
 
           {draft.overtime && draft.serviceIds.length > 0 && (
-            <div className="p-3 bg-[#131728] border border-amber-500/20 rounded-lg space-y-2">
-              <label className="text-[9px] text-amber-400 font-bold block">Duración por servicio (minutos)</label>
+            <div className="p-3 bg-nexus-background border border-nexus-warning/20 rounded-lg space-y-2">
+              <label className="text-[9px] text-nexus-warning-text font-bold block">Duración por servicio (minutos)</label>
               {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
                 <div key={s?.id} className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-300 truncate flex-1">{s?.name}</span>
+                  <span className="text-[10px] text-nexus-text-secondary truncate flex-1">{s?.name}</span>
                   <input
                     type="number"
                     min="5"
                     step="5"
                     value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
                     onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
-                    className="w-16 bg-[#0C0E17] border border-[#232B4C] rounded-lg p-1.5 text-xs text-white outline-none text-center font-mono"
+                    className="w-16 bg-nexus-surface border border-nexus-border rounded-lg p-1.5 text-xs text-nexus-text outline-none text-center font-mono"
                   />
                 </div>
               ))}
@@ -364,34 +364,34 @@ export default function AppointmentCreateModal({
           {/* ── Fecha y Hora ─────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Fecha *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Fecha *</label>
               <input
                 type="date"
                 required
                 value={draft.date}
                 onChange={(e) => change('date', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 font-mono font-bold"
+                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono font-bold"
               />
             </div>
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1">Hora *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora *</label>
               <input
                 type="time"
                 required
                 value={draft.time}
                 onChange={(e) => change('time', e.target.value)}
-                className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none"
+                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none"
               />
             </div>
           </div>
 
           {/* ── Método de Pago ───────────────────────────────── */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">Método de Pago</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Método de Pago</label>
             <select
               value={draft.paymentMethod}
               onChange={(e) => change('paymentMethod', e.target.value)}
-              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500"
+              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
             >
               <option value="Efectivo">Efectivo</option>
               <option value="Tarjeta">Tarjeta</option>
@@ -402,13 +402,13 @@ export default function AppointmentCreateModal({
 
           {/* ── Notas ────────────────────────────────────────── */}
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block mb-1">Notas Internas (Opcional)</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Notas Internas (Opcional)</label>
             <input
               type="text"
               placeholder="Ej: requiere camilla, alérgico a ciertos aceites..."
               value={draft.notes}
               onChange={(e) => change('notes', e.target.value)}
-              className="w-full bg-[#131728] border border-[#232A4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500"
+              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
             />
           </div>
 
@@ -417,13 +417,13 @@ export default function AppointmentCreateModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg hover:bg-slate-700 cursor-pointer"
+              className="px-3.5 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-3.5 py-1.5 bg-indigo-500 text-white text-xs font-bold rounded-lg hover:bg-indigo-400 cursor-pointer"
+              className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer"
             >
               Confirmar Reserva
             </button>

@@ -15,7 +15,7 @@ export default function LoginPage({ onLogin, error, loading }) {
   const canSubmit = !loading && email.trim() !== '' && password !== '';
 
   return (
-    <div className="min-h-screen bg-[#07080D] text-[#E2E8F0] font-sans antialiased flex items-center justify-center p-4 selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-nexus-background text-nexus-text font-sans antialiased flex items-center justify-center p-4 selection:bg-nexus-primary selection:text-white">
       
       <div className="w-full max-w-sm">
 
@@ -24,29 +24,29 @@ export default function LoginPage({ onLogin, error, loading }) {
         <img
             src="/favicon.svg"
             alt="GallyFlow"
-            className="w-12 h-12 rounded-xl shadow-lg shadow-indigo-950/40 mb-4 object-contain"
+            className="w-12 h-12 rounded-xl shadow-md mb-4 object-contain"
           />
-          <h1 className="text-base font-extrabold tracking-wider bg-gradient-to-r from-white via-slate-200 to-indigo-400 bg-clip-text text-transparent">
+          <h1 className="text-base font-extrabold tracking-wider text-nexus-text">
             GallyFlow
           </h1>
-          <p className="text-[10px] text-slate-500 font-bold tracking-widest uppercase font-mono mt-0.5">
+          <p className="text-[10px] text-nexus-text-muted font-bold tracking-widest uppercase font-mono mt-0.5">
             Panel de Administración
           </p>
         </div>
 
         {/* ── Card ── */}
-        <div className="bg-[#0C0E17] border border-[#1B2136] rounded-2xl p-7 shadow-2xl shadow-black/40">
+        <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-7 shadow-xl">
 
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
 
             {/* ── Campo: correo ── */}
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1.5 uppercase tracking-wider">
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1.5 uppercase tracking-wider">
                 Correo electrónico
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="w-3.5 h-3.5 text-slate-500" />
+                  <Mail className="w-3.5 h-3.5 text-nexus-text-muted" />
                 </span>
                 <input
                   type="email"
@@ -55,18 +55,18 @@ export default function LoginPage({ onLogin, error, loading }) {
                   placeholder="admin@gallyflow.com"
                   disabled={loading}
                   autoComplete="email"
-                  className="w-full bg-[#131728] border border-[#1E2442] rounded-lg pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600 disabled:opacity-50 text-left"                />
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary transition-colors placeholder:text-nexus-text-muted disabled:opacity-50 text-left"                />
               </div>
             </div>
 
             {/* ── Campo: contraseña ── */}
             <div>
-              <label className="text-[10px] text-slate-400 font-bold block mb-1.5 uppercase tracking-wider">
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1.5 uppercase tracking-wider">
                 Contraseña
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <Lock className="w-3.5 h-3.5 text-nexus-text-muted" />
                 </span>
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -75,11 +75,11 @@ export default function LoginPage({ onLogin, error, loading }) {
                   placeholder="••••••••"
                   disabled={loading}
                   autoComplete="current-password"
-                  className="w-full bg-[#131728] border border-[#1E2442] rounded-lg pl-9 pr-10 py-2.5 text-xs text-white outline-none focus:border-indigo-500 transition-colors font-mono placeholder:text-slate-600 disabled:opacity-50 text-left"                />
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary transition-colors font-mono placeholder:text-nexus-text-muted disabled:opacity-50 text-left"                />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-nexus-text-muted hover:text-nexus-text-secondary transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword
@@ -91,8 +91,8 @@ export default function LoginPage({ onLogin, error, loading }) {
 
             {/* ── Error ── */}
             {error && (
-              <div className="bg-[#1F0E13] border border-red-500/25 text-red-300 rounded-xl px-3.5 py-2.5 text-[11px] font-bold flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+              <div className="bg-nexus-error-bg border border-nexus-error/25 text-nexus-error-text rounded-xl px-3.5 py-2.5 text-[11px] font-bold flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-nexus-error shrink-0" />
                 {error}
               </div>
             )}
@@ -101,7 +101,7 @@ export default function LoginPage({ onLogin, error, loading }) {
             <button
               type="button" onClick={() => onLogin(email, password)}
               disabled={!canSubmit}
-              className="w-full mt-1 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 disabled:from-indigo-500/40 disabled:to-indigo-700/40 text-white font-extrabold rounded-lg text-xs shadow-md shadow-indigo-950/30 transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+              className="w-full mt-1 px-4 py-2.5 bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-40 text-white font-extrabold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -120,7 +120,7 @@ export default function LoginPage({ onLogin, error, loading }) {
         </div>
 
         {/* ── Footer ── */}
-        <p className="text-center text-[10px] text-slate-600 font-mono mt-6">
+        <p className="text-center text-[10px] text-nexus-text-muted font-mono mt-6">
           © {new Date().getFullYear()} GallyFlow Inc.
         </p>
 

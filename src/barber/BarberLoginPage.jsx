@@ -12,40 +12,40 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#07080D] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-nexus-background flex items-center justify-center px-4">
 
       {/* Glow ambiental */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-nexus-primary/5 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-sm">
 
         {/* Logo / marca */}
         <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 mb-4">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-nexus-primary-soft border border-nexus-primary/20 mb-4">
             <img
               src="/favicon.svg"
               alt="GallyFlow"
               className="w-9 h-9 rounded-lg object-contain"
             />
           </div>
-          <h1 className="text-xl font-extrabold text-white tracking-tight font-mono">
-            Gally<span className="text-indigo-400">Flow</span> Staff
+          <h1 className="text-xl font-extrabold text-nexus-text tracking-tight font-mono">
+            Gally<span className="text-nexus-primary">Flow</span> Staff
           </h1>
-          <p className="text-xs text-slate-500 mt-1 font-mono tracking-widest uppercase">
+          <p className="text-xs text-nexus-text-muted mt-1 font-mono tracking-widest uppercase">
             Acceso Profesional
           </p>
         </div>
 
         {/* Card */}
-        <div className="bg-[#0C0E17] border border-[#1B2136] rounded-2xl p-6 shadow-2xl">
+        <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-6 shadow-xl">
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
             {/* Usuario */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest font-mono">
+              <label className="block text-[10px] font-black text-nexus-primary uppercase tracking-widest font-mono">
                 Usuario
               </label>
               <input
@@ -54,13 +54,13 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="tu.usuario"
                 autoComplete="username"
-                className="w-full bg-[#07080D] border border-[#1B2136] focus:border-indigo-500/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-colors font-mono"
+                className="w-full bg-nexus-background border border-nexus-border focus:border-nexus-primary rounded-xl px-4 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted outline-none transition-colors font-mono"
               />
             </div>
 
             {/* Contraseña */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest font-mono">
+              <label className="block text-[10px] font-black text-nexus-primary uppercase tracking-widest font-mono">
                 Contraseña
               </label>
               <div className="relative">
@@ -70,12 +70,12 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full bg-[#07080D] border border-[#1B2136] focus:border-indigo-500/60 rounded-xl px-4 py-2.5 pr-10 text-sm text-white placeholder-slate-600 outline-none transition-colors font-mono"
+                  className="w-full bg-nexus-background border border-nexus-border focus:border-nexus-primary rounded-xl px-4 py-2.5 pr-10 text-sm text-nexus-text placeholder-nexus-text-muted outline-none transition-colors font-mono"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-nexus-text-muted hover:text-nexus-text-secondary transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -94,9 +94,9 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
 
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                <p className="text-xs text-rose-400 font-semibold font-mono">{error}</p>
+              <div className="flex items-center gap-2 bg-nexus-error-bg border border-nexus-error/20 rounded-xl px-3 py-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-nexus-error shrink-0" />
+                <p className="text-xs text-nexus-error-text font-semibold font-mono">{error}</p>
               </div>
             )}
 
@@ -104,7 +104,7 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
             <button
               type="submit"
               disabled={loading || !username.trim() || !password.trim()}
-              className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-500/20 font-mono mt-2"
+              className="w-full py-2.5 bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md font-mono mt-2"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -121,7 +121,7 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
           </form>
         </div>
 
-        <p className="text-center text-[10px] text-slate-600 mt-5 font-mono">
+        <p className="text-center text-[10px] text-nexus-text-muted mt-5 font-mono">
           GallyFlow · Plataforma Staff · v1.0
         </p>
       </div>
