@@ -7,6 +7,8 @@ import { LogOut } from 'lucide-react';
 import { useBarberAuth } from './useBarberAuth';
 import { useServicios } from '../firebase/useServicios';
 import BarberLoginPage from './BarberLoginPage';
+import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
+import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import AppointmentStatusBadge from '../shared/appointments/AppointmentStatusBadge';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { FIELD_PERMISSIONS } from '../shared/appointments/permissions';
@@ -225,6 +227,7 @@ const MESES_NOMBRES = [
 export default function App() {
   const { barberUser, error: authError, loading: authLoading, loginBarber, logoutBarber } = useBarberAuth();
   const negocioId = barberUser?.negocioId;
+  const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const { servicios: services } = useServicios(negocioId);
@@ -994,6 +997,10 @@ useEffect(() => {
 
   if (!activeBarber) {
     return <div style={{ background: '#F8FAFC', width: '100vw', height: '100vh' }} />;
+  }
+
+  if (isBlocked) {
+    return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
   }
 
   return (

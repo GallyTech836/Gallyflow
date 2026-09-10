@@ -8,6 +8,8 @@ import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
 import { notify, NotificationType } from '../shared/notifications';
 import { calculateTotals } from '../shared/appointments/serviceSelection';
 import { confirmBookingToClient } from './useClientBookingConfirmation';
+import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
+import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -65,6 +67,7 @@ export default function App({ negocioSlug } = {}) {
   const [negocioId, setNegocioId] = useState(null);
   const [negocioResolving, setNegocioResolving] = useState(true);
   const [negocioNotFound, setNegocioNotFound] = useState(false);
+  const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
 
   useEffect(() => {
     const resolveNegocio = async () => {
@@ -523,6 +526,10 @@ export default function App({ negocioSlug } = {}) {
         <p className="text-sm text-nexus-text-secondary">No se encontró el negocio solicitado.</p>
       </div>
     );
+  }
+
+  if (isBlocked) {
+    return <SuspendedScreen status={negocioStatus} />;
   }
 
   return (

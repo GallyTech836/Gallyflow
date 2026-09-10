@@ -5,6 +5,8 @@ import { useServicios } from '../firebase/useServicios';
 import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useNegocio } from '../firebase/useNegocio';
+import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
+import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
@@ -32,8 +34,9 @@ const GEOLOCATIONS_DB = [
 const INITIAL_AUTOMATION_LOGS = [];
 
 export default function App({ user }) {
-  const { logout } = useAuth();
+const { logout } = useAuth();
   const { negocioId } = useNegocio(user);
+  const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 console.log('[ADMIN] negocioId:', negocioId);
 const [activeTab, setActiveTab] = useState('agenda');
@@ -1836,6 +1839,10 @@ const [saleForm, setSaleForm] = useState({
     setAutomationLogs(prev => [newLog, ...prev]);
     triggerToast(`Mensaje de prueba encolado para ${randomClient.name}`);
   };
+
+  if (isBlocked) {
+    return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
+  }
 
   return (
     <div className="min-h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
