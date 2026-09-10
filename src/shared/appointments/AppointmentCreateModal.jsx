@@ -338,7 +338,7 @@ export default function AppointmentCreateModal({
               className="w-3.5 h-3.5 accent-nexus-warning cursor-pointer"
             />
             <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-nexus-warning-text cursor-pointer select-none">
-              Sobre Horario (permite editar la duración de los servicios)
+              Ajuste de la duracion de los servicos.
             </label>
           </div>
 

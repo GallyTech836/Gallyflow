@@ -1286,7 +1286,7 @@ useEffect(() => {
                                         {getServiceDuration(services, appt)}
                                       </span>
                                       <span>•</span>
-                                      <span className="font-black text-nexus-text">${appt.price} USD</span>
+                                      <span className="font-black text-nexus-text">{appt.price} Bs</span>
                                     </div>
                                   </div>
 
@@ -1600,7 +1600,7 @@ useEffect(() => {
 
                   <h3 className="text-xl font-bold tracking-tight text-nexus-text mt-4">{activeBarber.name} </h3>
                   <span className="text-xs text-nexus-primary font-bold uppercase tracking-wider">{activeBarber.role}</span>
-                  <p className="text-[11px] text-nexus-text-muted mt-1">Gallyflow Staff</p>
+                  <p className="text-[11px] text-nexus-text-muted mt-1">Nexus Staff</p>
                 </div>
 
                 <div className="space-y-3 pt-4">
