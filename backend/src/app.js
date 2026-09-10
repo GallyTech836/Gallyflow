@@ -10,18 +10,21 @@ const app = express();
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map((o) => o.trim()).filter(Boolean);
 
-// La ruta /api/superadmin queda abierta de CORS a propósito: el dominio de
-// StackBlitz del panel Super Admin cambia seguido, y esta ruta ya se protege
-// con Firebase Auth + verificación de correo dentro del propio endpoint
-// (requireSuperAdmin), no dependía de CORS para su seguridad real.
-app.use('/api/superadmin', cors());
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    logger.warn('[cors] Origen rechazado:', origin);
-    return callback(new Error('No permitido por CORS'));
-  },
+// Un solo middleware de CORS que decide según la ruta: /api/superadmin
+// queda abierto a propósito (el dominio de StackBlitz cambia seguido, y
+// esa ruta ya se protege con Firebase Auth + verificación de correo
+// dentro del propio endpoint, no depende de CORS para su seguridad real).
+// El resto de rutas sigue con la lista blanca estricta de siempre.
+app.use(cors((req, callback) => {
+  if (req.path.startsWith('/api/superadmin')) {
+    return callback(null, { origin: true });
+  }
+  const origin = req.header('Origin');
+  if (!origin || allowedOrigins.includes(origin)) {
+    return callback(null, { origin: true });
+  }
+  logger.warn('[cors] Origen rechazado:', origin);
+  return callback(null, { origin: false });
 }));
 
 app.use(express.json());
