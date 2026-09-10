@@ -10,6 +10,12 @@ const app = express();
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map((o) => o.trim()).filter(Boolean);
 
+// La ruta /api/superadmin queda abierta de CORS a propósito: el dominio de
+// StackBlitz del panel Super Admin cambia seguido, y esta ruta ya se protege
+// con Firebase Auth + verificación de correo dentro del propio endpoint
+// (requireSuperAdmin), no dependía de CORS para su seguridad real.
+app.use('/api/superadmin', cors());
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
@@ -19,6 +25,8 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+app.use('/api/superadmin', superadminRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'gallyflow-backend' });
