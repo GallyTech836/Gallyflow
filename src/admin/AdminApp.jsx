@@ -6,6 +6,7 @@ import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useNegocio } from '../firebase/useNegocio';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
+import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPlan/useNegocioPlan';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
@@ -284,11 +285,10 @@ const [saleForm, setSaleForm] = useState({
     return () => unsub();
   }, [negocioId]);
 
-// 🔧 Flags temporales para ocultar módulos del menú sin borrar código
-   const FEATURE_FLAGS = {
-    showInventario: false,
-    showWhatsAppBots: false,
-   };
+// Antes eran flags fijos (apagados a mano para todos). Ahora se leen
+// del plan real asignado al negocio — cada uno ve solo lo que su plan
+// incluye, sin tocar código cada vez que cambie.
+const { features: planFeatures } = useNegocioPlan(negocioId);
   const [whatsappSettings, setWhatsappSettings] = useState({
     isConnected: true,
     connectionStatus: 'connected', // connected, disconnected, pairing
@@ -2021,7 +2021,7 @@ const [saleForm, setSaleForm] = useState({
             {!isSidebarCollapsed && <span className="truncate">Sucursales</span>}
           </button>
 
-        {FEATURE_FLAGS.showInventario && (
+        {hasFeature(planFeatures, 'inventario') && (
           <button 
             onClick={() => {
               setActiveTab('inventory');
@@ -2039,7 +2039,7 @@ const [saleForm, setSaleForm] = useState({
             {!isSidebarCollapsed && <span className="truncate">Inventario</span>}
           </button>
          )}
-         {FEATURE_FLAGS.showWhatsAppBots && (
+         {hasFeature(planFeatures, 'automatizaciones') && (
           <button 
             onClick={() => {
               setActiveTab('automatizaciones');
@@ -2064,6 +2064,7 @@ const [saleForm, setSaleForm] = useState({
             <div className="border-t border-nexus-navy-border my-3 mx-2" />
           )}
 
+{hasFeature(planFeatures, 'comisiones') && (
           <button 
             onClick={() => {
               setActiveTab('commissions');
@@ -2080,7 +2081,9 @@ const [saleForm, setSaleForm] = useState({
             <DollarSign className={`w-4 h-4 shrink-0 ${activeTab === 'commissions' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Comisiones</span>}
           </button>
+          )}
 
+          {hasFeature(planFeatures, 'asistencia') && (
           <button 
             onClick={() => {
               setActiveTab('assistance');
@@ -2097,7 +2100,9 @@ const [saleForm, setSaleForm] = useState({
             <Clock className={`w-4 h-4 shrink-0 ${activeTab === 'assistance' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Asistencia</span>}
           </button>
+          )}
 
+          {hasFeature(planFeatures, 'analiticas') && (
           <button 
             onClick={() => {
               setActiveTab('reports');
@@ -2114,6 +2119,7 @@ const [saleForm, setSaleForm] = useState({
             <BarChart3 className={`w-4 h-4 shrink-0 ${activeTab === 'reports' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Analíticas</span>}
           </button>
+          )}
 
           {!isSidebarCollapsed ? (
             <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Sistema</p>
@@ -2665,6 +2671,11 @@ const [saleForm, setSaleForm] = useState({
                 </div>
                 <button
                   onClick={() => {
+                    const staffLimit = getFeatureLimit(planFeatures, 'staff');
+                    if (staffLimit !== null && barbers.length >= staffLimit) {
+                      triggerToast(`Tu plan permite hasta ${staffLimit} profesionales. Cambia de plan para agregar más.`, 'error');
+                      return;
+                    }
                     resetBarberForm();
                     setEditingBarberId(null);
                     setActiveModal('add-barber');
@@ -2853,6 +2864,11 @@ const [saleForm, setSaleForm] = useState({
                 </div>
                 <button
                   onClick={() => {
+                    const sucursalesLimit = getFeatureLimit(planFeatures, 'sucursales');
+                    if (sucursalesLimit !== null && branches.length >= sucursalesLimit) {
+                      triggerToast(`Tu plan permite hasta ${sucursalesLimit} sucursales. Cambia de plan para agregar más.`, 'error');
+                      return;
+                    }
                     setEditingBranchId(null);
                     setNewBranch({ name: '', phone: '', address: '', schedule: '', lat: -17.7732, lng: -63.1821, createdDate: '' });
                     setLocationSearch('');
