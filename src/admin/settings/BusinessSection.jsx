@@ -1,14 +1,7 @@
 import React from 'react';
 import { Building2 } from 'lucide-react';
 
-export default function BusinessSection({
-  negocioId,
-  businessName,
-  setBusinessName,
-  isEditingBusinessName,
-  setIsEditingBusinessName,
-  saveBusinessName,
-}) {
+export default function BusinessSection({ negocioId, businessName }) {
   return (
     <div className="space-y-4">
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
@@ -22,29 +15,9 @@ export default function BusinessSection({
             GF
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono">MARCA ACTIVA</p>
-              <button
-                type="button"
-                onClick={() => setIsEditingBusinessName(!isEditingBusinessName)}
-                className="text-[9px] text-nexus-primary hover:underline font-bold"
-              >
-                Editar
-              </button>
-            </div>
-            {isEditingBusinessName ? (
-              <input
-                type="text"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                onBlur={() => { setIsEditingBusinessName(false); saveBusinessName(businessName); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setIsEditingBusinessName(false); saveBusinessName(businessName); } }}
-                className="w-full bg-nexus-background border border-nexus-primary/40 text-nexus-text rounded text-xs px-1 py-0.5 outline-none font-sans"
-                autoFocus
-              />
-            ) : (
-              <p className="text-xs font-semibold text-nexus-text truncate">{businessName}</p>
-            )}
+            <p className="text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono">MARCA ACTIVA</p>
+            <p className="text-xs font-semibold text-nexus-text truncate">{businessName}</p>
+            <p className="text-[10px] text-nexus-text-muted mt-1">Para cambiar el nombre, contacta a soporte.</p>
           </div>
         </div>
       </div>

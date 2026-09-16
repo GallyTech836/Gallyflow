@@ -249,10 +249,7 @@ const [saleForm, setSaleForm] = useState({
     return () => unsub();
   }, [negocioId]);
 
-  async function saveBusinessName(name) {
-    if (!negocioId || !name?.trim()) return;
-    await updateDoc(doc(db, 'negocios', negocioId), { 'heroConfig.businessName': name.trim() });
-  }
+  
 
   const [branches, setBranches] = useState([]);
   useEffect(() => {
@@ -4030,7 +4027,6 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
               setBusinessName={setBusinessName}
               isEditingBusinessName={isEditingBusinessName}
               setIsEditingBusinessName={setIsEditingBusinessName}
-              saveBusinessName={saveBusinessName}
               onLogout={logout}
               activeSection={settingsSection}
             />
