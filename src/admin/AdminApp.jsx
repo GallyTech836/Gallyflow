@@ -236,6 +236,24 @@ const [saleForm, setSaleForm] = useState({
   const [businessName, setBusinessName] = useState('GallyFlow');
   const [isEditingBusinessName, setIsEditingBusinessName] = useState(false);
 
+  // Carga el nombre real del negocio desde Firestore (heroConfig.businessName,
+  // el mismo campo que usa la Pantalla de Bienvenida) — antes se quedaba fijo
+  // en "GallyFlow" para todos los negocios, sin importar cuál fuera.
+  useEffect(() => {
+    if (!negocioId) return;
+    const ref = doc(db, 'negocios', negocioId);
+    const unsub = onSnapshot(ref, (snap) => {
+      const name = snap.data()?.heroConfig?.businessName;
+      if (name) setBusinessName(name);
+    });
+    return () => unsub();
+  }, [negocioId]);
+
+  async function saveBusinessName(name) {
+    if (!negocioId || !name?.trim()) return;
+    await updateDoc(doc(db, 'negocios', negocioId), { 'heroConfig.businessName': name.trim() });
+  }
+
   const [branches, setBranches] = useState([]);
   useEffect(() => {
     if (!negocioId) return;
@@ -4012,6 +4030,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
               setBusinessName={setBusinessName}
               isEditingBusinessName={isEditingBusinessName}
               setIsEditingBusinessName={setIsEditingBusinessName}
+              saveBusinessName={saveBusinessName}
               onLogout={logout}
               activeSection={settingsSection}
             />

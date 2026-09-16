@@ -7,6 +7,7 @@ export default function BusinessSection({
   setBusinessName,
   isEditingBusinessName,
   setIsEditingBusinessName,
+  saveBusinessName,
 }) {
   return (
     <div className="space-y-4">
@@ -36,8 +37,8 @@ export default function BusinessSection({
                 type="text"
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                onBlur={() => setIsEditingBusinessName(false)}
-                onKeyDown={(e) => { if (e.key === 'Enter') setIsEditingBusinessName(false); }}
+                onBlur={() => { setIsEditingBusinessName(false); saveBusinessName(businessName); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setIsEditingBusinessName(false); saveBusinessName(businessName); } }}
                 className="w-full bg-nexus-background border border-nexus-primary/40 text-nexus-text rounded text-xs px-1 py-0.5 outline-none font-sans"
                 autoFocus
               />
