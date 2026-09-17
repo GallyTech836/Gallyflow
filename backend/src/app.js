@@ -3,16 +3,10 @@ import express from 'express';
 import cors from 'cors';
 import notificationsRoutes from '../routes/notifications.routes.js';
 import superadminRoutes from '../routes/superadmin.routes.js';
-import { logger } from '../utils/logger.js';
 import appointmentsRoutes from '../routes/appointments.routes.js';
-// ...
-app.use('/api', appointmentsRoutes);
 import assistantRoutes from '../routes/assistant.routes.js';
-// ...
-app.use('/api', assistantRoutes);
 import whatsappWebhookRoutes from '../routes/whatsappWebhook.routes.js';
-// ...
-app.use('/api', whatsappWebhookRoutes);
+import { logger } from '../utils/logger.js';
 
 const app = express();
 
@@ -39,6 +33,10 @@ app.use(cors((req, callback) => {
 app.use(express.json());
 
 app.use('/api/superadmin', superadminRoutes);
+app.use('/api', notificationsRoutes);
+app.use('/api', appointmentsRoutes);
+app.use('/api', assistantRoutes);
+app.use('/api', whatsappWebhookRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'gallyflow-backend' });
@@ -54,14 +52,9 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use('/api', notificationsRoutes);
-app.use('/api/superadmin', superadminRoutes);
-
 app.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });
 });
-
-
 
 app.use((err, req, res, next) => {
   logger.error('[app] Error no controlado:', err.message);
