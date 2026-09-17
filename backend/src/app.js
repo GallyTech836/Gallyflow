@@ -4,6 +4,15 @@ import cors from 'cors';
 import notificationsRoutes from '../routes/notifications.routes.js';
 import superadminRoutes from '../routes/superadmin.routes.js';
 import { logger } from '../utils/logger.js';
+import appointmentsRoutes from '../routes/appointments.routes.js';
+// ...
+app.use('/api', appointmentsRoutes);
+import assistantRoutes from '../routes/assistant.routes.js';
+// ...
+app.use('/api', assistantRoutes);
+import whatsappWebhookRoutes from '../routes/whatsappWebhook.routes.js';
+// ...
+app.use('/api', whatsappWebhookRoutes);
 
 const app = express();
 
