@@ -2054,24 +2054,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
             {!isSidebarCollapsed && <span className="truncate">Inventario</span>}
           </button>
          )}
-         {hasFeature(planFeatures, 'automatizaciones') && (
-          <button 
-            onClick={() => {
-              setActiveTab('automatizaciones');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'automatizaciones' 
-                ? 'bg-nexus-success text-white border-l-2 border-nexus-success shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <Globe className={`w-4 h-4 shrink-0 ${activeTab === 'automatizaciones' ? 'text-white' : 'text-nexus-success'}`} />
-            {!isSidebarCollapsed && <span className="truncate">WhatsApp & Bots</span>}
-          </button>
-         )}
+
 
           {!isSidebarCollapsed ? (
             <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Finanzas</p>
@@ -2173,7 +2156,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
           {!isSidebarCollapsed && isSettingsMenuOpen && (
             <div className="ml-3 pl-2.5 border-l border-nexus-navy-border space-y-0.5 py-1">
-              {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
+              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'automatizaciones')).map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   onClick={() => {
@@ -2229,7 +2212,6 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
                   {activeTab === 'commissions' && 'Liquidación de Comisiones'}
                   {activeTab === 'assistance' && 'Control de Asistencias'}
                   {activeTab === 'reports' && 'Métricas & Informes'}
-                  {activeTab === 'automatizaciones' && 'Motores & Automatizaciones WhatsApp'}
                   {activeTab === 'settings' && 'Configuración'}
                 </span>
               </h2>
@@ -3776,260 +3758,22 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
             </div>
           )}
 
-          {/* ==========================================
-              10. NUEVO MÓDULO: WHATSAPP & AUTOMATIZACIONES (PREPARADO PARA RAILWAY)
-              ========================================== */}
-          {activeTab === 'automatizaciones' && (
-            <div className="space-y-6 animate-fadeIn">
-              
-              {/* Alerta instructiva de arquitectura */}
-              <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-3">
-                <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-slate-300 space-y-1">
-                  <h5 className="font-extrabold text-white">Arquitectura Preparada para Railway & WhatsApp Web API</h5>
-                  <p>Esta pestaña expone los modelos de datos preparados en Firestore. Tu futuro backend de Node.js o Python alojado en Railway podrá consultar de forma periódica las colecciones <code>reservations</code> y <code>whatsapp_settings</code> para emitir mensajes reales.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Columna Izquierda: Configuración y Conexión */}
-                <div className="space-y-5 lg:col-span-1">
-                  <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 shadow-lg space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Servicio de Conexión</h4>
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase font-mono ${
-                        whatsappSettings.isConnected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                      }`}>
-                        {whatsappSettings.isConnected ? 'Conectado (Mock)' : 'Desconectado'}
-                      </span>
-                    </div>
-
-                    <div className="p-4 bg-[#080A12] border border-[#1E2442] rounded-xl text-center space-y-4">
-                      {whatsappSettings.isConnected ? (
-                        <div className="space-y-2">
-                          <div className="w-16 h-16 rounded-full bg-emerald-500/15 border-2 border-emerald-500 mx-auto flex items-center justify-center text-emerald-400">
-                            <Check className="w-8 h-8" />
-                          </div>
-                          <p className="text-xs font-bold text-white">Bot de Mensajería Listo</p>
-                          <p className="text-[10px] text-slate-500 font-mono">Última sinc: {new Date(whatsappSettings.lastSync).toLocaleTimeString()}</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Simulación del QR code */}
-                          <div className="w-32 h-32 bg-white p-2 mx-auto rounded-lg flex items-center justify-center">
-                            <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white text-[9px] font-bold font-mono text-center leading-tight">
-                              [ QR CODE <br/> SIMULATOR ]
-                            </div>
-                          </div>
-                          <p className="text-xs text-slate-300">Escanee el código QR desde su celular para emparejar el canal de WhatsApp.</p>
-                        </div>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={toggleWhatsAppConnection}
-                        className={`w-full py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          whatsappSettings.isConnected 
-                            ? 'bg-rose-950/40 text-rose-400 border border-rose-500/20 hover:bg-rose-900/40' 
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/20'
-                        }`}
-                      >
-                        {whatsappSettings.isConnected ? 'Desconectar WhatsApp' : 'Simular Escaneo de QR'}
-                      </button>
-                    </div>
-
-                    {/* Automatizaciones rápidas */}
-                    <div className="space-y-3 pt-2">
-                      <h5 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider font-mono">Disparadores del Bot</h5>
-                      
-                      <div className="flex items-center justify-between p-2 bg-[#0E111E] border border-[#1E2442] rounded-lg">
-                        <span className="text-xs text-slate-300">Confirmación al reservar</span>
-                        <button
-                          type="button"
-                          onClick={() => setWhatsappSettings(prev => ({ ...prev, autoConfirmationEnabled: !prev.autoConfirmationEnabled }))}
-                          className="text-slate-400 hover:text-white"
-                        >
-                          {whatsappSettings.autoConfirmationEnabled ? (
-                            <ToggleRight className="w-7 h-7 text-emerald-400" />
-                          ) : (
-                            <ToggleLeft className="w-7 h-7 text-slate-600" />
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 bg-[#0E111E] border border-[#1E2442] rounded-lg">
-                        <span className="text-xs text-slate-300">Recordatorio previo (24h)</span>
-                        <button
-                          type="button"
-                          onClick={() => setWhatsappSettings(prev => ({ ...prev, autoReminderEnabled: !prev.autoReminderEnabled }))}
-                          className="text-slate-400 hover:text-white"
-                        >
-                          {whatsappSettings.autoReminderEnabled ? (
-                            <ToggleRight className="w-7 h-7 text-emerald-400" />
-                          ) : (
-                            <ToggleLeft className="w-7 h-7 text-slate-600" />
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 bg-[#0E111E] border border-[#1E2442] rounded-lg">
-                        <span className="text-xs text-slate-300">Notificación al cancelar</span>
-                        <button
-                          type="button"
-                          onClick={() => setWhatsappSettings(prev => ({ ...prev, autoCancellationEnabled: !prev.autoCancellationEnabled }))}
-                          className="text-slate-400 hover:text-white"
-                        >
-                          {whatsappSettings.autoCancellationEnabled ? (
-                            <ToggleRight className="w-7 h-7 text-emerald-400" />
-                          ) : (
-                            <ToggleLeft className="w-7 h-7 text-slate-600" />
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 bg-[#0E111E] border border-[#1E2442] rounded-lg">
-                        <span className="text-xs text-slate-300">Agradecimiento post-servicio</span>
-                        <button
-                          type="button"
-                          onClick={() => setWhatsappSettings(prev => ({ ...prev, autoThankYouEnabled: !prev.autoThankYouEnabled }))}
-                          className="text-slate-400 hover:text-white"
-                        >
-                          {whatsappSettings.autoThankYouEnabled ? (
-                            <ToggleRight className="w-7 h-7 text-emerald-400" />
-                          ) : (
-                            <ToggleLeft className="w-7 h-7 text-slate-600" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Columna Derecha: Plantillas y Logs de automatización */}
-                <div className="space-y-5 lg:col-span-2">
-                  
-                  {/* Edición de plantillas */}
-                  <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 shadow-lg space-y-4">
-                    <div className="flex justify-between items-center border-b border-[#1A1F36] pb-3">
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Estructura de Mensajes (Templates)</h4>
-                      <button
-                        type="button"
-                        onClick={handleTestTriggerMessage}
-                        className="px-2.5 py-1 bg-indigo-500/15 text-indigo-400 border border-indigo-500/25 text-[10px] rounded font-mono font-bold hover:bg-indigo-500/25"
-                      >
-                        Probar Envío de Prueba
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] text-indigo-400 font-bold block uppercase tracking-widest font-mono">Confirmación de Cita</label>
-                        <textarea
-                          rows="3"
-                          value={whatsappSettings.messageTemplates.confirmation}
-                          onChange={(e) => setWhatsappSettings(prev => ({
-                            ...prev,
-                            messageTemplates: { ...prev.messageTemplates, confirmation: e.target.value }
-                          }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-sans resize-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] text-indigo-400 font-bold block uppercase tracking-widest font-mono">Recordatorio Cita (24H)</label>
-                        <textarea
-                          rows="3"
-                          value={whatsappSettings.messageTemplates.reminder}
-                          onChange={(e) => setWhatsappSettings(prev => ({
-                            ...prev,
-                            messageTemplates: { ...prev.messageTemplates, reminder: e.target.value }
-                          }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-sans resize-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] text-indigo-400 font-bold block uppercase tracking-widest font-mono">Aviso de Cancelación</label>
-                        <textarea
-                          rows="3"
-                          value={whatsappSettings.messageTemplates.cancellation}
-                          onChange={(e) => setWhatsappSettings(prev => ({
-                            ...prev,
-                            messageTemplates: { ...prev.messageTemplates, cancellation: e.target.value }
-                          }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-sans resize-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] text-indigo-400 font-bold block uppercase tracking-widest font-mono">Agradecimiento Final</label>
-                        <textarea
-                          rows="3"
-                          value={whatsappSettings.messageTemplates.thankYou}
-                          onChange={(e) => setWhatsappSettings(prev => ({
-                            ...prev,
-                            messageTemplates: { ...prev.messageTemplates, thankYou: e.target.value }
-                          }))}
-                          className="w-full bg-[#131728] border border-[#1E2442] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-sans resize-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Logs de Mensajería */}
-                  <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-5 shadow-lg space-y-4">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Cola de Eventos Recientes (Logs)</h4>
-                    <div className="overflow-x-auto max-h-56 rounded-lg border border-[#1A1F36] bg-[#090b14]">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-[#1E2442] bg-[#141829] text-[9px] text-slate-400 uppercase tracking-widest font-mono">
-                            <th className="py-2 px-3">Cita</th>
-                            <th className="py-2 px-3">Destinatario</th>
-                            <th className="py-2 px-3">Mensaje</th>
-                            <th className="py-2 px-3 text-center">Estado</th>
-                            <th className="py-2 px-3 text-right">Fecha Registro</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1E2442]/50 font-mono text-[10px]">
-                          {automationLogs.map((log) => (
-                            <tr key={log.id} className="hover:bg-[#131728]/30 transition-colors">
-                              <td className="py-2 px-3 text-indigo-400 font-bold">#{log.reservationId}</td>
-                              <td className="py-2 px-3 font-sans text-slate-300 font-semibold">{log.phone}</td>
-                              <td className="py-2 px-3 text-slate-400 uppercase">{log.type}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase font-mono ${
-                                  log.status === 'sent' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                                }`}>
-                                  {log.status === 'sent' ? 'Enviado' : 'Fallido'}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3 text-right text-slate-500">{new Date(log.createdAt).toLocaleTimeString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-
-              </div>
-          )}
-
          {activeTab === 'settings' && (
             <SettingsPage 
-              negocioId={negocioId} 
-              user={user} 
-              businessName={businessName}
-              setBusinessName={setBusinessName}
-              isEditingBusinessName={isEditingBusinessName}
-              setIsEditingBusinessName={setIsEditingBusinessName}
-              onLogout={logout}
-              activeSection={settingsSection}
-            />
+            negocioId={negocioId} 
+            user={user} 
+            businessName={businessName}
+            setBusinessName={setBusinessName}
+            isEditingBusinessName={isEditingBusinessName}
+            setIsEditingBusinessName={setIsEditingBusinessName}
+            onLogout={logout}
+            activeSection={settingsSection}
+            whatsappSettings={whatsappSettings}
+            setWhatsappSettings={setWhatsappSettings}
+            automationLogs={automationLogs}
+            toggleWhatsAppConnection={toggleWhatsAppConnection}
+            handleTestTriggerMessage={handleTestTriggerMessage}
+          />
           )}
 
         </div>

@@ -1,10 +1,11 @@
 import React from 'react';
-import { User, Building2, LayoutTemplate, CalendarClock, CalendarCheck, CreditCard, Bell, HelpCircle } from 'lucide-react';
+import { User, Building2, LayoutTemplate, CalendarClock, CalendarCheck, CreditCard, Bell, HelpCircle, Bot } from 'lucide-react';
 
 export const SETTINGS_SECTIONS = [
   { id: 'profile', label: 'Perfil', icon: User },
   { id: 'business', label: 'Negocio', icon: Building2 },
   { id: 'hero', label: 'Pantalla de Bienvenida', icon: LayoutTemplate },
+  { id: 'automation', label: 'Automatización', icon: Bot },
   // { id: 'schedule', label: 'Horarios', icon: CalendarClock },
   // { id: 'reservations', label: 'Reservas', icon: CalendarCheck },
   // { id: 'subscription', label: 'Suscripción', icon: CreditCard },

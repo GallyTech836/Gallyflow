@@ -7,6 +7,7 @@ import ReservationSection from './ReservationSection';
 import SubscriptionSection from './SubscriptionSection';
 import NotificationsSection from './NotificationsSection';
 import HelpSection from './HelpSection';
+import AutomationSection from './AutomationSection';
 
 const SECTION_COMPONENTS = {
   profile: ProfileSection,
@@ -17,6 +18,7 @@ const SECTION_COMPONENTS = {
   subscription: SubscriptionSection,
   notifications: NotificationsSection,
   help: HelpSection,
+  automation: AutomationSection,
 };
 
 export default function SettingsPage({
@@ -28,6 +30,11 @@ export default function SettingsPage({
   setIsEditingBusinessName,
   onLogout,
   activeSection = 'profile',
+  whatsappSettings,
+  setWhatsappSettings,
+  automationLogs,
+  toggleWhatsAppConnection,
+  handleTestTriggerMessage,
 }) {
   const ActiveComponent = SECTION_COMPONENTS[activeSection] || ProfileSection;
 
@@ -40,6 +47,11 @@ export default function SettingsPage({
       isEditingBusinessName={isEditingBusinessName}
       setIsEditingBusinessName={setIsEditingBusinessName}
       onLogout={onLogout}
+      whatsappSettings={whatsappSettings}
+      setWhatsappSettings={setWhatsappSettings}
+      automationLogs={automationLogs}
+      toggleWhatsAppConnection={toggleWhatsAppConnection}
+      handleTestTriggerMessage={handleTestTriggerMessage}
     />
   );
 }
