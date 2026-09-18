@@ -47,9 +47,19 @@ function listaNumerada(items, getLabel) {
   return items.map((it, i) => `${i + 1}. ${getLabel(it)}`).join('\n');
 }
 
-export async function assistantEngine({ negocioId, phone, message }) {
+export async function assistantEngine({ negocioId, phone, message, messageId }) {
   const context = await getBusinessContext(negocioId);
   let conversation = await getOrCreateConversation(negocioId, phone);
+
+  // Meta puede reentregar el mismo mensaje más de una vez; sin esto se
+  // procesaría dos veces y se mandarían respuestas cruzadas/duplicadas.
+  if (messageId && conversation.lastMessageId === messageId) {
+    return { replyText: null, conversation };
+  }
+  if (messageId) {
+    conversation = await updateConversation(negocioId, phone, { lastMessageId: messageId });
+  }
+
   const texto = (message || '').trim();
 
   if (/^(cancelar|salir|reiniciar)$/i.test(texto)) {

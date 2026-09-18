@@ -43,8 +43,10 @@ router.post('/whatsapp/webhook', async (req, res) => {
       return;
     }
 
-    const { replyText } = await assistantEngine({ negocioId, phone: from, message: texto });
-    await whatsappProvider.send(from, replyText);
+    const { replyText } = await assistantEngine({ negocioId, phone: from, message: texto, messageId: mensajeEntrante.id });
+    if (replyText) {
+      await whatsappProvider.send(from, replyText);
+    }
   } catch (err) {
     logger.error('[whatsappWebhook] Error procesando mensaje:', err.message);
   }
