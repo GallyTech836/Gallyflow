@@ -41,7 +41,8 @@ export async function updateConversation(negocioId, phone, cambios) {
   const ref = conversationsRef(negocioId).doc(phone);
   const datos = { ...cambios, updatedAt: new Date().toISOString() };
   await ref.set(datos, { merge: true });
-  return datos;
+  const snap = await ref.get();
+  return { id: snap.id, ...snap.data() };
 }
 
 export async function resetConversation(negocioId, phone) {
