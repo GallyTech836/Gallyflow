@@ -95,7 +95,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'choosing_date',
-        selectedStaff: { id: profesional.id, name: profesional.name },
+        selectedStaff: { id: profesional.id, name: profesional.name, branch: profesional.branch || '' },
       });
       return responder(mensajeFechas(), conversation);
     }
