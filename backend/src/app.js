@@ -7,7 +7,7 @@ import appointmentsRoutes from '../routes/appointments.routes.js';
 import assistantRoutes from '../routes/assistant.routes.js';
 import whatsappWebhookRoutes from '../routes/whatsappWebhook.routes.js';
 import { logger } from '../utils/logger.js';
-import migrateBranchRoutes from '../routes/migrateBranch.routes.js';
+
 
 const app = express();
 app.set('trust proxy', 1);
@@ -39,7 +39,7 @@ app.use('/api', notificationsRoutes);
 app.use('/api', appointmentsRoutes);
 app.use('/api', assistantRoutes);
 app.use('/api', whatsappWebhookRoutes);
-app.use('/api', migrateBranchRoutes);
+
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'gallyflow-backend' });
