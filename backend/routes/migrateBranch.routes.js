@@ -2,6 +2,8 @@
 //
 // TEMPORAL: corrige el "branch" de citas históricas en batch, una sola vez.
 // Bórralo del proyecto en cuanto lo uses — no tiene autenticación.
+// Recibe los datos por query string (URL) para evitar problemas de teclado
+// con el body JSON.
 
 import { Router } from 'express';
 import { db } from '../config/firebase.js';
@@ -9,7 +11,7 @@ import { db } from '../config/firebase.js';
 const router = Router();
 
 router.post('/admin/migrate-branch', async (req, res) => {
-  const { negocioId, oldBranch, newBranch } = req.body || {};
+  const { negocioId, oldBranch, newBranch } = req.query || {};
   if (!negocioId || !oldBranch || !newBranch) {
     return res.status(400).json({ error: 'Faltan negocioId, oldBranch, newBranch.' });
   }
