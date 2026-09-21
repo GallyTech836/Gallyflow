@@ -326,8 +326,16 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterBarberId, setFilterBarberId] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [selectedBranch, setSelectedBranch] = useState('Equipetrol');
+  const [selectedBranch, setSelectedBranch] = useState(null);
 
+  // Selecciona la primera sucursal real del negocio en cuanto Firestore
+  // las entrega — nunca asume un nombre fijo. Solo corre si el usuario
+  // no ha elegido ya una sucursal (no pisa su selección manual).
+  useEffect(() => {
+    if (!selectedBranch && branches.length > 0) {
+      setSelectedBranch(branches[0].name);
+    }
+  }, [branches, selectedBranch]);
   const professionals = barbers;
   const setProfessionals = setBarbers;
   const branchBarbers = useMemo(() => {
@@ -364,7 +372,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   const [newBarber, setNewBarber] = useState({
     firstName: '',
     lastName: '',
-    branch: 'Equipetrol',
+    branch: selectedBranch || branches[0]?.name || '',
     username: '',
     pin: '',
     password: '',
@@ -1593,7 +1601,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     setNewBarber({
       firstName: '',
       lastName: '',
-      branch: 'Equipetrol',
+      branch: selectedBranch || branches[0]?.name || '',
       username: '',
       pin: '',
       password: '',
@@ -1699,7 +1707,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     setNewBarber({
       firstName: barber.firstName || '',
       lastName: barber.lastName || '',
-      branch: barber.branch || 'Equipetrol',
+      branch: barber.branch || selectedBranch || branches[0]?.name || '',
       username: barber.username || '',
       pin: barber.pin || '',
       password: barber.password || '',
@@ -2260,7 +2268,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
               <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-2.5 py-1 text-xs text-nexus-text gap-1.5 shrink-0 shadow-md">
               <MapPin className="w-3.5 h-3.5 text-nexus-primary" />
                 <select 
-                  value={selectedBranch || 'Equipetrol'}
+                  value={selectedBranch || ''}
                   onChange={(e) => setSelectedBranch(e.target.value)}
                   className="bg-transparent border-0 outline-none text-nexus-text font-bold cursor-pointer text-xs"
                 >
