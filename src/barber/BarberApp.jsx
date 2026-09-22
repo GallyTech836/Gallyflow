@@ -400,7 +400,8 @@ useEffect(() => {
       paymentMethod: newPaymentMethod,
       createdAt: new Date().toISOString(),
       notes: newNotes,
-      branch: activeBarber.branch
+      branch: activeBarber.branch,
+      bookedBy: 'barber'
     };
 
 
@@ -609,6 +610,7 @@ useEffect(() => {
       createdAt: new Date().toISOString(),
       notes: draft.notes || '',
       branch: activeBarber.branch,
+      bookedBy: 'barber',
     };
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);

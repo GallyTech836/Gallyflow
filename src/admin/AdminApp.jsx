@@ -17,6 +17,7 @@ import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
 import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
+import AnalyticsSection from './analytics/AnalyticsSection';
 
 const GEOLOCATIONS_DB = [
   { name: "Equipetrol, Santa Cruz de la Sierra", address: "Av. San Martín, Calle 5 Oeste, Santa Cruz de la Sierra, Bolivia", lat: -17.7732, lng: -63.1821 },
@@ -3731,40 +3732,13 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
               9. PESTAÑA: ANALÍTICAS
               ========================================== */}
           {activeTab === 'reports' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg">
-                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-4">Servicios Más Rentables</h4>
-                  <div className="space-y-3.5">
-                    {(services || []).slice(0, 4).map((s, idx) => {
-                      const percentages = [85, 65, 45, 25];
-                      return (
-                        <div key={s?.id}>
-                          <div className="flex justify-between items-center text-xs mb-1">
-                            <span className="text-nexus-text-secondary font-semibold">{s?.name}</span>
-                            <span className="text-nexus-primary font-mono font-bold">{percentages[idx]}% de ventas</span>
-                          </div>
-                          <div className="w-full bg-nexus-background h-2 rounded-full overflow-hidden">
-                            <div className="bg-nexus-primary h-full rounded-full" style={{ width: `${percentages[idx]}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg">
-                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-4">Canales de Reserva (%)</h4>
-                  <div className="relative h-44 w-full flex items-center justify-center">
-                    <div className="text-center">
-                      <p className="text-3xl font-black text-nexus-primary font-mono">75%</p>
-                      <p className="text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono font-bold">Reserva Online</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+           <AnalyticsSection
+            reservations={branchReservations}
+            services={services}
+            barbers={branchBarbers}
+            branches={branches}
+            />
+         )}
 
          {activeTab === 'settings' && (
             <SettingsPage 
