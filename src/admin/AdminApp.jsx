@@ -3732,13 +3732,14 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
               9. PESTAÑA: ANALÍTICAS
               ========================================== */}
           {activeTab === 'reports' && (
-           <AnalyticsSection
-            reservations={branchReservations}
-            services={services}
-            barbers={branchBarbers}
-            branches={branches}
+            <AnalyticsSection
+              reservations={branchReservations}
+              barbers={branchBarbers}
+              agendaView={agendaView}
+              selectedDate={selectedDate}
+              selectedBranch={selectedBranch}
             />
-         )}
+          )}
 
          {activeTab === 'settings' && (
             <SettingsPage 

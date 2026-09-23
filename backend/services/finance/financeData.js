@@ -87,6 +87,8 @@ export async function getDetalleComisionesBarbero(negocioId, barberId, { startDa
 
   const citasDelBarbero = citas.filter((c) => c.professionalId === barberId || c.barberId === barberId);
 
+  citasDelBarbero.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
   return citasDelBarbero.map((cita) => {
     const { totalAmount, breakdown } = calculateCommissionForCita(cita, barber, servicios);
     return {
