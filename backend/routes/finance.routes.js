@@ -18,12 +18,20 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function requireFinanceSession(req, res, next) {
-  const token = req.headers['x-finance-session'];
-  if (!verifySessionToken(token, req.negocioId)) {
-    return res.status(401).json({ error: 'Sesión financiera inválida o expirada. Ingresa el PIN de nuevo.' });
+async function requireFinanceSession(req, res, next) {
+  try {
+    const negocioSnap = await db.collection('negocios').doc(req.negocioId).get();
+    const analyticsPinEnabled = negocioSnap.data()?.analyticsPinEnabled === true;
+    if (!analyticsPinEnabled) return next();
+
+    const token = req.headers['x-finance-session'];
+    if (!verifySessionToken(token, req.negocioId)) {
+      return res.status(401).json({ error: 'Sesión financiera inválida o expirada. Ingresa el PIN de nuevo.' });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  next();
 }
 
 router.use(identifyRequester);

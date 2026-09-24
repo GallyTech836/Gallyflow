@@ -3738,6 +3738,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
               agendaView={agendaView}
               selectedDate={selectedDate}
               selectedBranch={selectedBranch}
+              negocioId={negocioId}
             />
           )}
 

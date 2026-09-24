@@ -108,5 +108,20 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
     return res.status(500).json({ error: 'No se pudo crear el negocio.' });
   }
 });
+// POST /api/superadmin/negocios/:negocioId/analytics-pin
+// Activa/desactiva la protección por PIN de la sección Analítica de un negocio.
+router.post('/negocios/:negocioId/analytics-pin', identifyRequester, requireSuperAdmin, async (req, res) => {
+  const { negocioId } = req.params;
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Falta "enabled" (true/false).' });
+  }
+  try {
+    await db.collection('negocios').doc(negocioId).update({ analyticsPinEnabled: enabled });
+    return res.status(200).json({ ok: true, negocioId, analyticsPinEnabled: enabled });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

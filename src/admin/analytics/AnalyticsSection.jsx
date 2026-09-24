@@ -2,9 +2,12 @@
 //
 // Reutiliza el selector de período/sucursal que ya existe en AdminApp
 // (agendaView/selectedDate/selectedBranch) — no tiene su propio filtro.
-// Todas las secciones se muestran apiladas en una sola vista, sin pestañas.
+// El PIN (si el negocio lo tiene activado vía Super Admin) protege TODO
+// el módulo de una sola vez, no solo Finanzas.
 
 import { useState, useMemo, useEffect } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Scissors, Smartphone, Users, UserRound, Lock, TrendingUp } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
@@ -88,7 +91,9 @@ function SectionHeader({ icon: Icon, label }) {
   );
 }
 
-export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch }) {
+export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId }) {
+  // null = todavía no sabemos si el negocio pide PIN (evita parpadeo)
+  const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
   const [financeSession, setFinanceSession] = useState(null);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -98,7 +103,17 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   const [expandedBarberId, setExpandedBarberId] = useState(null);
   const [commissionDetail, setCommissionDetail] = useState(null);
 
-  const isFinanceUnlocked = financeSession && financeSession.expiresAt > Date.now();
+  useEffect(() => {
+    if (!negocioId) return;
+    const unsub = onSnapshot(doc(db, 'negocios', negocioId), (snap) => {
+      setAnalyticsPinEnabled(snap.data()?.analyticsPinEnabled === true);
+    });
+    return () => unsub();
+  }, [negocioId]);
+
+  const sessionValida = financeSession && financeSession.expiresAt > Date.now();
+  const isUnlocked = analyticsPinEnabled === false || sessionValida;
+
   const { startDate, endDate } = useMemo(() => getRangeBounds(selectedDate, agendaView), [selectedDate, agendaView]);
 
   const citasEnRango = useMemo(() => {
@@ -239,10 +254,9 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   }
 
   async function loadFinanceData() {
-    if (!isFinanceUnlocked) return;
     const [summaryRes, commissionsRes] = await Promise.all([
-      getFinanceSummary(financeSession.token, { startDate, endDate, branch: selectedBranch }),
-      getFinanceCommissions(financeSession.token, { startDate, endDate, branch: selectedBranch }),
+      getFinanceSummary(financeSession?.token, { startDate, endDate, branch: selectedBranch }),
+      getFinanceCommissions(financeSession?.token, { startDate, endDate, branch: selectedBranch }),
     ]);
     if (summaryRes.status === 401) {
       setFinanceSession(null);
@@ -258,23 +272,63 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       return;
     }
     setExpandedBarberId(barberId);
-    const result = await getFinanceCommissionDetail(financeSession.token, barberId, { startDate, endDate });
+    const result = await getFinanceCommissionDetail(financeSession?.token, barberId, { startDate, endDate });
     setCommissionDetail(result.data);
   }
 
   async function handlePagarComision(barberId) {
-    await payFinanceCommission(financeSession.token, barberId, { startDate, endDate });
+    await payFinanceCommission(financeSession?.token, barberId, { startDate, endDate });
     loadFinanceData();
     setExpandedBarberId(null);
   }
 
   useEffect(() => {
-    if (isFinanceUnlocked) loadFinanceData();
-  }, [isFinanceUnlocked, startDate, endDate, selectedBranch]);
+    if (isUnlocked) loadFinanceData();
+  }, [isUnlocked, startDate, endDate, selectedBranch]);
+
+  if (analyticsPinEnabled === null) {
+    return <div className="p-6"><p className="text-sm text-nexus-text-secondary">Cargando…</p></div>;
+  }
+
+  if (!isUnlocked) {
+    return (
+      <div className="p-4 md:p-6 flex justify-center">
+        <div className="max-w-xs w-full bg-nexus-surface border border-nexus-border rounded-lg p-6 text-center mt-10">
+          <Lock className="w-8 h-8 text-nexus-primary mx-auto mb-3" />
+          <p className="font-bold text-sm text-nexus-text mb-3">
+            {needsPinSetup ? 'Crea tu PIN de Analítica' : 'Analítica protegida'}
+          </p>
+          <input
+            type="password"
+            inputMode="numeric"
+            value={pinInput}
+            onChange={(e) => setPinInput(e.target.value)}
+            className="w-full bg-nexus-bg border border-nexus-border rounded-lg px-3 py-2 text-center text-lg tracking-widest mb-2"
+            placeholder="••••"
+          />
+          {pinError && <p className="text-xs text-red-500 mb-2">{pinError}</p>}
+          <button onClick={handlePinSubmit} className="w-full bg-nexus-primary text-white rounded-lg py-2 text-sm font-bold">
+            {needsPinSetup ? 'Guardar PIN' : 'Desbloquear'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-8">
-      {/* Rendimiento general */}
+      {financeSummary && (
+        <section>
+          <SectionHeader icon={Lock} label="Finanzas" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <MetricCard label="Ingresos brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(2)}`} />
+            <MetricCard label="Comisión generada" value={`Bs ${financeSummary.comisionGenerada.toFixed(2)}`} />
+            <MetricCard label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(2)}`} />
+            <MetricCard label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(2)}`} />
+          </div>
+        </section>
+      )}
+
       <section>
         <SectionHeader icon={TrendingUp} label="Rendimiento general" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -287,7 +341,35 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
         </div>
       </section>
 
-      {/* Servicios */}
+      <section>
+        <SectionHeader icon={Users} label="Clientes" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard label="Clientes totales (histórico)" value={clientesStats.totalHistorico} />
+          <MetricCard label="Nuevos en el período" value={clientesStats.nuevosEnPeriodo} />
+          <MetricCard label="Recurrentes en el período" value={clientesStats.recurrentesEnPeriodo} />
+          <MetricCard label="Activos (últimos 30 días)" value={clientesStats.activos30d} />
+          <MetricCard label="Sin volver (30+ días)" value={clientesStats.sinVolver30d} />
+        </div>
+      </section>
+
+      <section>
+        <SectionHeader icon={Smartphone} label="Canales de reserva" />
+        <div className="space-y-2">
+          {canalesStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin datos en este período.</p>}
+          {canalesStats.map((c) => (
+            <div key={c.canal} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="font-bold text-nexus-text">{c.label}</span>
+                <span className="text-nexus-text-secondary">{c.cantidad} ({c.porcentaje.toFixed(1)}%)</span>
+              </div>
+              <div className="w-full bg-nexus-border rounded-full h-2">
+                <div className="bg-nexus-primary h-2 rounded-full" style={{ width: `${c.porcentaje}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section>
         <SectionHeader icon={Scissors} label="Servicios" />
         <p className="text-xs text-nexus-text-secondary mb-3">
@@ -320,38 +402,6 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
         </div>
       </section>
 
-      {/* Canales de reserva */}
-      <section>
-        <SectionHeader icon={Smartphone} label="Canales de reserva" />
-        <div className="space-y-2">
-          {canalesStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin datos en este período.</p>}
-          {canalesStats.map((c) => (
-            <div key={c.canal} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="font-bold text-nexus-text">{c.label}</span>
-                <span className="text-nexus-text-secondary">{c.cantidad} ({c.porcentaje.toFixed(1)}%)</span>
-              </div>
-              <div className="w-full bg-nexus-border rounded-full h-2">
-                <div className="bg-nexus-primary h-2 rounded-full" style={{ width: `${c.porcentaje}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Clientes */}
-      <section>
-        <SectionHeader icon={Users} label="Clientes" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard label="Clientes totales (histórico)" value={clientesStats.totalHistorico} />
-          <MetricCard label="Nuevos en el período" value={clientesStats.nuevosEnPeriodo} />
-          <MetricCard label="Recurrentes en el período" value={clientesStats.recurrentesEnPeriodo} />
-          <MetricCard label="Activos (últimos 30 días)" value={clientesStats.activos30d} />
-          <MetricCard label="Sin volver (30+ días)" value={clientesStats.sinVolver30d} />
-        </div>
-      </section>
-
-      {/* Profesionales */}
       <section>
         <SectionHeader icon={UserRound} label="Profesionales" />
         <div className="space-y-2">
@@ -369,76 +419,40 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
         </div>
       </section>
 
-      {/* Finanzas */}
-      <section>
-        <SectionHeader icon={Lock} label="Finanzas" />
-
-        {!isFinanceUnlocked && (
-          <div className="max-w-xs bg-nexus-surface border border-nexus-border rounded-lg p-6 text-center">
-            <Lock className="w-8 h-8 text-nexus-primary mx-auto mb-3" />
-            <p className="font-bold text-sm text-nexus-text mb-3">
-              {needsPinSetup ? 'Crea tu PIN financiero' : 'Información financiera protegida'}
-            </p>
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              className="w-full bg-nexus-bg border border-nexus-border rounded-lg px-3 py-2 text-center text-lg tracking-widest mb-2"
-              placeholder="••••"
-            />
-            {pinError && <p className="text-xs text-red-500 mb-2">{pinError}</p>}
-            <button onClick={handlePinSubmit} className="w-full bg-nexus-primary text-white rounded-lg py-2 text-sm font-bold">
-              {needsPinSetup ? 'Guardar PIN' : 'Desbloquear'}
-            </button>
-          </div>
-        )}
-
-        {isFinanceUnlocked && (
-          <div className="space-y-4">
-            {!financeSummary && <p className="text-sm text-nexus-text-secondary">Cargando…</p>}
-            {financeSummary && (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <MetricCard label="Ingresos brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(2)}`} />
-                  <MetricCard label="Comisión generada" value={`Bs ${financeSummary.comisionGenerada.toFixed(2)}`} />
-                  <MetricCard label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(2)}`} />
-                  <MetricCard label="Resultado barbería" value={`Bs ${financeSummary.resultadoBarberia.toFixed(2)}`} />
+      {financeSummary && (
+        <section>
+          <SectionHeader icon={Lock} label="Comisiones por profesional" />
+          <div className="space-y-2">
+            {financeCommissions.map((c) => (
+              <div key={c.barberId} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
+                <div className="flex justify-between items-center cursor-pointer" onClick={() => handleExpandBarber(c.barberId)}>
+                  <p className="font-bold text-sm text-nexus-text">{c.name}</p>
+                  <div className="text-right text-xs">
+                    <p className="text-nexus-text-secondary">Ingresos: Bs {c.ingresosGenerados.toFixed(2)}</p>
+                    <p className="text-nexus-text-secondary">Comisión: Bs {c.comisionGenerada.toFixed(2)}</p>
+                    <p className="text-red-500 font-bold">Pendiente: Bs {c.comisionPendiente.toFixed(2)}</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {financeCommissions.map((c) => (
-                    <div key={c.barberId} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
-                      <div className="flex justify-between items-center cursor-pointer" onClick={() => handleExpandBarber(c.barberId)}>
-                        <p className="font-bold text-sm text-nexus-text">{c.name}</p>
-                        <div className="text-right text-xs">
-                          <p className="text-nexus-text-secondary">Ingresos: Bs {c.ingresosGenerados.toFixed(2)}</p>
-                          <p className="text-nexus-text-secondary">Comisión: Bs {c.comisionGenerada.toFixed(2)}</p>
-                          <p className="text-red-500 font-bold">Pendiente: Bs {c.comisionPendiente.toFixed(2)}</p>
-                        </div>
+                {expandedBarberId === c.barberId && (
+                  <div className="mt-3 pt-3 border-t border-nexus-border space-y-1">
+                    {(commissionDetail || []).map((d) => (
+                      <div key={d.citaId} className="text-xs flex justify-between text-nexus-text-secondary">
+                        <span>{d.date} · {d.services.map((s) => s.serviceName).join(' + ')}</span>
+                        <span>Bs {d.totalComision.toFixed(2)} {d.commissionPaid ? '✅' : ''}</span>
                       </div>
-                      {expandedBarberId === c.barberId && (
-                        <div className="mt-3 pt-3 border-t border-nexus-border space-y-1">
-                          {(commissionDetail || []).map((d) => (
-                            <div key={d.citaId} className="text-xs flex justify-between text-nexus-text-secondary">
-                              <span>{d.date} · {d.services.map((s) => s.serviceName).join(' + ')}</span>
-                              <span>Bs {d.totalComision.toFixed(2)} {d.commissionPaid ? '✅' : ''}</span>
-                            </div>
-                          ))}
-                          {c.comisionPendiente > 0 && (
-                            <button onClick={() => handlePagarComision(c.barberId)} className="mt-2 w-full bg-nexus-primary text-white rounded-lg py-1.5 text-xs font-bold">
-                              Registrar pago de Bs {c.comisionPendiente.toFixed(2)}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+                    ))}
+                    {c.comisionPendiente > 0 && (
+                      <button onClick={() => handlePagarComision(c.barberId)} className="mt-2 w-full bg-nexus-primary text-white rounded-lg py-1.5 text-xs font-bold">
+                        Registrar pago de Bs {c.comisionPendiente.toFixed(2)}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
