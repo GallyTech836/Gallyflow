@@ -1,15 +1,14 @@
 // AnalyticsSection.jsx
 //
 // Reutiliza el selector de período/sucursal que ya existe en AdminApp
-// (agendaView/selectedDate/selectedBranch) — no tiene su propio filtro.
-// El PIN (si el negocio lo tiene activado vía Super Admin) protege TODO
-// el módulo de una sola vez, no solo Finanzas.
+// (agendaView/selectedDate/selectedBranch). El PIN (si el negocio lo tiene
+// activado desde Super Admin) protege TODO el módulo de una sola vez.
 
 import { useState, useMemo, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { Scissors, Smartphone, Users, UserRound, Lock, TrendingUp } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
 import { verifyFinancePin, setFinancePin, getFinanceSummary, getFinanceCommissions, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 
@@ -82,17 +81,7 @@ function ingresoDeCita(cita) {
   return getServicesFromCita(cita).reduce((sum, s) => sum + Number(s?.price || 0), 0);
 }
 
-function SectionHeader({ icon: Icon, label }) {
-  return (
-    <div className="flex items-center gap-2 mb-3">
-      <Icon className="w-4 h-4 text-nexus-primary" />
-      <h3 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">{label}</h3>
-    </div>
-  );
-}
-
 export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId }) {
-  // null = todavía no sabemos si el negocio pide PIN (evita parpadeo)
   const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
   const [financeSession, setFinanceSession] = useState(null);
   const [pinInput, setPinInput] = useState('');
@@ -180,7 +169,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     return Object.entries(stats)
       .map(([canal, cantidad]) => ({
         canal,
-        label: CHANNEL_LABELS[canal] || 'Desconocido (citas antiguas sin canal registrado)',
+        label: CHANNEL_LABELS[canal] || 'Desconocido',
         cantidad,
         porcentaje: total > 0 ? (cantidad / total) * 100 : 0,
       }))
@@ -208,12 +197,10 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 
     return {
       totalHistorico: clientesHistoricos.size,
-      nuevosEnPeriodo: performance.clientesNuevos,
-      recurrentesEnPeriodo: performance.clientesRecurrentes,
       activos30d,
       sinVolver30d,
     };
-  }, [reservations, performance]);
+  }, [reservations]);
 
   const profesionalesStats = useMemo(() => {
     return (barbers || []).map((barber) => {
@@ -229,6 +216,13 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       };
     });
   }, [barbers, completadas]);
+
+  const profesionalesConFinanzas = useMemo(() => {
+    return profesionalesStats.map((p) => {
+      const finanzas = (financeCommissions || []).find((c) => c.barberId === p.id);
+      return { ...p, finanzas: finanzas || null };
+    });
+  }, [profesionalesStats, financeCommissions]);
 
   async function handlePinSubmit() {
     setPinError('');
@@ -316,152 +310,155 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-8">
+    <div className="p-4 md:p-6 space-y-6">
       {financeSummary && (
-        <section>
-          <SectionHeader icon={Lock} label="Finanzas" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard label="Ingresos brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(2)}`} />
-            <MetricCard label="Comisión generada" value={`Bs ${financeSummary.comisionGenerada.toFixed(2)}`} />
-            <MetricCard label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(2)}`} />
-            <MetricCard label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(2)}`} />
-          </div>
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <BigMetric label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
+          <BigMetric label="Comisiones generadas" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
+          <BigMetric label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
+          <BigMetric label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
         </section>
       )}
 
       <section>
-        <SectionHeader icon={TrendingUp} label="Rendimiento general" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard label="Reservas" value={performance.reservas} />
-          <MetricCard label="Completadas" value={performance.completadas} />
-          <MetricCard label="Clientes atendidos" value={performance.clientesAtendidos} />
-          <MetricCard label="Clientes nuevos" value={performance.clientesNuevos} />
-          <MetricCard label="Clientes recurrentes" value={performance.clientesRecurrentes} />
-          <MetricCard label="Ingresos generados" value={`Bs ${performance.ingresosGenerados.toFixed(2)}`} />
-        </div>
-      </section>
-
-      <section>
-        <SectionHeader icon={Users} label="Clientes" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard label="Clientes totales (histórico)" value={clientesStats.totalHistorico} />
-          <MetricCard label="Nuevos en el período" value={clientesStats.nuevosEnPeriodo} />
-          <MetricCard label="Recurrentes en el período" value={clientesStats.recurrentesEnPeriodo} />
-          <MetricCard label="Activos (últimos 30 días)" value={clientesStats.activos30d} />
-          <MetricCard label="Sin volver (30+ días)" value={clientesStats.sinVolver30d} />
-        </div>
-      </section>
-
-      <section>
-        <SectionHeader icon={Smartphone} label="Canales de reserva" />
-        <div className="space-y-2">
-          {canalesStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin datos en este período.</p>}
-          {canalesStats.map((c) => (
-            <div key={c.canal} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="font-bold text-nexus-text">{c.label}</span>
-                <span className="text-nexus-text-secondary">{c.cantidad} ({c.porcentaje.toFixed(1)}%)</span>
-              </div>
-              <div className="w-full bg-nexus-border rounded-full h-2">
-                <div className="bg-nexus-primary h-2 rounded-full" style={{ width: `${c.porcentaje}%` }} />
-              </div>
+        <h3 className="text-xs font-bold text-nexus-text-secondary uppercase tracking-wider font-mono mb-2">Reservas y clientes</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
+            <p className="font-bold text-sm text-nexus-text mb-2">Canales de reservas</p>
+            <div className="space-y-1.5">
+              {canalesStats.map((c) => (
+                <DashedRow key={c.canal} label={c.label} value={`${c.porcentaje.toFixed(0)}%`} />
+              ))}
+              {canalesStats.length === 0 && <p className="text-xs text-nexus-text-secondary">Sin datos.</p>}
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <SectionHeader icon={Scissors} label="Servicios" />
-        <p className="text-xs text-nexus-text-secondary mb-3">
-          Ordenado por ingreso generado — no es una medida de rentabilidad real (no considera costos de insumo ni tiempo de silla).
-        </p>
-        {serviciosStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin datos en este período.</p>}
-        {serviciosStats.length > 0 && (
-          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-3 mb-3">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={serviciosStats}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" />
-                <XAxis dataKey="serviceName" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={60} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v) => `Bs ${Number(v).toFixed(2)}`} />
-                <Bar dataKey="ingreso" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
           </div>
-        )}
-        <div className="space-y-2">
-          {serviciosStats.map((s) => (
-            <div key={s.serviceName} className="bg-nexus-surface border border-nexus-border rounded-lg p-3 flex justify-between items-center">
-              <div>
-                <p className="font-bold text-sm text-nexus-text">{s.serviceName}</p>
-                <p className="text-xs text-nexus-text-secondary">{s.reservas} reservas · Bs {s.precioPromedio.toFixed(2)} prom. · {s.duracionPromedio.toFixed(0)} min prom.</p>
-              </div>
-              <p className="text-xs text-nexus-primary font-bold">{s.participacion.toFixed(1)}%</p>
+
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 flex flex-col justify-center gap-3">
+            <div>
+              <p className="text-xs text-nexus-text-secondary uppercase font-mono">Reservas</p>
+              <p className="text-2xl font-black text-nexus-text">{performance.reservas}</p>
             </div>
-          ))}
+            <div>
+              <p className="text-xs text-nexus-text-secondary uppercase font-mono">Completadas</p>
+              <p className="text-2xl font-black text-nexus-text">{performance.completadas}</p>
+            </div>
+          </div>
+
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
+            <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
+            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes atendidos</p>
+            <div className="flex justify-center gap-4 text-sm">
+              <span><b className="text-nexus-text">{performance.clientesRecurrentes}</b> <span className="text-nexus-text-secondary">Recurrentes</span></span>
+              <span><b className="text-nexus-text">{performance.clientesNuevos}</b> <span className="text-nexus-text-secondary">Nuevos</span></span>
+            </div>
+          </div>
+
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
+            <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico}</p>
+            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes totales</p>
+            <div className="flex justify-center gap-4 text-sm">
+              <span><b className="text-nexus-text">{clientesStats.activos30d}</b> <span className="text-nexus-text-secondary">activos</span></span>
+              <span><b className="text-nexus-text">{clientesStats.sinVolver30d}</b> <span className="text-nexus-text-secondary">sin volver</span></span>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-nexus-text-secondary mt-2">Ingresos generados en el período: <b className="text-nexus-text">Bs {performance.ingresosGenerados.toFixed(2)}</b></p>
+      </section>
+
+      <section>
+        <h3 className="text-xs font-bold text-nexus-text-secondary uppercase tracking-wider font-mono mb-2">Servicios</h3>
+        <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
+          <p className="font-bold text-sm text-nexus-text">Gráfico de servicios</p>
+          <p className="text-xs text-nexus-text-secondary mb-3">Ordenado por ingreso generado</p>
+          {serviciosStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin datos en este período.</p>}
+          {serviciosStats.length > 0 && (
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="md:w-1/2">
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={serviciosStats}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" />
+                    <XAxis dataKey="serviceName" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={55} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v) => `Bs ${Number(v).toFixed(2)}`} />
+                    <Bar dataKey="ingreso" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="md:w-1/2 space-y-2 self-center">
+                {serviciosStats.map((s) => (
+                  <div key={s.serviceName}>
+                    <DashedRow label={s.serviceName} value={`${s.participacion.toFixed(1)}%`} />
+                    <p className="text-[11px] text-nexus-text-secondary pl-1">{s.reservas} reservas · Bs {s.precioPromedio.toFixed(2)} prom. · {s.duracionPromedio.toFixed(0)} min prom.</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
       <section>
-        <SectionHeader icon={UserRound} label="Profesionales" />
+        <h3 className="text-xs font-bold text-nexus-text-secondary uppercase tracking-wider font-mono mb-2">Profesionales</h3>
         <div className="space-y-2">
-          {profesionalesStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin profesionales.</p>}
-          {profesionalesStats.map((p) => (
-            <div key={p.id} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
-              <p className="font-bold text-sm text-nexus-text mb-1">{p.name}</p>
-              <div className="grid grid-cols-3 gap-2 text-xs text-nexus-text-secondary">
-                <span>{p.reservasAtendidas} reservas</span>
-                <span>{p.serviciosRealizados} servicios</span>
-                <span>{p.clientesAtendidos} clientes</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {financeSummary && (
-        <section>
-          <SectionHeader icon={Lock} label="Comisiones por profesional" />
-          <div className="space-y-2">
-            {financeCommissions.map((c) => (
-              <div key={c.barberId} className="bg-nexus-surface border border-nexus-border rounded-lg p-3">
-                <div className="flex justify-between items-center cursor-pointer" onClick={() => handleExpandBarber(c.barberId)}>
-                  <p className="font-bold text-sm text-nexus-text">{c.name}</p>
-                  <div className="text-right text-xs">
-                    <p className="text-nexus-text-secondary">Ingresos: Bs {c.ingresosGenerados.toFixed(2)}</p>
-                    <p className="text-nexus-text-secondary">Comisión: Bs {c.comisionGenerada.toFixed(2)}</p>
-                    <p className="text-red-500 font-bold">Pendiente: Bs {c.comisionPendiente.toFixed(2)}</p>
+          {profesionalesConFinanzas.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin profesionales.</p>}
+          {profesionalesConFinanzas.map((p) => (
+            <div key={p.id} className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 cursor-pointer" onClick={() => p.finanzas && handleExpandBarber(p.id)}>
+                <div>
+                  <p className="font-bold text-base text-nexus-text mb-1">{p.name}</p>
+                  <div className="flex gap-4 text-sm text-nexus-text-secondary">
+                    <span>{p.reservasAtendidas} reservas</span>
+                    <span>{p.serviciosRealizados} servicios</span>
+                    <span>{p.clientesAtendidos} clientes</span>
                   </div>
                 </div>
-                {expandedBarberId === c.barberId && (
-                  <div className="mt-3 pt-3 border-t border-nexus-border space-y-1">
-                    {(commissionDetail || []).map((d) => (
-                      <div key={d.citaId} className="text-xs flex justify-between text-nexus-text-secondary">
-                        <span>{d.date} · {d.services.map((s) => s.serviceName).join(' + ')}</span>
-                        <span>Bs {d.totalComision.toFixed(2)} {d.commissionPaid ? '✅' : ''}</span>
-                      </div>
-                    ))}
-                    {c.comisionPendiente > 0 && (
-                      <button onClick={() => handlePagarComision(c.barberId)} className="mt-2 w-full bg-nexus-primary text-white rounded-lg py-1.5 text-xs font-bold">
-                        Registrar pago de Bs {c.comisionPendiente.toFixed(2)}
-                      </button>
-                    )}
+                {p.finanzas && (
+                  <div className="text-sm text-right">
+                    <p className="text-nexus-text-secondary">Ingresos: <b className="text-nexus-text">Bs {p.finanzas.ingresosGenerados.toFixed(2)}</b></p>
+                    <p className="text-nexus-text-secondary">Comisiones: <b className="text-nexus-text">Bs {p.finanzas.comisionGenerada.toFixed(2)}</b></p>
+                    <p className="text-red-500 font-bold">Pendientes: Bs {p.finanzas.comisionPendiente.toFixed(2)}</p>
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+
+              {expandedBarberId === p.id && p.finanzas && (
+                <div className="mt-3 pt-3 border-t border-nexus-border space-y-1">
+                  {(commissionDetail || []).map((d) => (
+                    <div key={d.citaId} className="text-xs flex justify-between text-nexus-text-secondary">
+                      <span>{d.date} · {d.services.map((s) => s.serviceName).join(' + ')}</span>
+                      <span>Bs {d.totalComision.toFixed(2)} {d.commissionPaid ? '✅' : ''}</span>
+                    </div>
+                  ))}
+                  {p.finanzas.comisionPendiente > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); handlePagarComision(p.id); }} className="mt-2 w-full bg-nexus-primary text-white rounded-lg py-1.5 text-xs font-bold">
+                      Registrar pago de Bs {p.finanzas.comisionPendiente.toFixed(2)}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
-function MetricCard({ label, value }) {
+function BigMetric({ label, value }) {
   return (
-    <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
-      <p className="text-xs text-nexus-text-secondary uppercase tracking-wider font-mono">{label}</p>
-      <p className="text-xl font-black text-nexus-text mt-1">{value}</p>
+    <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
+      <p className="text-xs text-nexus-text-secondary uppercase tracking-wider font-mono mb-1">{label}</p>
+      <p className="text-2xl font-black text-nexus-text">{value}</p>
+    </div>
+  );
+}
+
+function DashedRow({ label, value }) {
+  return (
+    <div className="flex items-baseline gap-2 text-sm">
+      <span className="font-bold text-nexus-text whitespace-nowrap">{label}</span>
+      <span className="flex-1 border-b border-dashed border-nexus-border translate-y-[-4px]" />
+      <span className="font-bold text-nexus-text whitespace-nowrap">{value}</span>
     </div>
   );
 }
