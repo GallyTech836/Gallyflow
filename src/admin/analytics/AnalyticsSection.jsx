@@ -8,7 +8,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { Lock } from 'lucide-react';
+import { Lock, DollarSign, TrendingUp, Clock, Wallet } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
 import { verifyFinancePin, setFinancePin, getFinanceSummary, getFinanceCommissions, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 
@@ -312,19 +312,22 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   return (
     <div className="p-4 md:p-6 space-y-6">
       {financeSummary && (
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <BigMetric label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
-          <BigMetric label="Comisiones generadas" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
-          <BigMetric label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
-          <BigMetric label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
+        <section>
+          <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Rendimiento general</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <BigMetric icon={DollarSign} label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
+            <BigMetric icon={TrendingUp} label="Comisión generada" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
+            <BigMetric icon={Clock} label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
+            <BigMetric icon={Wallet} label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
+          </div>
         </section>
       )}
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-text-secondary uppercase tracking-wider font-mono mb-2">Reservas y clientes</h3>
+        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Reservas y clientes</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
-            <p className="font-bold text-sm text-nexus-text mb-2">Canales de reservas</p>
+            <p className="text-xs text-nexus-text-secondary uppercase font-mono">Canales de reservas</p>
             <div className="space-y-1.5">
               {canalesStats.map((c) => (
                 <DashedRow key={c.canal} label={c.label} value={`${c.porcentaje.toFixed(0)}%`} />
@@ -347,26 +350,25 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
             <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes atendidos</p>
-            <div className="flex justify-center gap-4 text-sm">
-              <span><b className="text-nexus-text">{performance.clientesRecurrentes}</b> <span className="text-nexus-text-secondary">Recurrentes</span></span>
-              <span><b className="text-nexus-text">{performance.clientesNuevos}</b> <span className="text-nexus-text-secondary">Nuevos</span></span>
+            <div className="flex justify-center gap-6 text-sm">
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos}</b><span className="text-nexus-text-secondary">Nuevos</span></span>
             </div>
           </div>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico}</p>
             <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes totales</p>
-            <div className="flex justify-center gap-4 text-sm">
-              <span><b className="text-nexus-text">{clientesStats.activos30d}</b> <span className="text-nexus-text-secondary">activos</span></span>
-              <span><b className="text-nexus-text">{clientesStats.sinVolver30d}</b> <span className="text-nexus-text-secondary">sin volver</span></span>
+            <div className="flex justify-center gap-6 text-sm">
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d}</b><span className="text-nexus-text-secondary">activos</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d}</b><span className="text-nexus-text-secondary">sin volver</span></span>
             </div>
           </div>
         </div>
-        <p className="text-xs text-nexus-text-secondary mt-2">Ingresos generados en el período: <b className="text-nexus-text">Bs {performance.ingresosGenerados.toFixed(2)}</b></p>
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-text-secondary uppercase tracking-wider font-mono mb-2">Servicios</h3>
+        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Servicios</h3>
         <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
           <p className="font-bold text-sm text-nexus-text">Gráfico de servicios</p>
           <p className="text-xs text-nexus-text-secondary mb-3">Ordenado por ingreso generado</p>
@@ -374,7 +376,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           {serviciosStats.length > 0 && (
             <div className="flex flex-col md:flex-row gap-4">
               <div className="md:w-1/2">
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={serviciosStats}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" />
                     <XAxis dataKey="serviceName" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={55} />
@@ -384,7 +386,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="md:w-1/2 space-y-2 self-center">
+              <div className="md:w-1/2 space-y-2 pr-2" style={{ height: '260px', overflowY: 'auto' }}>
                 {serviciosStats.map((s) => (
                   <div key={s.serviceName}>
                     <DashedRow label={s.serviceName} value={`${s.participacion.toFixed(1)}%`} />
@@ -398,7 +400,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-text-secondary uppercase tracking-wider font-mono mb-2">Profesionales</h3>
+        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Profesionales</h3>
         <div className="space-y-2">
           {profesionalesConFinanzas.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin profesionales.</p>}
           {profesionalesConFinanzas.map((p) => (
@@ -444,11 +446,12 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   );
 }
 
-function BigMetric({ label, value }) {
+function BigMetric({ icon: Icon, label, value }) {
   return (
-    <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-      <p className="text-xs text-nexus-text-secondary uppercase tracking-wider font-mono mb-1">{label}</p>
-      <p className="text-2xl font-black text-nexus-text">{value}</p>
+    <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center min-w-0">
+      {Icon && <Icon className="w-4 h-4 text-nexus-primary mx-auto mb-1" />}
+      <p className="text-[10px] text-nexus-text-secondary uppercase tracking-wider font-mono mb-1 leading-tight">{label}</p>
+      <p className="text-xl md:text-2xl font-black text-nexus-text truncate">{value}</p>
     </div>
   );
 }
