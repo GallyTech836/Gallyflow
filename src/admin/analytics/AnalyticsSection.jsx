@@ -314,11 +314,11 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       {financeSummary && (
         <section>
           <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Rendimiento general</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <BigMetric icon={DollarSign} label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
-            <BigMetric icon={TrendingUp} label="Comisión generada" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
-            <BigMetric icon={Clock} label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
-            <BigMetric icon={Wallet} label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <BigMetric label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
+            <BigMetric label="Comisiones generadas" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
+            <BigMetric label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
+            <BigMetric label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
           </div>
         </section>
       )}
