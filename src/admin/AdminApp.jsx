@@ -1869,7 +1869,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   }
 
   return (
-    <div className="min-h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
+    <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
       
       {isMobileSidebarOpen && (
         <div 
