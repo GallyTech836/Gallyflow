@@ -8,7 +8,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { Lock, DollarSign, TrendingUp, Clock, Wallet } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
 import { verifyFinancePin, setFinancePin, getFinanceSummary, getFinanceCommissions, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 
@@ -446,12 +446,11 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   );
 }
 
-function BigMetric({ icon: Icon, label, value }) {
+function BigMetric({ label, value }) {
   return (
-    <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center min-w-0">
-      {Icon && <Icon className="w-4 h-4 text-nexus-primary mx-auto mb-1" />}
-      <p className="text-[10px] text-nexus-text-secondary uppercase tracking-wider font-mono mb-1 leading-tight">{label}</p>
-      <p className="text-xl md:text-2xl font-black text-nexus-text truncate">{value}</p>
+    <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
+      <p className="text-xs text-nexus-text-secondary uppercase tracking-wider font-mono mb-1">{label}</p>
+      <p className="text-2xl font-black text-nexus-text">{value}</p>
     </div>
   );
 }
