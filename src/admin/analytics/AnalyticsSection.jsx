@@ -377,12 +377,12 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             <div className="flex flex-col md:flex-row gap-4">
               <div className="md:w-1/2">
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={serviciosStats}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" />
+                <BarChart data={serviciosStats}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" strokeOpacity={0.25} />
                     <XAxis dataKey="serviceName" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={55} />
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v) => `Bs ${Number(v).toFixed(2)}`} />
-                    <Bar dataKey="ingreso" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="ingreso" fill="var(--nx-primary)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

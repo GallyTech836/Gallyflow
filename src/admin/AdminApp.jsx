@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, Scissors, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, FileSliders as Sliders, Trash2, CreditCard as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, Scissors, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, CreditCard as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
 import { auth, db } from '../firebase/config';
@@ -36,6 +37,18 @@ const GEOLOCATIONS_DB = [
 const INITIAL_AUTOMATION_LOGS = [];
 
 export default function App({ user }) {
+  function DashboardChartTooltip({ active, payload, label }) {
+    if (!active || !payload || !payload.length) return null;
+    const bucket = payload[0].payload || {};
+    const displayLabel = bucket.fullLabel || label;
+    return (
+      <div className="bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 shadow-lg text-[10px] space-y-0.5">
+        <p className="font-bold text-nexus-text">{displayLabel}</p>
+        <p className="text-nexus-text-secondary">Citas: {bucket.citas || 0}</p>
+      <p className="text-nexus-text-secondary">Ventas: {Number(bucket.ventas || 0).toLocaleString('es-BO')} Bs</p>
+      </div>
+    );
+  }
 const { logout } = useAuth();
   const { negocioId } = useNegocio(user);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
@@ -931,6 +944,230 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       clientsServed: new Set(completed.map(r => r?.clientId).filter(Boolean)).size
     };
   }, [rangeReservations, branchBarbers, services]);
+
+  /* ==========================================
+     HELPERS Y MÉTRICAS PARA EL DASHBOARD OPERATIVO
+     (no confundir con isDateInSelectedRange, que sigue
+     usando el selectedDate actual vía closure)
+     ========================================== */
+  const isDateInRangeFor = (dateStr, refDateStr, view) => {
+    if (!dateStr || !refDateStr) return false;
+    try {
+      const date = parseDate(dateStr);
+      const refDate = parseDate(refDateStr);
+
+      if (view === 'dia') return dateStr === refDateStr;
+      if (view === 'semana') {
+        const day = refDate.getDay();
+        const diff = refDate.getDate() - day + (day === 0 ? -6 : 1);
+        const startOfWeek = new Date(refDate);
+        startOfWeek.setDate(diff);
+        startOfWeek.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        return date >= startOfWeek && date <= endOfWeek;
+      }
+      if (view === 'mes') {
+        return date.getFullYear() === refDate.getFullYear() && date.getMonth() === refDate.getMonth();
+      }
+      if (view === 'año') {
+        return date.getFullYear() === refDate.getFullYear();
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  };
+
+  const getPreviousPeriodRefDate = (refDateStr, view) => {
+    const date = parseDate(refDateStr);
+    if (view === 'dia') date.setDate(date.getDate() - 1);
+    else if (view === 'semana') date.setDate(date.getDate() - 7);
+    else if (view === 'mes') date.setMonth(date.getMonth() - 1);
+    else if (view === 'año') date.setFullYear(date.getFullYear() - 1);
+    return formatDate(date);
+  };
+
+  // Comparación real "vs anterior": suma de ventas del período equivalente
+  // inmediatamente anterior, tomada de branchReservations (no de rangeReservations,
+  // que ya está acotado al período actual).
+  const salesComparison = useMemo(() => {
+    const prevRefDate = getPreviousPeriodRefDate(selectedDate, agendaView);
+    const prevRevenue = (branchReservations || [])
+      .filter(r => r?.status === 'completed' && isDateInRangeFor(r?.date, prevRefDate, agendaView))
+      .reduce((sum, r) => sum + Number(r?.price || 0), 0);
+    const currentRevenue = rangeMetrics?.totalRevenue || 0;
+
+    if (!prevRevenue) {
+      return { comparable: false, percent: 0 };
+    }
+    const percent = ((currentRevenue - prevRevenue) / prevRevenue) * 100;
+    return { comparable: true, percent };
+  }, [branchReservations, selectedDate, agendaView, rangeMetrics]);
+
+  // Horario real de atención para una fecha dada: se deriva de la disponibilidad
+  // ('Disponible') que cada barbero de la sucursal ya tiene configurada por día
+  // en su ficha (barber.availability). No existe todavía un horario general de
+  // negocio/sucursal en Configuración (esa sección está marcada "Próximamente"),
+  // así que esta es la única fuente real disponible para saber cuándo atiende el negocio.
+  const DASH_DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+  const getOpenHoursForDate = (dateStr) => {
+    const date = parseDate(dateStr);
+    const dayName = DASH_DAY_NAMES_MON_FIRST[(date.getDay() + 6) % 7];
+    const slots = (branchBarbers || [])
+      .flatMap(b => (b?.availability || []).filter(a => a?.day === dayName && a?.status === 'Disponible'));
+    if (slots.length === 0) return null;
+    const startMin = Math.min(...slots.map(a => timeToMin(a?.start || '00:00')));
+    const endMin = Math.max(...slots.map(a => timeToMin(a?.end || '00:00')));
+    return { startMin, endMin };
+  };
+
+  const isBranchOpenOnDayName = (dayName) => {
+    return (branchBarbers || []).some(b => (b?.availability || []).some(a => a?.day === dayName && a?.status === 'Disponible'));
+  };
+
+  // Datos reales para "Estimación Gráfica de Productividad". El eje X cambia
+  // según agendaView; ventas = suma de price de citas 'completed', citas = total
+  // de citas en ese bucket (mismo criterio que las tarjetas superiores).
+  const dashboardChartData = useMemo(() => {
+    const MONTH_NAMES_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const MONTH_NAMES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const DAY_NAMES_SHORT = { Lunes: 'Lun', Martes: 'Mar', Miércoles: 'Mié', Jueves: 'Jue', Viernes: 'Vie', Sábado: 'Sáb', Domingo: 'Dom' };
+
+    const bucketFrom = (list) => {
+      const completed = list.filter(r => r?.status === 'completed');
+      return {
+        ventas: completed.reduce((sum, r) => sum + Number(r?.price || 0), 0),
+        citas: list.length
+      };
+    };
+
+    if (agendaView === 'dia') {
+      const openHours = getOpenHoursForDate(selectedDate);
+      if (!openHours) return [];
+      const startH = Math.floor(openHours.startMin / 60);
+      const endH = Math.ceil(openHours.endMin / 60);
+      const hours = [];
+      for (let h = startH; h <= endH; h++) hours.push(h);
+      return hours.map(h => {
+        const inHour = (rangeReservations || []).filter(r => Math.floor(timeToMin(r?.time || '00:00') / 60) === h);
+        return { label: `${String(h).padStart(2, '0')}:00`, ...bucketFrom(inHour) };
+      });
+    }
+
+    if (agendaView === 'semana') {
+      const weekDates = getWeekDates(selectedDate);
+      let openDates = weekDates.filter(d => isBranchOpenOnDayName(d.dayName));
+      if (openDates.length === 0) openDates = weekDates; // sin datos de disponibilidad: no filtrar
+      return openDates.map(d => {
+        const dayRes = (rangeReservations || []).filter(r => r?.date === d.dateStr);
+        return { label: DAY_NAMES_SHORT[d.dayName] || d.dayName, fullLabel: d.dayName, ...bucketFrom(dayRes) };
+      });
+    }
+
+    if (agendaView === 'mes') {
+      const monthDays = getMonthDays(selectedDate).filter(d => d.isCurrentMonth);
+      return monthDays.map(d => {
+        const dayRes = (rangeReservations || []).filter(r => r?.date === d.dateStr);
+        return { label: String(d.dayNum), ...bucketFrom(dayRes) };
+      });
+    }
+
+    // año
+    const year = parseDate(selectedDate).getFullYear();
+    return MONTH_NAMES_SHORT.map((name, idx) => {
+      const monthRes = (rangeReservations || []).filter(r => {
+        const d = parseDate(r?.date);
+        return d.getFullYear() === year && d.getMonth() === idx;
+      });
+      return { label: name, fullLabel: MONTH_NAMES_FULL[idx], ...bucketFrom(monthRes) };
+    });
+  }, [agendaView, selectedDate, rangeReservations, branchBarbers]);
+
+  // Eje Y del gráfico en pasos redondos (2 en 2 hasta 10, luego 5 en 5),
+  // basado en el máximo real de citas del período mostrado.
+  const chartYAxisConfig = useMemo(() => {
+    const maxCitas = Math.max(0, ...dashboardChartData.map(d => d.citas || 0));
+    let step = 2;
+    let niceMax = Math.ceil(maxCitas / 2) * 2;
+    if (maxCitas > 10) {
+      step = 5;
+      niceMax = Math.ceil(maxCitas / 5) * 5;
+    }
+    if (niceMax === 0) niceMax = step;
+    const ticks = [];
+    for (let t = 0; t <= niceMax; t += step) ticks.push(t);
+    return { max: niceMax, ticks };
+  }, [dashboardChartData]);
+
+  // "Próxima cita": operativa y en tiempo real, independiente del selector de período.
+  // Se recalcula cada minuto vía currentTimeMinutes (ya existente para otros usos).
+  const nextAppointment = useMemo(() => {
+    const now = new Date();
+    const upcoming = (branchReservations || [])
+      .filter(r => r?.date && r?.status !== 'completed' && r?.status !== 'cancelled')
+      .map(r => {
+        const dt = parseDate(r.date);
+        const [hh, mm] = (r?.time || '00:00').split(':').map(Number);
+        dt.setHours(hh || 0, mm || 0, 0, 0);
+        return { ...r, __dt: dt };
+      })
+      .filter(r => r.__dt.getTime() >= now.getTime())
+      .sort((a, b) => a.__dt - b.__dt);
+    return upcoming[0] || null;
+  }, [branchReservations, currentTimeMinutes]);
+
+  // "Pagos del período": sí respeta el selector Día/Semana/Mes/Año.
+  // Se agrupa por paymentMethod tal cual existe en las citas reales (Efectivo/Tarjeta/Transferencia).
+  const paymentBreakdown = useMemo(() => {
+    const completed = (rangeReservations || []).filter(r => r?.status === 'completed');
+    const totals = {};
+    completed.forEach(r => {
+      const method = r?.paymentMethod || 'Sin especificar';
+      totals[method] = (totals[method] || 0) + Number(r?.price || 0);
+    });
+    const total = Object.values(totals).reduce((sum, v) => sum + v, 0);
+    return { totals, total };
+  }, [rangeReservations]);
+
+  const paymentsLabel = {
+    dia: 'Pagos de Hoy',
+    semana: 'Pagos de la Semana',
+    mes: 'Pagos del Mes',
+    año: 'Pagos del Año'
+  }[agendaView] || 'Pagos del Período';
+
+  // "Actividad reciente": operativa, independiente del selector. No existe una
+  // colección de eventos/actividad en Firestore, así que se construye a partir
+  // de createdAt/updatedAt + status de las citas reales (sin inventar eventos).
+  const recentActivity = useMemo(() => {
+    const STATUS_ACTIVITY_LABELS = {
+      completed: 'cita completada',
+      cancelled: 'cita cancelada',
+      'in-process': 'cita en atención',
+      confirmed: 'cita confirmada',
+      pending: 'nueva reserva'
+    };
+    return (branchReservations || [])
+      .map(r => {
+        const isNew = !!r?.createdAt && r.createdAt === r.updatedAt;
+        const label = isNew ? 'nueva reserva' : (STATUS_ACTIVITY_LABELS[r?.status] || 'cita actualizada');
+        return { id: r?.id, clientName: r?.clientName || 'Cliente', label, ts: r?.updatedAt || r?.createdAt };
+      })
+      .filter(ev => !!ev.ts)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts))
+      .slice(0, 6);
+  }, [branchReservations]);
+
+  const formatActivityTime = (ts) => {
+    try {
+      return new Date(ts).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (e) {
+      return '--:--';
+    }
+  };
 
   const barberCommissionsList = useMemo(() => {
     if (!Array.isArray(branchBarbers)) return [];
@@ -2318,10 +2555,14 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
                   <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Ventas periodo</span>
                   <h3 className="text-xl font-black text-nexus-text font-mono mt-1">{formatBs(rangeMetrics?.totalRevenue)}</h3>
-                  <div className="flex items-center gap-1 mt-1 text-[10px] text-nexus-primary font-bold">
-                    <TrendingUp className="w-3 h-3" />
-                    <span>+12.4% vs anterior</span>
-                  </div>
+                  {salesComparison.comparable ? (
+                    <div className={`flex items-center gap-1 mt-1 text-[10px] font-bold ${salesComparison.percent >= 0 ? 'text-nexus-primary' : 'text-nexus-error-text'}`}>
+                      {salesComparison.percent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                      <span>{salesComparison.percent >= 0 ? '+' : ''}{salesComparison.percent.toFixed(1)}% vs anterior</span>
+                    </div>
+                  ) : (
+                    <p className="text-[9px] text-nexus-text-muted mt-1">Sin datos comparables</p>
+                  )}
                 </div>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
                   <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Citas Agendadas</span>
@@ -2340,16 +2581,85 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
                 </div>
               </div>
 
-              <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Estimación Gráfica de Productividad ({agendaView.toUpperCase()})</h4>
-                  <span className="text-[9px] font-bold bg-nexus-primary-soft text-nexus-primary px-2.5 py-0.5 rounded border border-nexus-border">Tiempo Real</span>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Estimación Gráfica de Productividad ({agendaView.toUpperCase()})</h4>
+                    <span className="text-[9px] font-bold bg-nexus-primary-soft text-nexus-primary px-2.5 py-0.5 rounded border border-nexus-border">Tiempo Real</span>
+                  </div>
+                  <div className="h-44 w-full">
+                    {dashboardChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={dashboardChartData} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" strokeOpacity={0.25} vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={agendaView === 'mes' ? 2 : 0} />
+                          <YAxis tick={{ fontSize: 9 }} width={34} domain={[0, chartYAxisConfig.max]} ticks={chartYAxisConfig.ticks} allowDecimals={false} />
+                          <Tooltip content={<DashboardChartTooltip />} />
+                          <Area type="monotone" dataKey="citas" stroke="var(--nx-primary)" strokeWidth={2} fill="url(#chartGrad)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-center px-4 text-[10px] text-nexus-text-muted">
+                        No hay datos suficientes para este período
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="relative h-44 w-full bg-nexus-background rounded-lg p-2 overflow-hidden border border-nexus-border flex items-end">
-                  <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
-                    <path d="M0,130 Q120,110 250,50 T500,20 L500,150 L0,150 Z" fill="url(#chartGrad)" />
-                    <path d="M0,130 Q120,110 250,50 T500,20" fill="none" stroke="var(--nx-primary)" strokeWidth="3" />
-                  </svg>
+
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm flex flex-col">
+                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">Próxima Cita</h4>
+                  {nextAppointment ? (
+                    <div className="flex-1 flex flex-col justify-center">
+                      <span className="text-2xl font-black text-nexus-primary font-mono">{nextAppointment.time}</span>
+                      <span className="text-sm font-bold text-nexus-text mt-2">{nextAppointment.clientName}</span>
+                      <span className="text-xs text-nexus-text-secondary mt-0.5">{nextAppointment.serviceName || 'Servicio'}</span>
+                      <span className="text-[10px] text-nexus-text-muted mt-1">
+                        {(barbers.find(b => b?.id === (nextAppointment.professionalId || nextAppointment.barberId))?.name) || 'Sin asignar'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-center text-[11px] text-nexus-text-muted">
+                      No hay próximas citas
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
+          <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">{paymentsLabel}</h4>
+                  {paymentBreakdown.total > 0 ? (
+                    <div className="space-y-2">
+                      {Object.entries(paymentBreakdown.totals).map(([method, amount]) => (
+                        <div key={method} className="flex justify-between items-center text-xs">
+                          <span className="text-nexus-text-secondary">{method}</span>
+                          <span className="font-bold text-nexus-text font-mono">{formatBs(amount)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center text-xs pt-2 border-t border-nexus-border">
+                        <span className="font-bold text-nexus-text-secondary uppercase">Total</span>
+                        <span className="font-black text-nexus-primary font-mono">{formatBs(paymentBreakdown.total)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-nexus-text-muted py-4 text-center">Sin pagos registrados en este período</div>
+                  )}
+                </div>
+
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
+                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">Actividad Reciente</h4>
+                  {recentActivity.length > 0 ? (
+                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                      {recentActivity.map(ev => (
+                        <div key={ev.id} className="text-[11px] text-nexus-text-secondary flex gap-1.5">
+                          <span className="font-mono text-nexus-text-muted shrink-0">{formatActivityTime(ev.ts)}</span>
+                          <span>· {ev.clientName} — {ev.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-nexus-text-muted py-4 text-center">Sin actividad reciente</div>
+                  )}
                 </div>
               </div>
             </div>
