@@ -3,9 +3,13 @@ import { calculateCommissionForCita } from './commissionModel.js';
 
 async function getCitasEnRango(negocioId, startDate, endDate, branch) {
   const citasRef = db.collection('negocios').doc(negocioId).collection('citas');
-  let query = citasRef.where('date', '>=', startDate).where('date', '<=', endDate);
+  // Solo se leen citas completadas (índice compuesto: status ASC + date ASC).
+  const query = citasRef
+    .where('status', '==', 'completed')
+    .where('date', '>=', startDate)
+    .where('date', '<=', endDate);
   const snap = await query.get();
-  let citas = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => c.status === 'completed');
+  let citas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   if (branch && branch !== 'all') {
     citas = citas.filter((c) => c.branch === branch);
   }
@@ -30,10 +34,7 @@ function ingresoDeCita(cita) {
   return Number(cita.price || 0);
 }
 
-export async function getFinanceSummary(negocioId, { startDate, endDate, branch }) {
-  const citas = await getCitasEnRango(negocioId, startDate, endDate, branch);
-  const { barbers, servicios } = await getBarbersYServicios(negocioId);
-
+function calcularResumen(citas, barbers, servicios) {
   let ingresosBrutos = 0;
   let comisionGenerada = 0;
   let comisionPagada = 0;
@@ -52,10 +53,7 @@ export async function getFinanceSummary(negocioId, { startDate, endDate, branch 
   return { ingresosBrutos, comisionGenerada, comisionPagada, comisionPendiente, resultadoBarberia, citasCount: citas.length };
 }
 
-export async function getComisionesPorProfesional(negocioId, { startDate, endDate, branch }) {
-  const citas = await getCitasEnRango(negocioId, startDate, endDate, branch);
-  const { barbers, servicios } = await getBarbersYServicios(negocioId);
-
+function calcularComisionesPorProfesional(citas, barbers, servicios) {
   return barbers.map((barber) => {
     const citasDelBarbero = citas.filter((c) => c.professionalId === barber.id || c.barberId === barber.id);
     let ingresosGenerados = 0, comisionGenerada = 0, comisionPagada = 0;
@@ -77,6 +75,31 @@ export async function getComisionesPorProfesional(negocioId, { startDate, endDat
       comisionPendiente: comisionGenerada - comisionPagada,
     };
   });
+}
+
+export async function getFinanceSummary(negocioId, { startDate, endDate, branch }) {
+  const citas = await getCitasEnRango(negocioId, startDate, endDate, branch);
+  const { barbers, servicios } = await getBarbersYServicios(negocioId);
+  return calcularResumen(citas, barbers, servicios);
+}
+
+export async function getComisionesPorProfesional(negocioId, { startDate, endDate, branch }) {
+  const citas = await getCitasEnRango(negocioId, startDate, endDate, branch);
+  const { barbers, servicios } = await getBarbersYServicios(negocioId);
+  return calcularComisionesPorProfesional(citas, barbers, servicios);
+}
+
+// Resumen + comisiones con UNA sola lectura de citas/profesionales/servicios
+// (antes /summary y /commissions leían lo mismo dos veces).
+export async function getFinanceOverview(negocioId, { startDate, endDate, branch }) {
+  const [citas, { barbers, servicios }] = await Promise.all([
+    getCitasEnRango(negocioId, startDate, endDate, branch),
+    getBarbersYServicios(negocioId),
+  ]);
+  return {
+    summary: calcularResumen(citas, barbers, servicios),
+    commissions: calcularComisionesPorProfesional(citas, barbers, servicios),
+  };
 }
 
 export async function getDetalleComisionesBarbero(negocioId, barberId, { startDate, endDate }) {

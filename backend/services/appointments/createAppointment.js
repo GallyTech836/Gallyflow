@@ -55,6 +55,7 @@ export async function createAppointment({
 
     const totalPrice = services.reduce((acc, s) => acc + Number(s.price || 0), 0);
 
+    const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
     const nuevaCita = {
       clientName: clientName?.trim() || '',
@@ -73,7 +74,8 @@ export async function createAppointment({
       bookedBy,
       notes: '',
       branch: branch || '',
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     tx.set(nuevaCitaRef, nuevaCita);

@@ -5,12 +5,12 @@
 // activado desde Super Admin) protege TODO el módulo de una sola vez.
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
-import { verifyFinancePin, setFinancePin, getFinanceSummary, getFinanceCommissions, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
+import { verifyFinancePin, setFinancePin, getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 
 const CHANNEL_LABELS = {
   admin: 'Admin',
@@ -91,6 +91,12 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   const [financeCommissions, setFinanceCommissions] = useState([]);
   const [expandedBarberId, setExpandedBarberId] = useState(null);
   const [commissionDetail, setCommissionDetail] = useState(null);
+  // Histórico completo: NO se carga solo, únicamente al pulsar "Calcular histórico".
+  const [historyDocs, setHistoryDocs] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  // Últimos 30 días (solo si el período seleccionado no los cubre ya).
+  const [recent30Docs, setRecent30Docs] = useState(null);
 
   useEffect(() => {
     if (!negocioId) return;
@@ -104,6 +110,63 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   const isUnlocked = analyticsPinEnabled === false || sessionValida;
 
   const { startDate, endDate } = useMemo(() => getRangeBounds(selectedDate, agendaView), [selectedDate, agendaView]);
+
+  const hace30dias = useMemo(() => formatISODate(new Date(Date.now() - 30 * DIA_MS)), []);
+  const hoyStr = useMemo(() => formatISODate(new Date()), []);
+
+  // Al cambiar de negocio o sucursal, el histórico calculado deja de valer.
+  useEffect(() => {
+    setHistoryDocs(null);
+    setHistoryError('');
+  }, [negocioId, selectedBranch]);
+
+  // "Activos 30 días": consulta acotada a los últimos 30 días. Si el período seleccionado
+  // ya los cubre (p. ej. Año actual), se reutilizan las citas ya cargadas: 0 lecturas extra.
+  const cubre30d = startDate <= hace30dias && endDate >= hoyStr;
+  useEffect(() => {
+    if (!isUnlocked || !negocioId || !selectedBranch || cubre30d) return;
+    let cancelled = false;
+    getDocs(query(
+      collection(db, 'negocios', negocioId, 'citas'),
+      where('branch', '==', selectedBranch),
+      where('date', '>=', hace30dias),
+      where('date', '<=', hoyStr)
+    ))
+      .then((snap) => { if (!cancelled) setRecent30Docs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); })
+      .catch((err) => { console.error('[Analítica] error al leer últimos 30 días:', err); if (!cancelled) setRecent30Docs([]); });
+    return () => { cancelled = true; };
+  }, [isUnlocked, negocioId, selectedBranch, cubre30d, hace30dias, hoyStr]);
+
+  const activos30dRecientes = useMemo(() => {
+    const fuente = cubre30d ? reservations : recent30Docs;
+    if (!fuente) return null;
+    const claves = new Set();
+    fuente.forEach((r) => {
+      if (r.status !== 'completed' || !r.date || r.date < hace30dias) return;
+      const key = r.clientId || r.clientPhone;
+      if (key) claves.add(key);
+    });
+    return claves.size;
+  }, [cubre30d, reservations, recent30Docs, hace30dias]);
+
+  async function handleCalcularHistorico() {
+    if (!negocioId || !selectedBranch) return;
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'negocios', negocioId, 'citas'),
+        where('branch', '==', selectedBranch),
+        where('status', '==', 'completed')
+      ));
+      setHistoryDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('[Analítica] error al calcular histórico:', err);
+      setHistoryError('No se pudo calcular el histórico. Intenta de nuevo.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   const citasEnRango = useMemo(() => {
     return (reservations || []).filter((r) => {
@@ -119,13 +182,22 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     const ingresosGenerados = completadas.reduce((sum, r) => sum + ingresoDeCita(r), 0);
     const clientesUnicos = new Set(completadas.map((r) => r.clientId || r.clientPhone).filter(Boolean));
 
-    let nuevos = 0, recurrentes = 0;
-    clientesUnicos.forEach((key) => {
-      const tuvoAntes = (reservations || []).some(
-        (r) => r.status === 'completed' && (r.clientId === key || r.clientPhone === key) && r.date < startDate
-      );
-      if (tuvoAntes) recurrentes += 1; else nuevos += 1;
-    });
+    // Nuevos vs recurrentes necesita el histórico: null hasta que se pulse "Calcular histórico".
+    let nuevos = null, recurrentes = null;
+    if (historyDocs) {
+      nuevos = 0;
+      recurrentes = 0;
+      const clientesPrevios = new Set();
+      historyDocs.forEach((r) => {
+        if (r.status === 'completed' && r.date < startDate) {
+          if (r.clientId) clientesPrevios.add(r.clientId);
+          if (r.clientPhone) clientesPrevios.add(r.clientPhone);
+        }
+      });
+      clientesUnicos.forEach((key) => {
+        if (clientesPrevios.has(key)) recurrentes += 1; else nuevos += 1;
+      });
+    }
 
     return {
       reservas: citasEnRango.length,
@@ -135,7 +207,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       clientesRecurrentes: recurrentes,
       ingresosGenerados,
     };
-  }, [citasEnRango, completadas, reservations, startDate]);
+  }, [citasEnRango, completadas, historyDocs, startDate]);
 
   const serviciosStats = useMemo(() => {
     const stats = {};
@@ -177,10 +249,14 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   }, [citasEnRango]);
 
   const clientesStats = useMemo(() => {
-    const todosCompletados = (reservations || []).filter((r) => r.status === 'completed');
+    // Activos 30 días: siempre disponible (consulta acotada). Total histórico y "sin volver"
+    // requieren el histórico completo: null hasta pulsar "Calcular histórico".
+    if (!historyDocs) {
+      return { totalHistorico: null, activos30d: activos30dRecientes, sinVolver30d: null };
+    }
+    const todosCompletados = historyDocs.filter((r) => r.status === 'completed');
     const clientesHistoricos = new Set(todosCompletados.map((r) => r.clientId || r.clientPhone).filter(Boolean));
 
-    const hace30dias = formatISODate(new Date(Date.now() - 30 * DIA_MS));
     const ultimaVisitaPorCliente = new Map();
     todosCompletados.forEach((r) => {
       const key = r.clientId || r.clientPhone;
@@ -200,7 +276,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       activos30d,
       sinVolver30d,
     };
-  }, [reservations]);
+  }, [historyDocs, activos30dRecientes, hace30dias]);
 
   const profesionalesStats = useMemo(() => {
     return (barbers || []).map((barber) => {
@@ -248,16 +324,13 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   }
 
   async function loadFinanceData() {
-    const [summaryRes, commissionsRes] = await Promise.all([
-      getFinanceSummary(financeSession?.token, { startDate, endDate, branch: selectedBranch }),
-      getFinanceCommissions(financeSession?.token, { startDate, endDate, branch: selectedBranch }),
-    ]);
-    if (summaryRes.status === 401) {
+    const overviewRes = await getFinanceOverview(financeSession?.token, { startDate, endDate, branch: selectedBranch });
+    if (overviewRes.status === 401) {
       setFinanceSession(null);
       return;
     }
-    setFinanceSummary(summaryRes.data);
-    setFinanceCommissions(commissionsRes.data);
+    setFinanceSummary(overviewRes.data?.summary ?? null);
+    setFinanceCommissions(overviewRes.data?.commissions ?? []);
   }
 
   async function handleExpandBarber(barberId) {
@@ -351,18 +424,29 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
             <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes atendidos</p>
             <div className="flex justify-center gap-6 text-sm">
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos}</b><span className="text-nexus-text-secondary">Nuevos</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes ?? '—'}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos ?? '—'}</b><span className="text-nexus-text-secondary">Nuevos</span></span>
             </div>
           </div>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-            <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico}</p>
+            <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico ?? '—'}</p>
             <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes totales</p>
             <div className="flex justify-center gap-6 text-sm">
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d}</b><span className="text-nexus-text-secondary">activos</span></span>
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d}</b><span className="text-nexus-text-secondary">sin volver</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">activos</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d ?? '—'}</b><span className="text-nexus-text-secondary">sin volver</span></span>
             </div>
+            {!historyDocs && (
+              <button
+                type="button"
+                onClick={handleCalcularHistorico}
+                disabled={historyLoading}
+                className="mt-3 text-[10px] font-bold uppercase tracking-wider font-mono text-nexus-primary border border-nexus-primary/40 rounded px-3 py-1.5 disabled:opacity-50"
+              >
+                {historyLoading ? 'Calculando…' : 'Calcular histórico'}
+              </button>
+            )}
+            {historyError && <p className="text-[10px] text-nexus-error-text mt-2">{historyError}</p>}
           </div>
         </div>
       </section>

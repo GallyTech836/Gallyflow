@@ -38,6 +38,15 @@ export async function getFinanceSummary(sessionToken, { startDate, endDate, bran
   return { ok: res.ok, status: res.status, data: await res.json() };
 }
 
+// Resumen + comisiones en una sola llamada (una sola lectura en el backend).
+export async function getFinanceOverview(sessionToken, { startDate, endDate, branch }) {
+  const params = new URLSearchParams({ startDate, endDate, branch: branch || 'all' });
+  const res = await fetch(`${BASE_URL}/finance/overview?${params}`, {
+    headers: await authHeaders({ 'x-finance-session': sessionToken }),
+  });
+  return { ok: res.ok, status: res.status, data: await res.json() };
+}
+
 export async function getFinanceCommissions(sessionToken, { startDate, endDate, branch }) {
   const params = new URLSearchParams({ startDate, endDate, branch: branch || 'all' });
   const res = await fetch(`${BASE_URL}/finance/commissions?${params}`, {

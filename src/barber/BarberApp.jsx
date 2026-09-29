@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase/config';
-import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { getPeriodRange, getMonthGridRange } from '../shared/appointments/dateRanges';
 import { signOut } from 'firebase/auth';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { LogOut } from 'lucide-react';
@@ -306,22 +307,29 @@ useEffect(() => {
   return () => unsub();
 }, [negocioId, barberUser]);
 
-// --- CITAS DEL NEGOCIO (TIEMPO REAL) ---
+// --- RANGO DE FECHAS QUE MUESTRA LA PANTALLA (Día / Semana / Mes / Año) ---
+// Mes incluye las 42 celdas de la grilla (días de meses vecinos). Solo se descarga este rango.
+const barberRange = useMemo(() => {
+  if (selectedRange === "Mes") return getMonthGridRange(selectedDate);
+  const view = selectedRange === "Semana" ? 'semana' : selectedRange === "Año" ? 'año' : 'dia';
+  return getPeriodRange(selectedDate, view);
+}, [selectedRange, selectedDate]);
+const rangeStart = barberRange.start;
+const rangeEnd = barberRange.end;
+
+// --- CITAS DEL NEGOCIO (TIEMPO REAL, SOLO EL PERÍODO VISIBLE) ---
+// Un solo listener compartido por Agenda, Comisiones y Rendimiento (mismo selector y mismo rango).
+// En Perfil no se usa: no hay listener de citas.
+const citasTabActive = activeTab === "agenda" || activeTab === "comisiones" || activeTab === "rendimiento";
 useEffect(() => {
-  if (!negocioId) return;
-  const ref = collection(db, 'negocios', negocioId, 'citas');
-  const unsub = onSnapshot(ref, (snap) => {
+  if (!negocioId || !citasTabActive) return;
+  const q = query(
+    collection(db, 'negocios', negocioId, 'citas'),
+    where('date', '>=', rangeStart),
+    where('date', '<=', rangeEnd)
+  );
+  const unsub = onSnapshot(q, (snap) => {
     console.log('[BARBER] citas recibidas:', snap.docs.length);
-    snap.docs.forEach(d => {
-      const data = d.data();
-      console.log('[BARBER] cita', d.id, {
-        professionalId: data.professionalId,
-        barberId: data.barberId,
-        barber: data.barber,
-        date: data.date,
-        status: data.status
-      });
-    });
     setAppointments(snap.docs.map(d => {
       const data = d.data();
       return {
@@ -333,17 +341,31 @@ useEffect(() => {
     }));
   });
   return () => unsub();
-}, [negocioId]);
+}, [negocioId, citasTabActive, rangeStart, rangeEnd]);
 
-// --- HORARIOS BLOQUEADOS DEL NEGOCIO (TIEMPO REAL) ---
+// --- HORARIOS BLOQUEADOS DEL NEGOCIO (TIEMPO REAL, MISMO RANGO) ---
+// Solo la Agenda usa los bloqueos (grilla, crear cita, bloquear horario).
+const bloqueosTabActive = activeTab === "agenda";
 useEffect(() => {
-  if (!negocioId) return;
-  const ref = collection(db, 'negocios', negocioId, 'horariosBloqueados');
-  const unsub = onSnapshot(ref, (snap) => {
+  if (!negocioId || !bloqueosTabActive) return;
+  const q = query(
+    collection(db, 'negocios', negocioId, 'horariosBloqueados'),
+    where('date', '>=', rangeStart),
+    where('date', '<=', rangeEnd)
+  );
+  const unsub = onSnapshot(q, (snap) => {
     setBlockedSlots(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   });
   return () => unsub();
-}, [negocioId]);
+}, [negocioId, bloqueosTabActive, rangeStart, rangeEnd]);
+
+// Para validar una fecha fuera del período cargado (ej. el modal permite elegir otra fecha):
+// se consulta solo esa fecha.
+const isDateLoaded = (date) => !!date && date >= rangeStart && date <= rangeEnd;
+const fetchByDate = async (subcollection, date) => {
+  const snap = await getDocs(query(collection(db, 'negocios', negocioId, subcollection), where('date', '==', date)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
 
   // --- AGENDAR NUEVA CITA ---
   const handleAddAppointment = async (e) => {
@@ -384,6 +406,7 @@ useEffect(() => {
       return;
     }
 
+    const nowIso = new Date().toISOString();
     const newAppt = {
       barber: activeBarber.id,
       professionalId: activeBarber.id,
@@ -398,7 +421,8 @@ useEffect(() => {
       status: "confirmed",
       commissionPaid: false,
       paymentMethod: newPaymentMethod,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
       notes: newNotes,
       branch: activeBarber.branch,
       bookedBy: 'barber'
@@ -490,7 +514,16 @@ useEffect(() => {
     }
 
     // Validar superposición con reservas existentes
-    const conflictAppt = appointments.find(appt => {
+    let citasDeLaFecha = appointments;
+    if (!isDateLoaded(blockDate)) {
+      try {
+        citasDeLaFecha = await fetchByDate('citas', blockDate);
+      } catch (err) {
+        triggerToast("No se pudo verificar las citas de esa fecha: " + err.message, "error");
+        return;
+      }
+    }
+    const conflictAppt = citasDeLaFecha.find(appt => {
       if (appt.barber !== activeBarber.id || appt.date !== blockDate || appt.status === "Cancelado") return false;
       const apptMin = convertTimeToMinutes(appt.time);
       return apptMin >= startMin && apptMin < endMin;
@@ -535,7 +568,7 @@ useEffect(() => {
   const updateStatus = async (apptId, nextStatus) => {
     try {
       const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
-      await updateDoc(docRef, { status: nextStatus });
+      await updateDoc(docRef, { status: nextStatus, updatedAt: new Date().toISOString() });
       triggerToast(`Cita marcada como ${normalizeStatus(nextStatus)}`);
     } catch (err) {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
@@ -562,7 +595,7 @@ useEffect(() => {
       return;
     }
     try {
-      await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), payload);
+      await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, updatedAt: new Date().toISOString() });
       triggerToast('Cita actualizada');
       notify(
         payload.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
@@ -578,7 +611,16 @@ useEffect(() => {
   };
 
   const handleBarberCreateReservation = async (draft) => {
-    const blockConflict = blockedSlots.find(block => {
+    let bloqueosDeLaFecha = blockedSlots;
+    if (!isDateLoaded(draft.date)) {
+      try {
+        bloqueosDeLaFecha = await fetchByDate('horariosBloqueados', draft.date);
+      } catch (err) {
+        triggerToast('No se pudo verificar los bloqueos de esa fecha: ' + err.message, 'error');
+        return;
+      }
+    }
+    const blockConflict = bloqueosDeLaFecha.find(block => {
       if (block.barber !== activeBarber.id || block.date !== draft.date) return false;
       const apptMin = convertTimeToMinutes(draft.time);
       const startMin = convertTimeToMinutes(block.startTime);
@@ -591,6 +633,7 @@ useEffect(() => {
       return;
     }
 
+    const nowIso = new Date().toISOString();
     const newAppt = {
       barber: activeBarber.id,
       professionalId: activeBarber.id,
@@ -607,7 +650,8 @@ useEffect(() => {
       status: 'confirmed',
       commissionPaid: false,
       paymentMethod: draft.paymentMethod,
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
       notes: draft.notes || '',
       branch: activeBarber.branch,
       bookedBy: 'barber',

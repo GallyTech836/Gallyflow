@@ -3,7 +3,7 @@ import { db } from '../config/firebase.js';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { hashPin, verifyPin } from '../services/finance/pin.js';
 import { createSessionToken, verifySessionToken } from '../services/finance/financeSession.js';
-import { getFinanceSummary, getComisionesPorProfesional, getDetalleComisionesBarbero, registrarPagoComision } from '../services/finance/financeData.js';
+import { getFinanceSummary, getFinanceOverview, getComisionesPorProfesional, getDetalleComisionesBarbero, registrarPagoComision } from '../services/finance/financeData.js';
 
 const router = Router();
 
@@ -61,6 +61,16 @@ router.get('/finance/summary', requireAuth, requireFinanceSession, async (req, r
   try {
     const { startDate, endDate, branch } = req.query;
     const data = await getFinanceSummary(req.negocioId, { startDate, endDate, branch });
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/finance/overview', requireAuth, requireFinanceSession, async (req, res) => {
+  try {
+    const { startDate, endDate, branch } = req.query;
+    const data = await getFinanceOverview(req.negocioId, { startDate, endDate, branch });
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

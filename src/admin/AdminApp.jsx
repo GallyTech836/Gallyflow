@@ -4,7 +4,8 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContai
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
 import { auth, db } from '../firebase/config';
-import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
+import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
 import { useNegocio } from '../firebase/useNegocio';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPlan/useNegocioPlan';
@@ -295,24 +296,9 @@ const [saleForm, setSaleForm] = useState({
     });
     return () => unsub();
   }, [negocioId]);
+  // citas / horariosBloqueados se cargan según el selector y la pestaña activa (ver "CONSULTAS DE citas" más abajo)
   const [reservations, setReservations] = useState([]);
-  useEffect(() => {
-    if (!negocioId) return;
-    const ref = collection(db, 'negocios', negocioId, 'citas');
-    const unsub = onSnapshot(ref, (snap) => {
-      setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, [negocioId]);
   const [blockouts, setBlockouts] = useState([]);
-  useEffect(() => {
-    if (!negocioId) return;
-    const ref = collection(db, 'negocios', negocioId, 'horariosBloqueados');
-    const unsub = onSnapshot(ref, (snap) => {
-      setBlockouts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, [negocioId]);
 
 // Antes eran flags fijos (apagados a mano para todos). Ahora se leen
 // del plan real asignado al negocio — cada uno ve solo lo que su plan
@@ -733,6 +719,212 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     return () => clearInterval(interval);
   }, []);
 
+  /* ==========================================
+     CONSULTAS DE citas / horariosBloqueados
+     El selector Día/Semana/Mes/Año define el período. Solo se lee lo que
+     la pestaña activa necesita:
+       - Dashboard, Agenda, Comisiones y Analítica comparten UN listener con
+         el período exacto (sin período anterior).
+       - Dashboard además: suma de ventas del período anterior (agregación),
+         próxima cita y actividad reciente (independientes del selector).
+       - Agenda en vista Año: solo contadores por mes (count), sin descargar docs.
+       - Otras pestañas: sin listener de citas (solo un contador liviano
+         de pendientes para el badge del menú).
+     ========================================== */
+  const CITAS_TABS = ['dashboard', 'agenda', 'commissions', 'reports'];
+  const isCitasTab = CITAS_TABS.includes(activeTab);
+  const periodRange = useMemo(() => getPeriodRange(selectedDate, agendaView), [selectedDate, agendaView]);
+  const periodStart = periodRange.start;
+  const periodEnd = periodRange.end;
+  const selectedYear = String(selectedDate).slice(0, 4);
+
+  const [yearMonthCounts, setYearMonthCounts] = useState(null);
+  const [yearCountsFailed, setYearCountsFailed] = useState(false);
+  const [citasWriteTick, setCitasWriteTick] = useState(0);
+  const bumpCitasTick = () => setCitasWriteTick(t => t + 1);
+
+  const agendaYearCountsMode = activeTab === 'agenda' && agendaView === 'año' && !yearCountsFailed;
+  const periodDocsActive = isCitasTab && !agendaYearCountsMode;
+
+  // 1) Citas del período seleccionado (listener compartido).
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || !periodDocsActive) return;
+    const q = query(
+      collection(db, 'negocios', negocioId, 'citas'),
+      where('branch', '==', selectedBranch),
+      where('date', '>=', periodStart),
+      where('date', '<=', periodEnd)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (err) => console.error('[citas del período] error de consulta:', err)
+    );
+    return () => unsub();
+  }, [negocioId, selectedBranch, periodDocsActive, periodStart, periodEnd]);
+
+  // 2) Bloqueos: solo se muestran en la Agenda vista Día, y solo de ese día.
+  const blockoutsActive = activeTab === 'agenda' && agendaView === 'dia';
+  useEffect(() => {
+    if (!negocioId || !blockoutsActive) return;
+    const q = query(
+      collection(db, 'negocios', negocioId, 'horariosBloqueados'),
+      where('date', '==', selectedDate)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setBlockouts(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (err) => console.error('[horariosBloqueados] error de consulta:', err)
+    );
+    return () => unsub();
+  }, [negocioId, blockoutsActive, selectedDate]);
+
+  // 3) Badge de pendientes del menú: cuando NO hay listener del período, contador liviano
+  //    (todas las condiciones son de igualdad: no requiere índice compuesto).
+  const [pendingBadgeDocsCount, setPendingBadgeDocsCount] = useState(0);
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || periodDocsActive) return;
+    const q = query(
+      collection(db, 'negocios', negocioId, 'citas'),
+      where('branch', '==', selectedBranch),
+      where('date', '==', selectedDate),
+      where('status', '==', 'pending')
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setPendingBadgeDocsCount(snap.size),
+      (err) => console.error('[badge pendientes] error de consulta:', err)
+    );
+    return () => unsub();
+  }, [negocioId, selectedBranch, selectedDate, periodDocsActive]);
+
+  // 4) Dashboard: ventas del período anterior (solo la suma, no los documentos).
+  const [prevRevenue, setPrevRevenue] = useState(null);
+  const prevRange = useMemo(() => getPreviousPeriodRange(selectedDate, agendaView), [selectedDate, agendaView]);
+  const prevStart = prevRange.start;
+  const prevEnd = prevRange.end;
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || activeTab !== 'dashboard') return;
+    let cancelled = false;
+    const citasRef = collection(db, 'negocios', negocioId, 'citas');
+    (async () => {
+      try {
+        const q = query(
+          citasRef,
+          where('branch', '==', selectedBranch),
+          where('status', '==', 'completed'),
+          where('date', '>=', prevStart),
+          where('date', '<=', prevEnd)
+        );
+        const snap = await getAggregateFromServer(q, { total: sum('price') });
+        if (!cancelled) setPrevRevenue(Number(snap.data().total) || 0);
+      } catch (err) {
+        // Sin el índice (branch, status, date) la agregación falla: se lee el período con el
+        // índice (branch, date) para que la comparación siga funcionando.
+        console.warn('[Dashboard] agregación de ventas no disponible, usando lectura de documentos:', err?.message || err);
+        try {
+          const snap = await getDocs(query(
+            citasRef,
+            where('branch', '==', selectedBranch),
+            where('date', '>=', prevStart),
+            where('date', '<=', prevEnd)
+          ));
+          const total = snap.docs
+            .map(d => d.data())
+            .filter(r => r?.status === 'completed')
+            .reduce((acc, r) => acc + Number(r?.price || 0), 0);
+          if (!cancelled) setPrevRevenue(total);
+        } catch (err2) {
+          console.error('[Dashboard] no se pudo calcular el período anterior:', err2);
+          if (!cancelled) setPrevRevenue(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [negocioId, selectedBranch, activeTab, prevStart, prevEnd]);
+
+  // 5) Dashboard: "Próxima cita" (independiente del selector). Una sola cita: la primera
+  //    activa (pendiente / confirmada / en atención) desde ahora, ordenada por fecha y hora.
+  const getNowCursor = () => {
+    const n = new Date();
+    return { date: formatYMD(n), time: `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}` };
+  };
+  const [nextCursor, setNextCursor] = useState(getNowCursor);
+  const [nextCita, setNextCita] = useState(null);
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || activeTab !== 'dashboard') return;
+    const q = query(
+      collection(db, 'negocios', negocioId, 'citas'),
+      where('branch', '==', selectedBranch),
+      where('status', 'in', ['pending', 'confirmed', 'in-process']),
+      orderBy('date', 'asc'),
+      orderBy('time', 'asc'),
+      startAt(nextCursor.date, nextCursor.time),
+      limit(1)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setNextCita(snap.docs[0] ? { id: snap.docs[0].id, ...snap.docs[0].data() } : null),
+      (err) => { console.error('[próxima cita] error de consulta:', err); setNextCita(null); }
+    );
+    return () => unsub();
+  }, [negocioId, selectedBranch, activeTab, nextCursor.date, nextCursor.time]);
+
+  // Cuando la próxima cita ya pasó, se mueve el cursor a "ahora" y la consulta trae la siguiente.
+  useEffect(() => {
+    if (!nextCita) return;
+    const now = getNowCursor();
+    const isPast = (nextCita.date || '') < now.date || ((nextCita.date || '') === now.date && (nextCita.time || '') < now.time);
+    if (isPast) setNextCursor(now);
+  }, [nextCita, currentTimeMinutes]);
+
+  // 6) Dashboard: "Actividad reciente" (independiente del selector). Últimas 6 por updatedAt.
+  const [recentActivityDocs, setRecentActivityDocs] = useState([]);
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || activeTab !== 'dashboard') return;
+    const q = query(
+      collection(db, 'negocios', negocioId, 'citas'),
+      where('branch', '==', selectedBranch),
+      orderBy('updatedAt', 'desc'),
+      limit(6)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setRecentActivityDocs(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (err) => { console.error('[actividad reciente] error de consulta:', err); setRecentActivityDocs([]); }
+    );
+    return () => unsub();
+  }, [negocioId, selectedBranch, activeTab]);
+
+  // 7) Agenda vista Año: solo el contador de reservas por mes (12 count, sin descargar documentos).
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || !agendaYearCountsMode) return;
+    let cancelled = false;
+    const citasRef = collection(db, 'negocios', negocioId, 'citas');
+    Promise.all(Array.from({ length: 12 }, (_, i) => {
+      const mm = String(i + 1).padStart(2, '0');
+      return getCountFromServer(query(
+        citasRef,
+        where('branch', '==', selectedBranch),
+        where('date', '>=', `${selectedYear}-${mm}-01`),
+        where('date', '<=', `${selectedYear}-${mm}-31`)
+      ));
+    }))
+      .then((snaps) => { if (!cancelled) setYearMonthCounts(snaps.map(sn => sn.data().count)); })
+      .catch((err) => {
+        // Si el conteo falla (p. ej. falta el índice), la vista Año vuelve a usar el listener del período.
+        console.warn('[Agenda año] conteo no disponible, usando documentos:', err?.message || err);
+        if (!cancelled) setYearCountsFailed(true);
+      });
+    return () => { cancelled = true; };
+  }, [negocioId, selectedBranch, agendaYearCountsMode, selectedYear, citasWriteTick]);
+
+  // Busca una cita en los conjuntos cargados.
+  const findCitaById = (id) =>
+    reservations.find(r => r.id === id) ||
+    (nextCita && nextCita.id === id ? nextCita : null) ||
+    recentActivityDocs.find(r => r.id === id);
+
   const handlePrevPeriod = () => {
     const date = parseDate(selectedDate);
     if (agendaView === 'dia') {
@@ -895,6 +1087,11 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     return branchReservations.filter(res => res?.date === selectedDate);
   }, [branchReservations, selectedDate]);
 
+  // Badge de pendientes del menú: del listener del período si está activo; si no, del contador liviano.
+  const pendingBadgeCount = periodDocsActive
+    ? (dayReservations || []).filter(r => r?.status === 'pending').length
+    : pendingBadgeDocsCount;
+
   const rangeReservations = useMemo(() => {
     if (!Array.isArray(branchReservations)) return [];
     return branchReservations.filter(res => isDateInSelectedRange(res?.date));
@@ -993,10 +1190,6 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   // inmediatamente anterior, tomada de branchReservations (no de rangeReservations,
   // que ya está acotado al período actual).
   const salesComparison = useMemo(() => {
-    const prevRefDate = getPreviousPeriodRefDate(selectedDate, agendaView);
-    const prevRevenue = (branchReservations || [])
-      .filter(r => r?.status === 'completed' && isDateInRangeFor(r?.date, prevRefDate, agendaView))
-      .reduce((sum, r) => sum + Number(r?.price || 0), 0);
     const currentRevenue = rangeMetrics?.totalRevenue || 0;
 
     if (!prevRevenue) {
@@ -1004,7 +1197,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     }
     const percent = ((currentRevenue - prevRevenue) / prevRevenue) * 100;
     return { comparable: true, percent };
-  }, [branchReservations, selectedDate, agendaView, rangeMetrics]);
+  }, [prevRevenue, rangeMetrics]);
 
   // Horario real de atención para una fecha dada: se deriva de la disponibilidad
   // ('Disponible') que cada barbero de la sucursal ya tiene configurada por día
@@ -1104,20 +1297,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
   // "Próxima cita": operativa y en tiempo real, independiente del selector de período.
   // Se recalcula cada minuto vía currentTimeMinutes (ya existente para otros usos).
-  const nextAppointment = useMemo(() => {
-    const now = new Date();
-    const upcoming = (branchReservations || [])
-      .filter(r => r?.date && r?.status !== 'completed' && r?.status !== 'cancelled')
-      .map(r => {
-        const dt = parseDate(r.date);
-        const [hh, mm] = (r?.time || '00:00').split(':').map(Number);
-        dt.setHours(hh || 0, mm || 0, 0, 0);
-        return { ...r, __dt: dt };
-      })
-      .filter(r => r.__dt.getTime() >= now.getTime())
-      .sort((a, b) => a.__dt - b.__dt);
-    return upcoming[0] || null;
-  }, [branchReservations, currentTimeMinutes]);
+  const nextAppointment = nextCita;
 
   // "Pagos del período": sí respeta el selector Día/Semana/Mes/Año.
   // Se agrupa por paymentMethod tal cual existe en las citas reales (Efectivo/Tarjeta/Transferencia).
@@ -1150,7 +1330,8 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       confirmed: 'cita confirmada',
       pending: 'nueva reserva'
     };
-    return (branchReservations || [])
+    return (recentActivityDocs || [])
+      .filter(r => r?.branch === selectedBranch)
       .map(r => {
         const isNew = !!r?.createdAt && r.createdAt === r.updatedAt;
         const label = isNew ? 'nueva reserva' : (STATUS_ACTIVITY_LABELS[r?.status] || 'cita actualizada');
@@ -1159,7 +1340,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       .filter(ev => !!ev.ts)
       .sort((a, b) => new Date(b.ts) - new Date(a.ts))
       .slice(0, 6);
-  }, [branchReservations]);
+  }, [recentActivityDocs, selectedBranch]);
 
   const formatActivityTime = (ts) => {
     try {
@@ -1267,7 +1448,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     return `${Number(val || 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} Bs`;
   };
 
-  const checkConflicts = (ignoreId, barberId, date, startTime, endTime, isBlockout = false, isClientRole = false) => {
+  const checkConflicts = async (ignoreId, barberId, date, startTime, endTime, isBlockout = false, isClientRole = false) => {
     if (!barberId || barberId === 'pending') return { isValid: true };
 
     const startVal = timeToMin(startTime);
@@ -1290,7 +1471,22 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       }
     }
 
-    const activeRes = (reservations || []).filter(r => 
+    // Se consulta solo esa fecha (todas las sucursales, para no perder choques de un
+    // profesional con citas etiquetadas en otra sucursal).
+    let citasDeLaFecha = [];
+    let bloqueosDeLaFecha = [];
+    try {
+      const [snapC, snapB] = await Promise.all([
+        getDocs(query(collection(db, 'negocios', negocioId, 'citas'), where('date', '==', date))),
+        getDocs(query(collection(db, 'negocios', negocioId, 'horariosBloqueados'), where('date', '==', date)))
+      ]);
+      citasDeLaFecha = snapC.docs.map(d => ({ id: d.id, ...d.data() }));
+      bloqueosDeLaFecha = snapB.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (err) {
+      return { isValid: false, message: 'No se pudo verificar la disponibilidad: ' + err.message };
+    }
+
+    const activeRes = citasDeLaFecha.filter(r => 
       r?.id !== ignoreId && 
       r?.date === date && 
       (r?.professionalId === barberId || r?.barberId === barberId) && 
@@ -1307,7 +1503,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       }
     }
 
-    const activeBl = (blockouts || []).filter(b => 
+    const activeBl = bloqueosDeLaFecha.filter(b => 
       b?.id !== ignoreId && 
       b?.date === date && 
       b?.barberId === barberId
@@ -1333,7 +1529,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     const endTimeStr = minToTime(timeToMin(newReservation.time) + duration);
 
     const isClientRole = false;
-    const check = checkConflicts(null, targetProfessionalId, newReservation.date, newReservation.time, endTimeStr, false, isClientRole);
+    const check = await checkConflicts(null, targetProfessionalId, newReservation.date, newReservation.time, endTimeStr, false, isClientRole);
     
     if (!check.isValid) {
       triggerToast(check.message, 'error');
@@ -1365,6 +1561,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     const currentBranchObj = branches.find(b => b.name === selectedBranch) || branches[0];
 
     /* MODELADO COMPLETO DEL DOCUMENTO DE RESERVA PARA FIRESTORE */
+    const nowIso = new Date().toISOString();
     const reservationObj = {
       clientId: clientObj.id,
       clientName: clientObj.name,
@@ -1387,13 +1584,14 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       clientPhone: newReservation.phone || clientObj.phone || '',
       countryCode: detectedCountry ? detectedCountry.code : '+591',
       notes: newReservation.notes || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
 
     let savedReservationId = null;
     try {
       const docRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
+      bumpCitasTick();
       savedReservationId = docRef.id;
       triggerToast('¡Cita agendada con éxito!');
       notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
@@ -1452,7 +1650,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
     const targetProfessionalId = draft.professionalId || 'pending';
     const endTimeStr = minToTime(timeToMin(draft.time) + totalDuration);
-    const check = checkConflicts(null, targetProfessionalId, draft.date, draft.time, endTimeStr, false, false);
+    const check = await checkConflicts(null, targetProfessionalId, draft.date, draft.time, endTimeStr, false, false);
     if (!check.isValid) { triggerToast(check.message, 'error'); return; }
 
     const phoneId = (draft.phone || 'sin-telefono').replace(/[^0-9]/g, '') || 'sin-telefono';
@@ -1465,6 +1663,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
     const currentBranchObj = branches.find(b => b.name === selectedBranch) || branches[0];
 
+    const nowIso = new Date().toISOString();
     const reservationObj = {
       clientId: clientObj.id, clientName: clientObj.name,
       professionalId: targetProfessionalId, barberId: targetProfessionalId,
@@ -1481,11 +1680,12 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       branchId: currentBranchObj?.id || 'br1',
       clientPhone: draft.phone || clientObj.phone || '',
       countryCode: detectPhoneCountry(draft.phone)?.code || '+591',
-      notes: draft.notes || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      notes: draft.notes || '', createdAt: nowIso, updatedAt: nowIso
     };
 
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
+      bumpCitasTick();
       notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) { triggerToast('Error al guardar: ' + err.message, 'error'); return; }
 
@@ -1505,7 +1705,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     const endTimeStr = minToTime(timeToMin(editingReservation.time) + duration);
   
     const isClientRole = false;
-    const check = checkConflicts(editingReservation.id, targetProfessionalId, editingReservation.date, editingReservation.time, endTimeStr, false, isClientRole);
+    const check = await checkConflicts(editingReservation.id, targetProfessionalId, editingReservation.date, editingReservation.time, endTimeStr, false, isClientRole);
   
     if (!check.isValid) {
       triggerToast(check.message, 'error');
@@ -1541,6 +1741,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', editingReservation.id), updatedRecord);
+      bumpCitasTick();
       notify(
         editingReservation.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
@@ -1596,7 +1797,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
   const handleCreateBlockout = async (e) => {
     if (e) e.preventDefault();
-    const check = checkConflicts(null, blockoutForm.barberId, blockoutForm.date, blockoutForm.startTime, blockoutForm.endTime, true, false);
+    const check = await checkConflicts(null, blockoutForm.barberId, blockoutForm.date, blockoutForm.startTime, blockoutForm.endTime, true, false);
     if (!check.isValid) {
       triggerToast(check.message, 'error');
       return;
@@ -1632,8 +1833,8 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   const handleUpdateStatus = async (id, status) => {
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), { status, updatedAt: new Date().toISOString() });
-      await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), { status, updatedAt: new Date().toISOString() });
-      const targetReservation = reservations.find(r => r.id === id);
+      bumpCitasTick();
+      const targetReservation = findCitaById(id);
       notify(
         status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
@@ -1648,7 +1849,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
     /* SIMULACIÓN DE EVENTO POST-SERVICIO (THANK YOU) */
     if (status === 'completed' && whatsappSettings.autoThankYouEnabled) {
-      const updated = reservations.find(r => r.id === id);
+      const updated = findCitaById(id);
       const newLog = {
         id: 'log' + (automationLogs.length + 1),
         reservationId: id,
@@ -1665,9 +1866,10 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
   };
 
   const handleDeleteReservation = async (id) => {
-    const targetReservation = reservations.find(r => r.id === id);
+    const targetReservation = findCitaById(id);
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', id));
+      bumpCitasTick();
       triggerToast('Reserva eliminada con éxito.');
       notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: id, clientName: targetReservation?.clientName, time: targetReservation?.time }, user?.uid, targetReservation?.professionalId || targetReservation?.barberId);
     } catch (err) {
@@ -2199,9 +2401,9 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
             {!isSidebarCollapsed && (
               <>
                 <span className="truncate">Agenda del Staff</span>
-                {(dayReservations || []).filter(r => r?.status === 'pending').length > 0 && (
+                {pendingBadgeCount > 0 && (
                   <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-nexus-primary text-white rounded-full">
-                    {(dayReservations || []).filter(r => r?.status === 'pending').length}
+                    {pendingBadgeCount}
                   </span>
                 )}
               </>
@@ -2947,7 +3149,9 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
                   {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, idx) => {
                     const yearVal = parseDate(selectedDate).getFullYear();
                     const monthId = (idx + 1).toString().padStart(2, '0');
-                    const monthRes = (branchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`));
+                    const monthCount = agendaYearCountsMode
+                      ? (yearMonthCounts?.[idx] ?? 0)
+                      : (branchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`)).length;
                     return (
                       <div key={m} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 text-center hover:border-nexus-primary/40 transition-colors cursor-pointer" onClick={() => {
                         const targetDate = `${yearVal}-${monthId}-01`;
@@ -2956,7 +3160,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
                       }}>
                         <h4 className="text-xs font-black text-nexus-text uppercase mb-2 tracking-wider font-mono">{m}</h4>
                         <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl inline-block mt-1">
-                          <span className="text-base font-black text-nexus-primary font-mono block">{monthRes.length}</span>
+                          <span className="text-base font-black text-nexus-primary font-mono block">{monthCount}</span>
                           <span className="text-[8px] text-nexus-text-muted uppercase tracking-widest block mt-0.5 font-mono font-bold">Reservas</span>
                         </div>
                       </div>

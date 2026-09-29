@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc, collection, onSnapshot, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, addDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Sparkles, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
@@ -192,25 +192,46 @@ export default function App({ negocioSlug } = {}) {
   }, [negocioId]);
 
   // === CITAS EXISTENTES DEL NEGOCIO (para calcular disponibilidad real) ===
+  // Solo se consultan las citas y bloqueos de la fecha elegida (selectedDate).
+  // citasFecha / bloqueosFecha indican de qué fecha son los datos cargados, para no
+  // calcular horarios con datos de otro día mientras llega la consulta nueva.
   const [citasNegocio, setCitasNegocio] = useState([]);
+  const [citasFecha, setCitasFecha] = useState(null);
   useEffect(() => {
-    if (!negocioId) return;
-    const ref = collection(db, 'negocios', negocioId, 'citas');
-    const unsub = onSnapshot(ref, (snap) => {
+    if (!negocioId || !selectedDate) {
+      setCitasNegocio([]);
+      setCitasFecha(null);
+      return;
+    }
+    const q = query(
+      collection(db, 'negocios', negocioId, 'citas'),
+      where('date', '==', selectedDate)
+    );
+    const unsub = onSnapshot(q, (snap) => {
       setCitasNegocio(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCitasFecha(selectedDate);
     });
     return () => unsub();
-  }, [negocioId]);
+  }, [negocioId, selectedDate]);
 
   const [blockouts, setBlockouts] = useState([]);
+  const [bloqueosFecha, setBloqueosFecha] = useState(null);
   useEffect(() => {
-    if (!negocioId) return;
-    const ref = collection(db, 'negocios', negocioId, 'horariosBloqueados');
-    const unsub = onSnapshot(ref, (snap) => {
+    if (!negocioId || !selectedDate) {
+      setBlockouts([]);
+      setBloqueosFecha(null);
+      return;
+    }
+    const q = query(
+      collection(db, 'negocios', negocioId, 'horariosBloqueados'),
+      where('date', '==', selectedDate)
+    );
+    const unsub = onSnapshot(q, (snap) => {
       setBlockouts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setBloqueosFecha(selectedDate);
     });
     return () => unsub();
-  }, [negocioId]);
+  }, [negocioId, selectedDate]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -255,6 +276,8 @@ export default function App({ negocioSlug } = {}) {
       return DEFAULT_HOURS.filter(cumpleAnticipacion);
     }
     if (!selectedDate) return [];
+    // Espera a tener las citas y bloqueos de ESTA fecha antes de mostrar horarios libres.
+    if (citasFecha !== selectedDate || bloqueosFecha !== selectedDate) return [];
 
     const date = new Date(selectedDate + "T12:00:00");
     const dayName = DAY_NAMES_MON_FIRST[(date.getDay() + 6) % 7];
@@ -309,7 +332,7 @@ export default function App({ negocioSlug } = {}) {
       hours.push(hourStr);
     }
     return hours;
-  }, [selectedBarber, selectedDate, selectedServices, citasNegocio, blockouts]);
+  }, [selectedBarber, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha]);
 
   const calculateTotal = useMemo(() => {
     return selectedServices.reduce((acc, curr) => {
@@ -416,6 +439,7 @@ export default function App({ negocioSlug } = {}) {
       // compatibilidad (apuntando al primer servicio / totales), para que
       // el código que todavía no fue actualizado (reportes, agenda) siga
       // funcionando sin romperse mientras se completan las fases siguientes.
+      const nowIso = new Date().toISOString();
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), {
         clientName: clientName.trim(),
         clientPhone: clientPhone.trim() || 'No especificado',
@@ -433,7 +457,8 @@ export default function App({ negocioSlug } = {}) {
         bookedBy: 'client',
         notes: '',
         branch: selectedBarber?.branch || selectedBranch?.name || '',
-        createdAt: new Date().toISOString()
+        createdAt: nowIso,
+        updatedAt: nowIso
       });
       notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, professionalId);
       // Sin "await" a propósito: la confirmación visual (SuccessStep) no
