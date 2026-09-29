@@ -772,7 +772,7 @@ const fetchByDate = async (subcollection, date) => {
     const list = Array(12).fill(0).map((_, i) => ({ monthIndex: i, count: 0 }));
     
     appointments.forEach(appt => {
-      if (appt.barber === activeBarber.id) {
+      if (matchesBarber(appt, activeBarber.id) && appt.status === STATUS.COMPLETED) {
         const d = new Date(appt.date + "T00:00:00");
         if (d.getFullYear() === targetYear) {
           list[d.getMonth()].count += 1;
