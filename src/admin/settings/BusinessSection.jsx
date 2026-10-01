@@ -227,88 +227,124 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
         </div>
       </Card>
 
-      {/* ── Anticipación para reservar ───────────────────────────── */}
-      <Card>
-        <h3 className="text-sm font-bold text-nexus-text mb-1">Anticipación para reservar</h3>
-        <p className="text-[11px] text-nexus-text-muted mb-3">
-          Tiempo mínimo antes de una cita para que un cliente pueda reservarla desde el link
-          público. 0 = sin restricción (puede reservar para dentro de un momento).
-        </p>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            min="0"
-            step="15"
-            value={form.minAdvanceMinutes}
-            onChange={(e) => {
-              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-              setForm((prev) => ({ ...prev, minAdvanceMinutes: val }));
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+  {/* ── Anticipación para reservar ───────────────────────────── */}
+  <Card>
+    <h3 className="text-sm font-bold text-nexus-text mb-1">
+      Anticipación para reservar
+    </h3>
+
+    <p className="text-[11px] text-nexus-text-muted mb-3">
+      Tiempo mínimo antes de una cita para que un cliente pueda reservarla desde el link
+      público. 0 = sin restricción (puede reservar para dentro de un momento).
+    </p>
+
+    <div className="flex items-center gap-3">
+      <input
+        type="number"
+        min="0"
+        step="15"
+        value={form.minAdvanceMinutes}
+        onChange={(e) => {
+          const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+          setForm((prev) => ({ ...prev, minAdvanceMinutes: val }));
+          setSaved(false);
+        }}
+        className="w-28 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-xs font-mono text-nexus-text outline-none focus:border-nexus-primary/70"
+      />
+
+      <span className="text-[11px] text-nexus-text-muted">
+        minutos de anticipación mínima
+      </span>
+    </div>
+  </Card>
+
+  {/* ── Métodos de pago ───────────────────────────────────────── */}
+  <Card>
+    <div className="flex items-center gap-2.5 mb-1">
+      <Wallet className="w-4 h-4 text-nexus-primary" />
+
+      <h3 className="text-sm font-bold text-nexus-text">
+        Métodos de pago
+      </h3>
+    </div>
+
+    <p className="text-[11px] text-nexus-text-muted mb-3">
+      Opciones que aparecen al marcar una cita como "Completada" en Admin y Barber,
+      para registrar cómo pagó el cliente.
+    </p>
+
+    <div className="flex flex-wrap gap-2 mb-3">
+      {form.paymentMethods.map((method, idx) => (
+        <span
+          key={method}
+          className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-nexus-background border border-nexus-border text-[11px] font-semibold text-nexus-text"
+        >
+          {method}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (form.paymentMethods.length <= 1) return;
+
+              setForm((prev) => ({
+                ...prev,
+                paymentMethods: prev.paymentMethods.filter((_, i) => i !== idx)
+              }));
+
               setSaved(false);
             }}
-            className="w-28 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-xs font-mono text-nexus-text outline-none focus:border-nexus-primary/70"
-          />
-          <span className="text-[11px] text-nexus-text-muted">minutos de anticipación mínima</span>
-        </div>
-      </Card>
-
-      {/* ── Métodos de pago ───────────────────────────────────────── */}
-      <Card>
-        <div className="flex items-center gap-2.5 mb-1">
-          <Wallet className="w-4 h-4 text-nexus-primary" />
-          <h3 className="text-sm font-bold text-nexus-text">Métodos de pago</h3>
-        </div>
-        <p className="text-[11px] text-nexus-text-muted mb-3">
-          Opciones que aparecen al marcar una cita como "Completada" en Admin y Barber, para
-          registrar cómo pagó el cliente.
-        </p>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {form.paymentMethods.map((method, idx) => (
-            <span
-              key={method}
-              className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-nexus-background border border-nexus-border text-[11px] font-semibold text-nexus-text"
-            >
-              {method}
-              <button
-                type="button"
-                onClick={() => {
-                  if (form.paymentMethods.length <= 1) return;
-                  setForm((prev) => ({ ...prev, paymentMethods: prev.paymentMethods.filter((_, i) => i !== idx) }));
-                  setSaved(false);
-                }}
-                disabled={form.paymentMethods.length <= 1}
-                className="p-0.5 rounded-full hover:bg-nexus-error-bg hover:text-nexus-error-text disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const value = newMethod.trim();
-            if (!value || form.paymentMethods.some((m) => m.toLowerCase() === value.toLowerCase())) return;
-            setForm((prev) => ({ ...prev, paymentMethods: [...prev.paymentMethods, value] }));
-            setNewMethod('');
-            setSaved(false);
-          }}
-          className="flex items-center gap-2"
-        >
-          <input
-            type="text"
-            value={newMethod}
-            onChange={(e) => setNewMethod(e.target.value)}
-            placeholder="Ej: QR, Pago móvil..."
-            className="flex-1 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary/70"
-          />
-          <button
-            type="submit"
-            className="shrink-0 p-2 rounded-lg bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 hover:opacity-80 cursor-pointer"
+            disabled={form.paymentMethods.length <= 1}
+            className="p-0.5 rounded-full hover:bg-nexus-error-bg hover:text-nexus-error-text disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <X className="w-3 h-3" />
           </button>
-        </form>
-      </Card>
+        </span>
+      ))}
+    </div>
+
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+
+        const value = newMethod.trim();
+
+        if (
+          !value ||
+          form.paymentMethods.some(
+            (m) => m.toLowerCase() === value.toLowerCase()
+          )
+        ) return;
+
+        setForm((prev) => ({
+          ...prev,
+          paymentMethods: [...prev.paymentMethods, value]
+        }));
+
+        setNewMethod('');
+        setSaved(false);
+      }}
+      className="flex items-center gap-2"
+    >
+      <input
+        type="text"
+        value={newMethod}
+        onChange={(e) => setNewMethod(e.target.value)}
+        placeholder="Ej: QR, Pago móvil..."
+        className="flex-1 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary/70"
+      />
+
+      <button
+        type="submit"
+        className="shrink-0 p-2 rounded-lg bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 hover:opacity-80 cursor-pointer"
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </form>
+  </Card>
+
+</div>
 
       {/* ── Guardar (horario + anticipación) ─────────────────────── */}
       <div className="sticky bottom-0 pb-1 pt-2">
