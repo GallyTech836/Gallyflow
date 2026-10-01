@@ -1,23 +1,11 @@
 import React from 'react';
-import ProfileSection from './ProfileSection';
 import BusinessSection from './BusinessSection';
 import BusinessHeroSettings from './business';
-import ScheduleSection from './ScheduleSection';
-import ReservationSection from './ReservationSection';
-import SubscriptionSection from './SubscriptionSection';
-import NotificationsSection from './NotificationsSection';
-import HelpSection from './HelpSection';
 import AutomationSection from './AutomationSection';
 
 const SECTION_COMPONENTS = {
-  profile: ProfileSection,
   business: BusinessSection,
   hero: BusinessHeroSettings,
-  schedule: ScheduleSection,
-  reservations: ReservationSection,
-  subscription: SubscriptionSection,
-  notifications: NotificationsSection,
-  help: HelpSection,
   automation: AutomationSection,
 };
 
@@ -29,14 +17,14 @@ export default function SettingsPage({
   isEditingBusinessName,
   setIsEditingBusinessName,
   onLogout,
-  activeSection = 'profile',
+  activeSection = 'business',
   whatsappSettings,
   setWhatsappSettings,
   automationLogs,
   toggleWhatsAppConnection,
   handleTestTriggerMessage,
 }) {
-  const ActiveComponent = SECTION_COMPONENTS[activeSection] || ProfileSection;
+  const ActiveComponent = SECTION_COMPONENTS[activeSection] || BusinessSection;
 
   return (
     <ActiveComponent

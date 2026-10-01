@@ -1,16 +1,10 @@
 import React from 'react';
-import { User, Building2, LayoutTemplate, CalendarClock, CalendarCheck, CreditCard, Bell, HelpCircle, Bot } from 'lucide-react';
+import { Building2, LayoutTemplate, Bot } from 'lucide-react';
 
 export const SETTINGS_SECTIONS = [
-  { id: 'profile', label: 'Perfil', icon: User },
   { id: 'business', label: 'Negocio', icon: Building2 },
-  { id: 'hero', label: 'Pantalla de Bienvenida', icon: LayoutTemplate },
+  { id: 'hero', label: 'Link Público', icon: LayoutTemplate },
   { id: 'automation', label: 'Automatización', icon: Bot },
-  // { id: 'schedule', label: 'Horarios', icon: CalendarClock },
-  // { id: 'reservations', label: 'Reservas', icon: CalendarCheck },
-  // { id: 'subscription', label: 'Suscripción', icon: CreditCard },
-  // { id: 'notifications', label: 'Notificaciones', icon: Bell },
-  // { id: 'help', label: 'Ayuda', icon: HelpCircle },
 ];
 
 export default function SettingsSidebar({ activeSection, onChangeSection }) {

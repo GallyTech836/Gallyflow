@@ -65,7 +65,7 @@ export default function BusinessHeroSettings({ negocioId }) {
       <SectionCard>
       <div className="flex items-center gap-2.5 mb-0.5">
           <LayoutTemplate className="w-4 h-4 text-nexus-primary shrink-0" />
-          <h3 className="text-sm font-bold text-nexus-text">Pantalla de Bienvenida</h3>
+          <h3 className="text-sm font-bold text-nexus-text">Link Público</h3>
         </div>
         <p className="text-[11px] text-nexus-text-muted ml-6.5">
           Personaliza lo que tus clientes ven antes de reservar una cita.

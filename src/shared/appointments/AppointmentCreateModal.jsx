@@ -75,7 +75,7 @@ export default function AppointmentCreateModal({
     professionalId: fixedProfessional?.id || initialProfessionalId || 'pending',
     date: initialDate,
     time: initialTime,
-    paymentMethod: 'Efectivo',
+    paymentMethod: 'Pendiente',
     notes: '',
     overtime: false,
     serviceDurations: {},
@@ -383,21 +383,6 @@ export default function AppointmentCreateModal({
                 className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none"
               />
             </div>
-          </div>
-
-          {/* ── Método de Pago ───────────────────────────────── */}
-          <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Método de Pago</label>
-            <select
-              value={draft.paymentMethod}
-              onChange={(e) => change('paymentMethod', e.target.value)}
-              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-            >
-              <option value="Efectivo">Efectivo</option>
-              <option value="Tarjeta">Tarjeta</option>
-              <option value="Transferencia">QR / Transferencia</option>
-              <option value="Pendiente">Pendiente</option>
-            </select>
           </div>
 
           {/* ── Notas ────────────────────────────────────────── */}

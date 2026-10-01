@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
@@ -16,6 +16,7 @@ export default function AppointmentManageModal({
   role,
   services = [],
   professionals = [],
+  paymentMethods = ['Efectivo', 'Tarjeta', 'Transferencia'],
   onClose,
   onChangeField,   // (field, value) => void  — actualiza el draft en el padre
   onSubmit,        // (e) => void  — equivalente a handleUpdateReservation
@@ -55,6 +56,12 @@ export default function AppointmentManageModal({
     onChangeField('price', totalPrice);
     onChangeField('duration', totalDuration);
   };
+
+  // Mientras el estatus sea "Completada" y no haya un método de pago real
+  // elegido, no se puede guardar — el botón "Guardar Cambios" queda bloqueado.
+  const isCompleting = appointment.status === 'completed';
+  const hasValidPayment = !!appointment.paymentMethod && appointment.paymentMethod !== 'Pendiente';
+  const paymentMethodMissing = isCompleting && !hasValidPayment;
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -169,6 +176,33 @@ export default function AppointmentManageModal({
             </div>
           </div>
 
+          {/* Solo aparece mientras el estatus elegido es "Completada". Es obligatorio
+              elegir un método real (no "Pendiente") para poder guardar. */}
+          {isCompleting && (
+            <div>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">¿Cómo pagó el cliente? *</label>
+              <select
+                required
+                disabled={!canEdit('paymentMethod')}
+                value={hasValidPayment ? appointment.paymentMethod : ''}
+                onChange={(e) => onChangeField('paymentMethod', e.target.value)}
+                className={`w-full bg-nexus-background border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed ${
+                  paymentMethodMissing ? 'border-nexus-error/60' : 'border-nexus-border'
+                }`}
+              >
+                <option value="" disabled>Selecciona un método...</option>
+                {paymentMethods.map((method) => (
+                  <option key={method} value={method}>{method}</option>
+                ))}
+              </select>
+              {paymentMethodMissing && (
+                <p className="text-[10px] text-nexus-error-text mt-1">
+                  Elige el método de pago para poder guardar la cita como completada.
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Notas de la Reserva</label>
             <input
@@ -197,10 +231,7 @@ export default function AppointmentManageModal({
               {appointment.status === 'in-process' && canGoTo('completed') && (
                 <button
                   type="button"
-                  onClick={() => {
-                    onTransition('completed');
-                    onClose();
-                  }}
+                  onClick={() => onChangeField('status', 'completed')}
                   className="px-2 py-1 bg-nexus-success hover:opacity-90 text-black font-extrabold rounded text-[9px] cursor-pointer"
                 >
                   Marcar Finalizado
@@ -218,7 +249,7 @@ export default function AppointmentManageModal({
               </button>
               <button
                 type="submit"
-                disabled={!canEdit('clientName') && !canEdit('status') && !canEdit('notes')}
+                disabled={(!canEdit('clientName') && !canEdit('status') && !canEdit('notes')) || paymentMethodMissing}
                 className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Guardar Cambios

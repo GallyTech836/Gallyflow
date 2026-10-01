@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase/config';
 import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { getPeriodRange, getMonthGridRange } from '../shared/appointments/dateRanges';
+import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import { signOut } from 'firebase/auth';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { LogOut } from 'lucide-react';
@@ -228,6 +229,7 @@ const MESES_NOMBRES = [
 export default function App() {
   const { barberUser, error: authError, loading: authLoading, loginBarber, logoutBarber } = useBarberAuth();
   const negocioId = barberUser?.negocioId;
+  const { businessSettings } = useBusinessSettings(negocioId);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
@@ -406,8 +408,32 @@ const fetchByDate = async (subcollection, date) => {
       return;
     }
 
+    // Guarda o actualiza el cliente (igual que hace Admin), para que aparezca en
+    // Clientes del panel aunque el barbero escriba un nombre nuevo directo aquí.
+    let clientObj = clientes.find(c => (c.name || '').toLowerCase() === newClientName.trim().toLowerCase());
+    if (!clientObj) {
+      const slug = newClientName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      clientObj = {
+        id: `${slug || 'cliente'}-${Date.now()}`,
+        name: newClientName.trim(),
+        phone: 'N/A',
+        visits: 1,
+        totalSpent: 0,
+        lastVisit: selectedDate,
+        favoriteService: newService.name
+      };
+    } else {
+      clientObj = { ...clientObj, visits: (clientObj.visits || 0) + 1, lastVisit: selectedDate };
+    }
+    try {
+      await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true });
+    } catch (err) {
+      triggerToast('Error al guardar el cliente: ' + err.message, 'error');
+    }
+
     const nowIso = new Date().toISOString();
     const newAppt = {
+      clientId: clientObj.id,
       barber: activeBarber.id,
       professionalId: activeBarber.id,
       clientName: newClientName,
@@ -565,10 +591,12 @@ const fetchByDate = async (subcollection, date) => {
     return hrs * 60 + mins;
   };
 
-  const updateStatus = async (apptId, nextStatus) => {
+  const updateStatus = async (apptId, nextStatus, paymentMethod) => {
     try {
       const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
-      await updateDoc(docRef, { status: nextStatus, updatedAt: new Date().toISOString() });
+      const payload = { status: nextStatus, updatedAt: new Date().toISOString() };
+      if (paymentMethod) payload.paymentMethod = paymentMethod;
+      await updateDoc(docRef, payload);
       triggerToast(`Cita marcada como ${normalizeStatus(nextStatus)}`);
     } catch (err) {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
@@ -633,8 +661,39 @@ const fetchByDate = async (subcollection, date) => {
       return;
     }
 
+    // Guarda o actualiza el cliente (mismo criterio que Admin): si venía de la
+    // lista (draft.clientId) solo suma una visita; si es nuevo, lo crea.
+    let clientObj;
+    if (draft.clientId) {
+      const existing = clientes.find(c => c.id === draft.clientId);
+      clientObj = existing
+        ? { ...existing, visits: (existing.visits || 0) + 1, lastVisit: draft.date }
+        : { id: draft.clientId, name: draft.clientName, phone: draft.phone || 'N/A', visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: draft.serviceName };
+    } else {
+      const phoneId = (draft.phone || '').replace(/[^0-9]/g, '');
+      const slug = (draft.clientName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const existingByName = clientes.find(c => (c.name || '').toLowerCase() === (draft.clientName || '').trim().toLowerCase());
+      clientObj = existingByName
+        ? { ...existingByName, visits: (existingByName.visits || 0) + 1, lastVisit: draft.date }
+        : {
+            id: phoneId || `${slug || 'cliente'}-${Date.now()}`,
+            name: draft.clientName,
+            phone: draft.phone || 'N/A',
+            visits: 1,
+            totalSpent: 0,
+            lastVisit: draft.date,
+            favoriteService: draft.serviceName
+          };
+    }
+    try {
+      await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true });
+    } catch (err) {
+      triggerToast('Error al guardar el cliente: ' + err.message, 'error');
+    }
+
     const nowIso = new Date().toISOString();
     const newAppt = {
+      clientId: clientObj.id,
       barber: activeBarber.id,
       professionalId: activeBarber.id,
       barberId: activeBarber.id,
@@ -680,6 +739,14 @@ const fetchByDate = async (subcollection, date) => {
     const targetAppt = appointments.find(a => a.id === apptId);
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', apptId));
+      // Descuenta la visita del cliente (se había sumado al crear la cita).
+      if (targetAppt?.clientId) {
+        const clientDoc = clientes.find(c => c.id === targetAppt.clientId);
+        if (clientDoc) {
+          const newVisits = Math.max(0, (clientDoc.visits || 0) - 1);
+          setDoc(doc(db, 'negocios', negocioId, 'clientes', clientDoc.id), { visits: newVisits }, { merge: true }).catch(() => {});
+        }
+      }
       triggerToast("Cita eliminada", "info");
       notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: apptId, clientName: targetAppt?.clientName, time: targetAppt?.time }, barberUser?.id, barberUser?.id);
     } catch (err) {
@@ -1852,17 +1919,18 @@ const fetchByDate = async (subcollection, date) => {
       {/* ================= MODAL: GESTIONAR CITA (compartido con Admin) ================= */}
       {managingAppt && (
         <AppointmentManageModal
-          appointment={managingAppt}
-          role="barber"
-          services={services}
-          professionals={activeBarber ? [activeBarber] : []}
-          onClose={() => setManagingAppt(null)}
+        appointment={managingAppt}
+        role="barber"
+        services={services}
+        professionals={activeBarber ? [activeBarber] : []}
+        paymentMethods={businessSettings.paymentMethods}
+        onClose={() => setManagingAppt(null)}
           onChangeField={handleChangeManagingField}
           onSubmit={handleSubmitManagingAppt}
           onDelete={deleteAppointment}
-          onTransition={(nextStatus) => {
-            updateStatus(managingAppt.id, nextStatus);
-            setManagingAppt(prev => (prev ? { ...prev, status: nextStatus } : prev));
+          onTransition={(nextStatus, paymentMethod) => {
+            updateStatus(managingAppt.id, nextStatus, paymentMethod);
+            setManagingAppt(prev => (prev ? { ...prev, status: nextStatus, paymentMethod: paymentMethod || prev.paymentMethod } : prev));
           }}
         />
       )}

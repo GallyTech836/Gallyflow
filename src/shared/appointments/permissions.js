@@ -24,6 +24,7 @@ export const FIELD_PERMISSIONS = {
     time: true,
     status: true,
     notes: true,
+    paymentMethod: true,
   },
   [ROLES.BARBER]: {
     clientName: false,
@@ -36,6 +37,7 @@ export const FIELD_PERMISSIONS = {
     time: true,
     status: true,
     notes: true,
+    paymentMethod: true,
   },
 };
 

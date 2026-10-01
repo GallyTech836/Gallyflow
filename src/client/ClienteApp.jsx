@@ -10,6 +10,7 @@ import { calculateTotals } from '../shared/appointments/serviceSelection';
 import { confirmBookingToClient } from './useClientBookingConfirmation';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
+import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -36,7 +37,6 @@ export default function App({ negocioSlug } = {}) {
   const [selectedBarber, setSelectedBarber] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedHour, setSelectedHour] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState(null);
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -68,6 +68,7 @@ export default function App({ negocioSlug } = {}) {
   const [negocioResolving, setNegocioResolving] = useState(true);
   const [negocioNotFound, setNegocioNotFound] = useState(false);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
+  const { businessSettings } = useBusinessSettings(negocioId);
 
   useEffect(() => {
     const resolveNegocio = async () => {
@@ -269,10 +270,18 @@ export default function App({ negocioSlug } = {}) {
     const isToday = selectedDate === todayStr;
     const nowMin = now.getHours() * 60 + now.getMinutes();
 
-    // Regla de los 30 minutos de anticipación (solo aplica a ClienteApp, y solo si la fecha elegida es hoy)
-    const cumpleAnticipacion = (hourStr) => !isToday || timeToMin(hourStr) >= nowMin + 30;
+    // Anticipación mínima configurada en Configuración → Negocio (0 = sin restricción).
+    // Solo aplica si la fecha elegida es hoy.
+    const minAdvance = businessSettings?.minAdvanceMinutes || 0;
+    const cumpleAnticipacion = (hourStr) => !isToday || timeToMin(hourStr) >= nowMin + minAdvance;
 
     if (!selectedBarber || selectedBarber.isPending) {
+      if (selectedDate) {
+        const pendingDate = new Date(selectedDate + "T12:00:00");
+        const pendingDayName = DAY_NAMES_MON_FIRST[(pendingDate.getDay() + 6) % 7];
+        const pendingBusinessDay = (businessSettings?.schedule || []).find(d => d?.day === pendingDayName);
+        if (pendingBusinessDay && pendingBusinessDay.status !== 'Disponible') return [];
+      }
       return DEFAULT_HOURS.filter(cumpleAnticipacion);
     }
     if (!selectedDate) return [];
@@ -285,8 +294,19 @@ export default function App({ negocioSlug } = {}) {
 
     if (!dayAvailability || dayAvailability.status !== 'Disponible') return [];
 
-    const startOfDayMin = timeToMin(dayAvailability.start || '00:00');
-    const endOfDayMin = timeToMin(dayAvailability.end || '00:00');
+    // Horario general del negocio (Configuración → Negocio). Si el negocio está
+    // cerrado ese día, no hay horarios, sin importar la disponibilidad del profesional.
+    const businessDay = (businessSettings?.schedule || []).find(d => d?.day === dayName);
+    if (businessDay && businessDay.status !== 'Disponible') return [];
+
+    const barberStartMin = timeToMin(dayAvailability.start || '00:00');
+    const barberEndMin = timeToMin(dayAvailability.end || '00:00');
+    const businessStartMin = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
+    const businessEndMin = businessDay ? timeToMin(businessDay.end || '23:59') : (24 * 60 - 1);
+
+    // La ventana real es la intersección entre el horario del profesional y el del negocio.
+    const startOfDayMin = Math.max(barberStartMin, businessStartMin);
+    const endOfDayMin = Math.min(barberEndMin, businessEndMin);
     if (isNaN(startOfDayMin) || isNaN(endOfDayMin) || endOfDayMin <= startOfDayMin) return [];
 
     const citasDelBarbero = citasNegocio.filter(c =>
@@ -332,7 +352,7 @@ export default function App({ negocioSlug } = {}) {
       hours.push(hourStr);
     }
     return hours;
-  }, [selectedBarber, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha]);
+  }, [selectedBarber, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
 
   const calculateTotal = useMemo(() => {
     return selectedServices.reduce((acc, curr) => {
@@ -403,7 +423,7 @@ export default function App({ negocioSlug } = {}) {
       triggerToast("Por favor ingresa tu nombre de reserva");
       return;
     }
-    if (!negocioId || selectedServices.length === 0 || !selectedBarber || !selectedDate || !selectedHour || !paymentMethod) {
+    if (!negocioId || selectedServices.length === 0 || !selectedBarber || !selectedDate || !selectedHour) {
       triggerToast("Faltan datos para completar la reserva.");
       return;
     }
@@ -453,7 +473,7 @@ export default function App({ negocioSlug } = {}) {
         date: selectedDate,
         time: selectedHour,
         status: 'confirmed',
-        paymentMethod: paymentMethod.name,
+        paymentMethod: 'Pendiente',
         bookedBy: 'client',
         notes: '',
         branch: selectedBarber?.branch || selectedBranch?.name || '',
@@ -507,12 +527,7 @@ export default function App({ negocioSlug } = {}) {
         onBack={() => setStep(3)} 
         total={calculateTotal}
       />;
-      case 5: return <PaymentStep 
-        method={paymentMethod} setMethod={setPaymentMethod} 
-        onNext={() => setStep(6)} 
-        onBack={() => setStep(4)} 
-      />;
-      case 6: return <ConfirmStep 
+      case 5: return <ConfirmStep 
         name={clientName} setName={setClientName} 
         phone={clientPhone} setPhone={setClientPhone}
         total={calculateTotal}
@@ -520,12 +535,11 @@ export default function App({ negocioSlug } = {}) {
         selectedBarber={selectedBarber}
         selectedDate={selectedDate}
         selectedHour={selectedHour}
-        paymentMethod={paymentMethod}
         onConfirm={handleBooking} 
         loading={loading}
-        onBack={() => setStep(5)} 
+        onBack={() => setStep(4)} 
       />;
-      case 7: return <SuccessStep 
+      case 6: return <SuccessStep 
         onReset={resetBooking} 
         selectedDate={selectedDate}
         selectedHour={selectedHour}
@@ -567,7 +581,7 @@ export default function App({ negocioSlug } = {}) {
 
       <main className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col p-5 sm:p-6 justify-between">
         
-        {step > 0 && step < 7 && (
+        {step > 0 && step < 6 && (
           <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
             <button 
               onClick={() => {
@@ -579,7 +593,7 @@ export default function App({ negocioSlug } = {}) {
               <ChevronLeft size={16} />
             </button>
             <div className="flex gap-1.5">
-              {[1, 2, 3, 4, 5, 6].map((s) => (
+              {[1, 2, 3, 4, 5].map((s) => (
                 <div 
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -592,7 +606,7 @@ export default function App({ negocioSlug } = {}) {
                 />
               ))}
             </div>
-            <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold font-mono">Paso {step}/6</span>
+            <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold font-mono">Paso {step}/5</span>
           </div>
         )}
         
@@ -1043,7 +1057,6 @@ const ConfirmStep = ({
   selectedBarber, 
   selectedDate, 
   selectedHour, 
-  paymentMethod,
   onConfirm, 
   loading 
 }) => (
@@ -1091,10 +1104,7 @@ const ConfirmStep = ({
             <span className="font-semibold text-nexus-text-secondary">Fecha y Hora:</span>
             <span className="font-bold text-nexus-primary">{selectedDate} - {selectedHour} Hrs</span>
           </div>
-          <div className="flex justify-between pb-2 border-b border-nexus-border">
-            <span className="font-semibold text-nexus-text-secondary">Método de Pago:</span>
-            <span className="font-bold text-nexus-text">{paymentMethod?.name}</span>
-          </div>
+          
           <div className="flex justify-between pt-1">
             <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
             <span className="text-base font-black text-nexus-success-text">{total} Bs</span>

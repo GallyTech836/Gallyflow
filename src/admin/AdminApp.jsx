@@ -6,6 +6,7 @@ import { useServicios } from '../firebase/useServicios';
 import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
+import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import { useNegocio } from '../firebase/useNegocio';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPlan/useNegocioPlan';
@@ -57,7 +58,7 @@ const { logout } = useAuth();
 console.log('[ADMIN] negocioId:', negocioId);
 const [activeTab, setActiveTab] = useState('agenda');
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState('profile');
+  const [settingsSection, setSettingsSection] = useState('business');
   const [agendaView, setAgendaView] = useState('dia');
   const [inventoryTab, setInventoryTab] = useState('stock');
   const [showNewProductPanel, setShowNewProductPanel] = useState(false);
@@ -304,6 +305,7 @@ const [saleForm, setSaleForm] = useState({
 // del plan real asignado al negocio — cada uno ve solo lo que su plan
 // incluye, sin tocar código cada vez que cambie.
 const { features: planFeatures } = useNegocioPlan(negocioId);
+const { businessSettings } = useBusinessSettings(negocioId);
   const [whatsappSettings, setWhatsappSettings] = useState({
     isConnected: true,
     connectionStatus: 'connected', // connected, disconnected, pairing
@@ -1654,10 +1656,15 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     if (!check.isValid) { triggerToast(check.message, 'error'); return; }
 
     const phoneId = (draft.phone || 'sin-telefono').replace(/[^0-9]/g, '') || 'sin-telefono';
-    let clientObj = clients.find(c => c.name.toLowerCase() === draft.clientName.toLowerCase()) || {
-      id: phoneId, name: draft.clientName, phone: draft.phone || 'N/A',
-      visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: pricedServices[0]?.serviceName || 'N/A'
-    };
+    let clientObj = clients.find(c => c.name.toLowerCase() === draft.clientName.toLowerCase());
+    if (clientObj) {
+      clientObj = { ...clientObj, visits: (clientObj.visits || 0) + 1, lastVisit: draft.date };
+    } else {
+      clientObj = {
+        id: phoneId, name: draft.clientName, phone: draft.phone || 'N/A',
+        visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: pricedServices[0]?.serviceName || 'N/A'
+      };
+    }
     try { await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true }); }
     catch (err) { triggerToast('Error al guardar el cliente: ' + err.message, 'error'); }
 
@@ -1830,9 +1837,11 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     }
   };
 
-  const handleUpdateStatus = async (id, status) => {
+  const handleUpdateStatus = async (id, status, paymentMethod) => {
     try {
-      await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), { status, updatedAt: new Date().toISOString() });
+      const payload = { status, updatedAt: new Date().toISOString() };
+      if (paymentMethod) payload.paymentMethod = paymentMethod;
+      await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), payload);
       bumpCitasTick();
       const targetReservation = findCitaById(id);
       notify(
@@ -1870,6 +1879,14 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', id));
       bumpCitasTick();
+      // Descuenta la visita del cliente (se había sumado al crear la cita).
+      if (targetReservation?.clientId) {
+        const clientDoc = clients.find(c => c.id === targetReservation.clientId);
+        if (clientDoc) {
+          const newVisits = Math.max(0, (clientDoc.visits || 0) - 1);
+          setDoc(doc(db, 'negocios', negocioId, 'clientes', clientDoc.id), { visits: newVisits }, { merge: true }).catch(() => {});
+        }
+      }
       triggerToast('Reserva eliminada con éxito.');
       notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: id, clientName: targetReservation?.clientName, time: targetReservation?.time }, user?.uid, targetReservation?.professionalId || targetReservation?.barberId);
     } catch (err) {
@@ -2265,11 +2282,13 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
 
   const filteredClientsList = useMemo(() => {
     if (!Array.isArray(clients)) return [];
-    if (!searchClientQuery) return clients;
-    return clients.filter(c => 
-      c?.name?.toLowerCase().includes(searchClientQuery.toLowerCase()) ||
-      c?.phone?.includes(searchClientQuery)
-    );
+    const base = !searchClientQuery
+      ? clients
+      : clients.filter(c =>
+          c?.name?.toLowerCase().includes(searchClientQuery.toLowerCase()) ||
+          c?.phone?.includes(searchClientQuery)
+        );
+    return [...base].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'es', { sensitivity: 'base' }));
   }, [clients, searchClientQuery]);
 
   const toggleWhatsAppConnection = () => {
@@ -4346,11 +4365,12 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
       {/* 2. MODAL EDITAR / MODIFICAR RESERVACIÓN */}
       {activeModal === 'edit-reservation' && editingReservation && (
         <AppointmentManageModal
-          appointment={editingReservation}
-          role="admin"
-          services={services}
-          professionals={branchBarbers}
-          onClose={() => setActiveModal(null)}
+        appointment={editingReservation}
+        role="admin"
+        services={services}
+        professionals={branchBarbers}
+        paymentMethods={businessSettings.paymentMethods}
+        onClose={() => setActiveModal(null)}
           onChangeField={(field, value) => {
             if (field === 'professionalId') {
               setEditingReservation(prev => ({ ...prev, professionalId: value, barberId: value }));
@@ -4360,7 +4380,7 @@ const { features: planFeatures } = useNegocioPlan(negocioId);
           }}
           onSubmit={handleUpdateReservation}
           onDelete={handleDeleteReservation}
-          onTransition={(nextStatus) => handleUpdateStatus(editingReservation?.id, nextStatus)}
+          onTransition={(nextStatus, paymentMethod) => handleUpdateStatus(editingReservation?.id, nextStatus, paymentMethod)}
         />
       )}
 
