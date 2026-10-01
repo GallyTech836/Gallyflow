@@ -943,9 +943,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
                   }`}
                 >
                   <span>{cell.dayNum}</span>
-                  {cell.isTuesday && !isPast && (
-                    <span className={`w-1 h-1 rounded-full absolute bottom-1 ${isSelected ? 'bg-white' : 'bg-nexus-primary'}`} />
-                  )}
+                  
                 </button>
               );
             })}
