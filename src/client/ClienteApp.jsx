@@ -174,6 +174,7 @@ export default function App({ negocioSlug } = {}) {
           image: b.avatar,
           branch: b.branch,
           availability: b.availability || [],
+          services: b.services || [],
           isPending: false
         }));
 
@@ -262,6 +263,26 @@ export default function App({ negocioSlug } = {}) {
     return services.filter(s => !s?.availableDays?.length || s.availableDays.includes(dayName));
   }, [services, selectedDate]);
 
+  const servicesForProfessional = useMemo(() => {
+    // "Pendiente" puede ofrecer todos los servicios
+    if (!selectedBarber || selectedBarber.isPending) {
+      return servicesForDate;
+    }
+  
+    // En Firestore, `services` del profesional es un array de objetos
+    // { serviceId, commissionEnabled, type, value }. Se extraen los IDs;
+    // también se tolera un array de strings por compatibilidad.
+    const assignedIds = new Set(
+      (Array.isArray(selectedBarber.services) ? selectedBarber.services : [])
+        .map(a => (typeof a === 'string' ? a : a?.serviceId))
+        .filter(Boolean)
+        .map(String)
+    );
+  
+    return servicesForDate.filter(service =>
+      assignedIds.has(String(service.id))
+    );
+  }, [servicesForDate, selectedBarber]);
   const availableHours = useMemo(() => {
     const serviceDuration = selectedServices[0]?.durationMin || 30;
 
@@ -520,7 +541,7 @@ export default function App({ negocioSlug } = {}) {
         onBack={() => setStep(2)} 
       />;
       case 4: return <ServicesStep 
-        services={servicesForDate}
+      services={servicesForProfessional}
         selected={selectedServices} 
         toggle={toggleService} 
         onNext={handleServicesNext} 
