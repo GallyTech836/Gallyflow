@@ -952,12 +952,6 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
           </div>
         </div>
 
-        {isTuesday && (
-          <div className="bg-nexus-primary-soft border border-nexus-primary/20 p-3 rounded-xl mb-4 flex gap-2.5 items-center animate-pulse">
-            <Info size={16} className="text-nexus-primary shrink-0" />
-            
-          </div>
-        )}
 
         {date ? (
           hours.length > 0 ? (
