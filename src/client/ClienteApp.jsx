@@ -7,6 +7,7 @@ import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
 import { notify, NotificationType } from '../shared/notifications';
 import { calculateTotals } from '../shared/appointments/serviceSelection';
+import { compareServicios } from '../firebase/useServicios';
 import { confirmBookingToClient } from './useClientBookingConfirmation';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
@@ -132,11 +133,12 @@ export default function App({ negocioSlug } = {}) {
           durationMin: Number(data.duration || 30),
           description: data.description || '',
           availableDays: data.availableDays || [],
-          createdAt: data.createdAt || 0
+          createdAt: data.createdAt || 0,
+          order: Number.isFinite(data.order) ? data.order : undefined
         };
       });
       // Mismo orden que en Admin: por fecha de creación real, no por el ID.
-      lista.sort((a, b) => a.createdAt - b.createdAt);
+      lista.sort(compareServicios);
       setServices(lista);
     });
     return () => unsub();

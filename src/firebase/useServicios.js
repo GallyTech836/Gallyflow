@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, getDocs } from 'firebase/firestore';
 import { db } from './config';
 
+// Orden de servicios: primero los que tienen `order` (definido al arrastrar en
+// Admin), luego los que no lo tienen por fecha de creación.
+export function compareServicios(a, b) {
+  const ao = Number.isFinite(a?.order) ? a.order : null;
+  const bo = Number.isFinite(b?.order) ? b.order : null;
+  if (ao !== null && bo !== null) return ao - bo;
+  if (ao !== null) return -1;
+  if (bo !== null) return 1;
+  return (a?.createdAt || 0) - (b?.createdAt || 0);
+}
+
 export function useServicios(uid) {
   const [servicios, setServicios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +26,7 @@ export function useServicios(uid) {
       // Orden por fecha de creación real, no por el ID del documento
       // (el ID se reutiliza al borrar servicios, así que no sirve como orden).
       // Los servicios viejos sin createdAt quedan primero (tratados como más antiguos).
-      lista.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      lista.sort(compareServicios);
       setServicios(lista);
       setLoading(false);
     });

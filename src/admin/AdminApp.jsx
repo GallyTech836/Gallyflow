@@ -2243,16 +2243,76 @@ const { businessSettings } = useBusinessSettings(negocioId);
     );
   }, [clientSearch, clients]);
 
-  const filteredWizardServices = useMemo(() => {
+  // Orden en vivo mientras se arrastra un servicio (null = usar el orden guardado)
+  const [serviceDragOrder, setServiceDragOrder] = useState(null);
+  const [draggingServiceId, setDraggingServiceId] = useState(null);
+
+  const orderedServices = useMemo(() => {
     if (!Array.isArray(services)) return [];
-    return services.filter(s => {
+    if (!serviceDragOrder) return services;
+    const byId = new Map(services.map(s => [s.id, s]));
+    const ordered = serviceDragOrder.map(id => byId.get(id)).filter(Boolean);
+    const rest = services.filter(s => !serviceDragOrder.includes(s.id));
+    return [...ordered, ...rest];
+  }, [services, serviceDragOrder]);
+
+  const startServiceDrag = (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const initialIds = orderedServices.map(s => s.id);
+    let current = initialIds;
+    setDraggingServiceId(id);
+    setServiceDragOrder(initialIds);
+
+    const onMove = (ev) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-service-row]');
+      const overId = el?.getAttribute('data-service-row');
+      if (!overId || overId === id) return;
+      const from = current.indexOf(id);
+      const to = current.indexOf(overId);
+      if (from < 0 || to < 0) return;
+      const next = [...current];
+      next.splice(from, 1);
+      next.splice(to, 0, id);
+      current = next;
+      setServiceDragOrder(next);
+    };
+
+    const onUp = async () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      setDraggingServiceId(null);
+      try {
+        // Guarda el nuevo orden (solo los que cambiaron) en negocios/{id}/servicios/{sid}.order
+        await Promise.all(
+          current.map((sid, i) => {
+            const original = services.find(x => x.id === sid);
+            return original?.order === i ? null : editarServicio(sid, { order: i });
+          })
+        );
+      } catch (err) {
+        console.error('Error guardando el orden de servicios:', err);
+      } finally {
+        setServiceDragOrder(null);
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+
+  const filteredWizardServices = useMemo(() => {
+    if (!Array.isArray(orderedServices)) return [];
+    return orderedServices.filter(s => {
       const matchSearch = s?.name?.toLowerCase().includes(serviceSearch.toLowerCase());
       if (serviceTab === 'Todos') return matchSearch;
       if (serviceTab === 'Públicos') return matchSearch && s?.category !== 'Estilo';
       if (serviceTab === 'Internos') return matchSearch && s?.category === 'Estilo';
       return matchSearch;
     });
-  }, [services, serviceSearch, serviceTab]);
+  }, [orderedServices, serviceSearch, serviceTab]);
 
   const filteredBranchesList = useMemo(() => {
     if (!Array.isArray(branches)) return [];
@@ -4917,6 +4977,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         return (
                           <div 
                             key={s.id} 
+                            data-service-row={s.id}
                             onClick={() => {
                               if (isSelected) {
                                 setNewBarber(prev => ({
@@ -4931,14 +4992,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               }
                             }}
                             className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between ${
+                              draggingServiceId === s.id ? 'opacity-60 shadow-lg ring-1 ring-nexus-primary/50' : ''
+                            } ${
                               isSelected 
                                 ? 'bg-nexus-primary-soft border-nexus-primary/40 hover:opacity-90' 
                                 : 'bg-nexus-surface border-nexus-border hover:bg-nexus-surface-hover'
                             }`}
                           >
-                            <div>
-                              <p className="font-bold text-nexus-text">{s.name}</p>
-                              <p className="text-[9px] text-nexus-text-muted font-mono">{s.duration} min — {s.price} Bs</p>
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                onPointerDown={(e) => startServiceDrag(e, s.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                title="Arrastrar para reordenar"
+                                className="p-1 -ml-1 text-nexus-text-muted hover:text-nexus-text cursor-grab active:cursor-grabbing touch-none select-none"
+                              >
+                                <Menu size={16} />
+                              </span>
+                              <div>
+                                <p className="font-bold text-nexus-text">{s.name}</p>
+                                <p className="text-[9px] text-nexus-text-muted font-mono">{s.duration} min — {s.price} Bs</p>
+                              </div>
                             </div>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold font-mono ${
                               isSelected ? 'bg-nexus-primary text-white' : 'bg-nexus-surface-hover text-nexus-text-secondary'
@@ -4952,6 +5025,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   </div>
                 </div>
               )}
+
+                
 
 {barberStep === 3 && (
                 <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
