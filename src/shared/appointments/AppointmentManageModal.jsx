@@ -164,7 +164,15 @@ export default function AppointmentManageModal({
               <select
                 disabled={!canEdit('status')}
                 value={appointment.status}
-                onChange={(e) => onChangeField('status', e.target.value)}
+                onChange={(e) => {
+                  const newStatus = e.target.value;
+                
+                  onChangeField('status', newStatus);
+                
+                  if (newStatus === 'completed') {
+                    onChangeField('paymentMethod', '');
+                  }
+                }}
                 className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-bold disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="pending">Por Confirmar</option>
@@ -184,7 +192,7 @@ export default function AppointmentManageModal({
               <select
                 required
                 disabled={!canEdit('paymentMethod')}
-                value={hasValidPayment ? appointment.paymentMethod : ''}
+                value={appointment.paymentMethod || ''}
                 onChange={(e) => onChangeField('paymentMethod', e.target.value)}
                 className={`w-full bg-nexus-background border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed ${
                   paymentMethodMissing ? 'border-nexus-error/60' : 'border-nexus-border'

@@ -2661,9 +2661,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
             <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="w-2 h-2 rounded-full bg-nexus-primary animate-pulse
-                  bg-nexus-primary animate-pulse"></span>
-                <span className="text-[10px] uppercase font-black tracking-widest text-nexus-primary font-mono font-bold">Plataforma GallyFlow Configurada</span>
+                
               </div>
               <h2 className="text-lg font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
                 <span className="text-nexus-text-secondary font-normal">{businessName}</span>
