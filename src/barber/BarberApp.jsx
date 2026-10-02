@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase/config';
 import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
-import { getPeriodRange, getMonthGridRange } from '../shared/appointments/dateRanges';
+import { getPeriodRange, getMonthGridRange, getPreviousPeriodRange } from '../shared/appointments/dateRanges';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import { signOut } from 'firebase/auth';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
@@ -19,6 +19,9 @@ import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
+
+// Colores del gráfico "Servicios más Solicitados" (gráfico de torta + su leyenda).
+const PIE_COLORS = ['#0F6FFF', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'];
 
 // --- ICONOS SVG PERSONALIZADOS (Diseño ultra-limpio) ---
 const Icons = {
@@ -319,6 +322,34 @@ const barberRange = useMemo(() => {
 const rangeStart = barberRange.start;
 const rangeEnd = barberRange.end;
 
+// --- GANANCIAS DEL PERÍODO ANTERIOR (solo para "Crecimiento Estimado" en Rendimiento) ---
+// "Mes" usa el mes calendario exacto (no la grilla de 42 días que usa la Agenda).
+const comparisonView = selectedRange === "Semana" ? 'semana' : selectedRange === "Mes" ? 'mes' : selectedRange === "Año" ? 'año' : 'dia';
+const [prevEarnings, setPrevEarnings] = useState(null);
+useEffect(() => {
+  if (!negocioId || activeTab !== 'rendimiento') return;
+  let cancelled = false;
+  const prevRange = getPreviousPeriodRange(selectedDate, comparisonView);
+  getDocs(query(
+    collection(db, 'negocios', negocioId, 'citas'),
+    where('date', '>=', prevRange.start),
+    where('date', '<=', prevRange.end)
+  ))
+    .then((snap) => {
+      if (cancelled) return;
+      const total = snap.docs
+        .map(d => d.data())
+        .filter(c => matchesBarber(c, activeBarber?.id) && c.status === STATUS.COMPLETED)
+        .reduce((sum, c) => sum + Number(c.price || 0), 0);
+      setPrevEarnings(total);
+    })
+    .catch((err) => {
+      console.error('[Rendimiento] error al leer el período anterior:', err);
+      if (!cancelled) setPrevEarnings(null);
+    });
+  return () => { cancelled = true; };
+}, [negocioId, activeTab, selectedDate, comparisonView, activeBarber?.id]);
+
 // --- CITAS DEL NEGOCIO (TIEMPO REAL, SOLO EL PERÍODO VISIBLE) ---
 // Un solo listener compartido por Agenda, Comisiones y Rendimiento (mismo selector y mismo rango).
 // En Perfil no se usa: no hay listener de citas.
@@ -446,7 +477,7 @@ const fetchByDate = async (subcollection, date) => {
       time: newTime,
       status: "confirmed",
       commissionPaid: false,
-      paymentMethod: newPaymentMethod,
+      paymentMethod: 'Pendiente',
       createdAt: nowIso,
       updatedAt: nowIso,
       notes: newNotes,
@@ -735,6 +766,26 @@ const fetchByDate = async (subcollection, date) => {
     }
   };
 
+  // Marca como pagadas TODAS las comisiones pendientes del período que está
+  // seleccionado ahora mismo (Día/Semana/Mes/Año) — usa commissionSummary,
+  // que ya está filtrado por ese mismo período.
+  const [collectingAll, setCollectingAll] = useState(false);
+  const markAllCommissionsPaid = async () => {
+    const pendientes = (commissionSummary.allFinalized || []).filter(item => !item.commissionPaid);
+    if (pendientes.length === 0 || collectingAll) return;
+    setCollectingAll(true);
+    try {
+      await Promise.all(pendientes.map(item =>
+        updateDoc(doc(db, 'negocios', negocioId, 'citas', item.id), { commissionPaid: true })
+      ));
+      triggerToast(`${pendientes.length} comisión(es) marcada(s) como PAGADA`);
+    } catch (err) {
+      triggerToast('Error al cobrar todo: ' + err.message, 'error');
+    } finally {
+      setCollectingAll(false);
+    }
+  };
+
   const deleteAppointment = async (apptId) => {
     const targetAppt = appointments.find(a => a.id === apptId);
     try {
@@ -997,7 +1048,9 @@ const fetchByDate = async (subcollection, date) => {
 
     const totalServicios = barbtAppts.length;
     const totalGanado = barbtAppts.reduce((sum, item) => sum + Number(item.price || 0), 0);
-    const crecimientoPorcentaje = totalServicios > 0 ? 12.5 : 0;
+    const crecimientoPorcentaje = (prevEarnings && prevEarnings > 0)
+      ? Math.round(((totalGanado - prevEarnings) / prevEarnings) * 1000) / 10
+      : null; // null = sin datos del período anterior para comparar (no "0%", que engaña)
 
     return {
       pieData: pieData.length > 0 ? pieData : [{ name: "Ninguno", value: 1 }],
@@ -1006,9 +1059,7 @@ const fetchByDate = async (subcollection, date) => {
       totalGanado,
       crecimientoPorcentaje
     };
-  }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays]);
-
-  // --- RENDERIZADOR DEL CONTENEDOR DEL SELECTOR UNIFICADO ---
+  }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays, prevEarnings]);
   const renderUnifiedSelector = (showAlternator = false) => {
     return (
       <div className="flex flex-row items-center justify-between gap-3 flex-wrap">
@@ -1536,9 +1587,21 @@ const fetchByDate = async (subcollection, date) => {
                 </div>
 
                 <div className="space-y-4">
-                  <div>
-                    <h3 className="text-base font-bold text-nexus-text">Transacciones & Comisiones</h3>
-                    <p className="text-xs text-nexus-text-muted">Historial completo de cortes finalizados para este periodo.</p>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="text-base font-bold text-nexus-text">Transacciones & Comisiones</h3>
+                      <p className="text-xs text-nexus-text-muted">Historial completo de cortes finalizados para este periodo.</p>
+                    </div>
+                    {commissionSummary.allFinalized.some(item => !item.commissionPaid) && (
+                      <button
+                        onClick={markAllCommissionsPaid}
+                        disabled={collectingAll}
+                        className="px-4 py-2 bg-nexus-success hover:opacity-90 disabled:opacity-50 text-black font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <Icons.Check className="w-3.5 h-3.5" />
+                        {collectingAll ? 'Cobrando...' : `Cobrar Todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid).length})`}
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-2.5">
@@ -1623,8 +1686,14 @@ const fetchByDate = async (subcollection, date) => {
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">Crecimiento Estimado</span>
-                      <span className="block text-3xl font-black text-nexus-info-text mt-1">+{performanceData.crecimientoPorcentaje}%</span>
+                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">
+                        {performanceData.crecimientoPorcentaje === null ? 'Crecimiento' : 'Crecimiento Estimado'}
+                      </span>
+                      <span className="block text-3xl font-black text-nexus-info-text mt-1">
+                        {performanceData.crecimientoPorcentaje === null
+                          ? 'Sin datos previos'
+                          : `${performanceData.crecimientoPorcentaje > 0 ? '+' : ''}${performanceData.crecimientoPorcentaje}%`}
+                      </span>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-nexus-info-bg flex items-center justify-center text-nexus-info-text">
                       <Icons.TrendingUp className="w-6 h-6" />
@@ -1684,7 +1753,7 @@ const fetchByDate = async (subcollection, date) => {
                                 dataKey="value"
                               >
                                 {performanceData.pieData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={['#0F6FFF', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'][index % 6]} />
+                                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                 ))}
                               </Pie>
                               <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E9EDF2', borderRadius: '12px', fontSize: '11px' }} />
@@ -1697,6 +1766,20 @@ const fetchByDate = async (subcollection, date) => {
                         </>
                       )}
                     </div>
+                    {performanceData.totalServicios > 0 && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center pt-1">
+                        {performanceData.pieData.map((entry, index) => (
+                          <div key={entry.name} className="flex items-center gap-1.5 text-[10px] text-nexus-text-secondary">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                            />
+                            <span className="font-semibold text-nexus-text">{entry.name}</span>
+                            <span className="text-nexus-text-muted">({entry.value})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1919,12 +2002,12 @@ const fetchByDate = async (subcollection, date) => {
       {/* ================= MODAL: GESTIONAR CITA (compartido con Admin) ================= */}
       {managingAppt && (
         <AppointmentManageModal
-        appointment={managingAppt}
-        role="barber"
-        services={services}
-        professionals={activeBarber ? [activeBarber] : []}
-        paymentMethods={businessSettings.paymentMethods}
-        onClose={() => setManagingAppt(null)}
+          appointment={managingAppt}
+          role="barber"
+          services={services}
+          professionals={activeBarber ? [activeBarber] : []}
+          paymentMethods={businessSettings.paymentMethods}
+          onClose={() => setManagingAppt(null)}
           onChangeField={handleChangeManagingField}
           onSubmit={handleSubmitManagingAppt}
           onDelete={deleteAppointment}

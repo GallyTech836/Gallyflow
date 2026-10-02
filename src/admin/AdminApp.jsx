@@ -59,6 +59,27 @@ console.log('[ADMIN] negocioId:', negocioId);
 const [activeTab, setActiveTab] = useState('agenda');
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState('business');
+
+  // Agenda, vista Día: el encabezado con los nombres de los profesionales y la
+  // cuadrícula de citas son dos áreas con scroll horizontal independientes en
+  // el DOM (una encima de la otra). En móvil, si el usuario desliza una no se
+  // mueve la otra y quedan desalineadas. Estas dos refs las mantienen
+  // sincronizadas: deslizar cualquiera de las dos mueve ambas.
+  const dayHeaderScrollRef = useRef(null);
+  const dayBodyScrollRef = useRef(null);
+  const syncingDayScrollRef = useRef(false);
+  const handleDayHeaderScroll = () => {
+    if (syncingDayScrollRef.current || !dayHeaderScrollRef.current || !dayBodyScrollRef.current) return;
+    syncingDayScrollRef.current = true;
+    dayBodyScrollRef.current.scrollLeft = dayHeaderScrollRef.current.scrollLeft;
+    syncingDayScrollRef.current = false;
+  };
+  const handleDayBodyScroll = () => {
+    if (syncingDayScrollRef.current || !dayHeaderScrollRef.current || !dayBodyScrollRef.current) return;
+    syncingDayScrollRef.current = true;
+    dayHeaderScrollRef.current.scrollLeft = dayBodyScrollRef.current.scrollLeft;
+    syncingDayScrollRef.current = false;
+  };
   const [agendaView, setAgendaView] = useState('dia');
   const [inventoryTab, setInventoryTab] = useState('stock');
   const [showNewProductPanel, setShowNewProductPanel] = useState(false);
@@ -2958,7 +2979,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     <div className="border-r border-nexus-border flex items-center justify-center p-2.5">
                       <Clock className="w-4 h-4 text-nexus-text-muted" />
                     </div>
-                    <div className="overflow-x-auto scrollbar-none">
+                    <div className="overflow-x-auto scrollbar-none" ref={dayHeaderScrollRef} onScroll={handleDayHeaderScroll}>
                       <div className="flex divide-x divide-nexus-border min-w-[700px] md:min-w-full">
                         
                       {filterBarberId === 'all' && (
@@ -3003,7 +3024,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       ))}
                     </div>
 
-                    <div className="overflow-x-auto min-w-[700px] md:min-w-full relative bg-nexus-background">
+                    <div className="overflow-x-auto min-w-[700px] md:min-w-full relative bg-nexus-background" ref={dayBodyScrollRef} onScroll={handleDayBodyScroll}>
                       <div className="absolute inset-0 flex divide-x divide-nexus-border">
                         
                         {filterBarberId === 'all' && (
