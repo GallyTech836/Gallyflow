@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc, collection, onSnapshot, addDoc, query, where } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, increment, collection, onSnapshot, addDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Sparkles, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
@@ -446,6 +446,10 @@ export default function App({ negocioSlug } = {}) {
       triggerToast("Por favor ingresa tu nombre de reserva");
       return;
     }
+    if (clientPhone.replace(/[^0-9]/g, '').length < 7) {
+      triggerToast("Por favor ingresa un número de celular válido");
+      return;
+    }
     if (!negocioId || selectedServices.length === 0 || !selectedBarber || !selectedDate || !selectedHour) {
       triggerToast("Faltan datos para completar la reserva.");
       return;
@@ -483,7 +487,43 @@ export default function App({ negocioSlug } = {}) {
       // el código que todavía no fue actualizado (reportes, agenda) siga
       // funcionando sin romperse mientras se completan las fases siguientes.
       const nowIso = new Date().toISOString();
+
+      // Guarda / actualiza el cliente en la base de clientes (igual que Admin y Barber)
+      const cleanName = clientName.trim();
+      const cleanPhone = clientPhone.trim();
+      const phoneDigits = cleanPhone.replace(/[^0-9]/g, '');
+      let savedClientId = null;
+      try {
+        let existing = null;
+        try {
+          const snap = await getDocs(collection(db, 'negocios', negocioId, 'clientes'));
+          const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          existing =
+            (phoneDigits && all.find(c => (c.phone || '').replace(/[^0-9]/g, '') === phoneDigits)) ||
+            all.find(c => (c.name || '').toLowerCase() === cleanName.toLowerCase()) ||
+            null;
+        } catch (_) { /* sin permiso de lectura */ }
+
+        const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const clientDocId = existing?.id || phoneDigits || `${slug || 'cliente'}-${Date.now()}`;
+        const clientData = {
+          name: existing?.name || cleanName,
+          lastVisit: selectedDate,
+          favoriteService: existing?.favoriteService || servicesForCita[0]?.serviceName || 'N/A',
+          visits: increment(1),
+          totalSpent: increment(0),
+        };
+        if (cleanPhone) clientData.phone = cleanPhone;
+        else if (!existing?.phone) clientData.phone = 'N/A';
+
+        await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientDocId), clientData, { merge: true });
+        savedClientId = clientDocId;
+      } catch (err) {
+        console.warn('[Cliente] No se pudo guardar en la base de clientes:', err?.message || err);
+      }
+
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), {
+        ...(savedClientId ? { clientId: savedClientId } : {}),
         clientName: clientName.trim(),
         clientPhone: clientPhone.trim() || 'No especificado',
         professionalId,
@@ -1092,9 +1132,10 @@ const ConfirmStep = ({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[10px] uppercase tracking-wider text-nexus-primary font-bold block">Teléfono / Celular (Opcional)</label>
+        <label className="text-[10px] uppercase tracking-wider text-nexus-primary font-bold block">Teléfono / Celular *</label>
           <input 
             type="tel" 
+            required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Ej: +591 70000000"
