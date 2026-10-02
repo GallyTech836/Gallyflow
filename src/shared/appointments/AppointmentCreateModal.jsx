@@ -101,11 +101,34 @@ export default function AppointmentCreateModal({
   // Servicios visibles ese día de la semana. Si un servicio no tiene
   // availableDays configurado (o viene vacío), se considera visible todos
   // los días — así no rompemos servicios creados antes de esta funcionalidad.
+  //
+  // Además, si hay un profesional seleccionado (o fijo, en Barber), solo se
+  // muestran los servicios asignados en su campo `services`, que es un array
+  // de objetos { serviceId, commissionEnabled, type, value } (también se tolera
+  // un array de strings). Con "Pendiente" no se filtra por profesional.
   const servicesForDate = useMemo(() => {
     const dayName = getDayName(draft.date);
-    if (!dayName) return services;
-    return services.filter(s => !s?.availableDays?.length || s.availableDays.includes(dayName));
-  }, [services, draft.date]);
+    const byDate = !dayName
+      ? services
+      : services.filter(s => !s?.availableDays?.length || s.availableDays.includes(dayName));
+
+    const professional =
+      fixedProfessional ||
+      (draft.professionalId && draft.professionalId !== 'pending'
+        ? professionals.find(b => b?.id === draft.professionalId)
+        : null);
+
+    if (!professional) return byDate;
+
+    const assignedIds = new Set(
+      (Array.isArray(professional.services) ? professional.services : [])
+        .map(a => (typeof a === 'string' ? a : a?.serviceId))
+        .filter(Boolean)
+        .map(String)
+    );
+
+    return byDate.filter(s => assignedIds.has(String(s?.id)));
+  }, [services, draft.date, draft.professionalId, professionals, fixedProfessional]);
 
   // Si cambia la fecha y algún servicio ya elegido deja de estar disponible
   // ese día, lo deseleccionamos automáticamente.
