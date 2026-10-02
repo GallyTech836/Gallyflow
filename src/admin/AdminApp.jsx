@@ -2971,188 +2971,193 @@ const { businessSettings } = useBusinessSettings(negocioId);
           {activeTab === 'agenda' && (
             <div className="space-y-4">
               
-              {agendaView === 'dia' && (
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg flex flex-col">
-                  
-                  {}
-                  <div className="grid grid-cols-[60px_1fr] border-b border-nexus-border bg-nexus-background">
-                    <div className="border-r border-nexus-border flex items-center justify-center p-2.5">
-                      <Clock className="w-4 h-4 text-nexus-text-muted" />
-                    </div>
-                    <div className="overflow-x-auto scrollbar-none" ref={dayHeaderScrollRef} onScroll={handleDayHeaderScroll}>
-                      <div className="flex divide-x divide-nexus-border min-w-[700px] md:min-w-full">
-                        
-                      {filterBarberId === 'all' && (
-                          <div className="flex-1 min-w-[150px] py-2 px-3 bg-nexus-primary-soft flex flex-col items-center justify-center gap-0.5 text-nexus-primary font-bold border-r border-nexus-border">
-                            <div className="flex items-center gap-2">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span className="text-[10px] tracking-wider uppercase font-black font-mono font-bold">Pendientes</span>
-                            </div>
-                            <span className="text-[9px] font-mono font-bold text-nexus-primary/70">{barberDayCounts['pending'] || 0} reservas</span>
-                          </div>
-                        )}
+              {agendaView === 'dia' && (() => {
+                const dayColumns = (branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId);
+                const totalCols = dayColumns.length + (filterBarberId === 'all' ? 1 : 0);
+                const dayMinWidth = 60 + totalCols * 150;
+                return (
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
+                  {/* UN SOLO contenedor con scroll (horizontal y vertical).
+                      Encabezado = sticky top, columna de horas = sticky left. */}
+                  <div className="relative h-[560px] overflow-auto overscroll-contain">
+                    <div style={{ minWidth: `${dayMinWidth}px` }}>
 
-                        {(branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId).map(b => (
-                          <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5">
-                            <div className="flex items-center gap-2">
-                              <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border" />
-                              <h5 className="text-[11px] font-bold text-nexus-text truncate">{b?.name}</h5>
-                            </div>
-                            <span className="text-[9px] font-mono font-bold text-nexus-text-muted">{barberDayCounts[b?.id] || 0} reservas</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-[60px_1fr] relative h-[560px] overflow-y-auto">
-                    
-                    {currentTimeMinutes >= 480 && currentTimeMinutes <= 1320 && (
-                      <div 
-                        className="absolute left-0 right-0 border-t-2 border-nexus-error z-10 flex items-center pointer-events-none"
-                        style={{ top: `${((currentTimeMinutes - 480) / 840) * 1120}px` }}
-                      >
-                        <div className="w-2.5 h-2.5 rounded-full bg-nexus-error -ml-1" />
-                      </div>
-                    )}
-
-                    <div className="bg-nexus-surface border-r border-nexus-border divide-y divide-nexus-border">
-                    {hoursRange.map(hour => (
-                        <div key={hour} className="h-10 px-1.5 flex items-start justify-end pt-1">
-                          <span className="font-mono text-[9px] text-nexus-text-muted font-bold">{formatHourLabel(hour)}</span>
+                      {/* ENCABEZADO (fijo arriba) */}
+                      <div className="sticky top-0 z-30 flex border-b border-nexus-border bg-nexus-background">
+                        <div className="sticky left-0 z-40 w-[60px] shrink-0 border-r border-nexus-border bg-nexus-background flex items-center justify-center p-2.5">
+                          <Clock className="w-4 h-4 text-nexus-text-muted" />
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex flex-1 divide-x divide-nexus-border">
+                          {filterBarberId === 'all' && (
+                            <div className="flex-1 min-w-[150px] py-2 px-3 bg-nexus-primary-soft flex flex-col items-center justify-center gap-0.5 text-nexus-primary font-bold">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span className="text-[10px] tracking-wider uppercase font-black font-mono">Pendientes</span>
+                              </div>
+                              <span className="text-[9px] font-mono font-bold text-nexus-primary/70">{barberDayCounts['pending'] || 0} reservas</span>
+                            </div>
+                          )}
+                          {dayColumns.map(b => (
+                            <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5 bg-nexus-background">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border shrink-0" />
+                                <h5 className="text-[11px] font-bold text-nexus-text truncate">{b?.name}</h5>
+                              </div>
+                              <span className="text-[9px] font-mono font-bold text-nexus-text-muted">{barberDayCounts[b?.id] || 0} reservas</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
 
-                    <div className="overflow-x-auto min-w-[700px] md:min-w-full relative bg-nexus-background" ref={dayBodyScrollRef} onScroll={handleDayBodyScroll}>
-                      <div className="absolute inset-0 flex divide-x divide-nexus-border">
-                        
-                        {filterBarberId === 'all' && (
-                          <div className="flex-1 relative min-w-[150px] h-full bg-nexus-surface-hover border-r border-nexus-border">
-                            {hoursRange.map(hour => (
-                              <div 
-                                key={hour} 
-                                onClick={() => handleEmptySlotClick('pending', formatHourLabel(hour))}
-                                className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
-                              />
-                            ))}
+                      {/* CUERPO */}
+                      <div className="relative flex">
 
-                            {(filteredReservations || []).filter(r => r?.professionalId === 'pending' || r?.barberId === 'pending').map(res => {
-                              const [h, m] = (res?.time || '12:00').split(':').map(Number);
-                              const startMin = h * 60 + m;
-                              const duration = getReservationDuration(res, services);
-
-                              const topPx = ((startMin - 480) / 840) * 1120;
-                                const heightPx = (duration / 840) * 1120;
-
-                              return (
-                                <div 
-                                  key={res?.id}
-                                  onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
-                                  style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                  className="absolute left-1 right-1 px-2.5 py-1 rounded border shadow bg-nexus-primary-soft border-nexus-primary/40 text-nexus-primary hover:opacity-80 transition-all cursor-pointer flex flex-col justify-between overflow-hidden"
-                                >
-                                  <div className="min-w-0">
-                                    <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
-                                    <p className="text-[9px] truncate text-nexus-text-secondary">{res?.serviceName}</p>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                        {currentTimeMinutes >= 480 && currentTimeMinutes <= 1320 && (
+                          <div
+                            className="absolute left-0 right-0 border-t-2 border-nexus-error z-10 flex items-center pointer-events-none"
+                            style={{ top: `${((currentTimeMinutes - 480) / 840) * 1120}px` }}
+                          >
+                            <div className="w-2.5 h-2.5 rounded-full bg-nexus-error -ml-1" />
                           </div>
                         )}
 
-                       {(branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId).map(barber => {
-                          const barberRes = (filteredReservations || []).filter(r => r?.professionalId === barber?.id || r?.barberId === barber?.id);
-                          const barberBl = (blockouts || []).filter(bl => bl?.date === selectedDate && bl?.barberId === barber?.id);
-                          const barberDayAvailability = getBarberDayAvailability(barber, selectedDate);
+                        {/* COLUMNA DE HORAS (fija a la izquierda) */}
+                        <div className="sticky left-0 z-20 w-[60px] shrink-0 bg-nexus-surface border-r border-nexus-border divide-y divide-nexus-border">
+                          {hoursRange.map(hour => (
+                            <div key={hour} className="h-10 px-1.5 flex items-start justify-end pt-1">
+                              <span className="font-mono text-[9px] text-nexus-text-muted font-bold">{formatHourLabel(hour)}</span>
+                            </div>
+                          ))}
+                        </div>
 
-                          return (
-                            <div key={barber?.id} className="flex-1 relative min-w-[150px] h-full">
-                              
+                        {/* COLUMNAS (mismo ancho que el encabezado, se mueven juntas) */}
+                        <div className="flex flex-1 divide-x divide-nexus-border bg-nexus-background">
+
+                          {filterBarberId === 'all' && (
+                            <div className="flex-1 relative min-w-[150px] bg-nexus-surface-hover">
                               {hoursRange.map(hour => (
-                                isHourWithinAvailability(barberDayAvailability, hour) ? (
-                                  <div 
-                                    key={hour} 
-                                    onClick={() => handleEmptySlotClick(barber?.id, formatHourLabel(hour))}
-                                    className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
-                                  />
-                                ) : (
-                                  <div 
-                                    key={hour}
-                                    className="h-10 w-full bg-nexus-border/30 border-b border-nexus-border/50 cursor-not-allowed"
-                                  />
-                                )
+                                <div
+                                  key={hour}
+                                  onClick={() => handleEmptySlotClick('pending', formatHourLabel(hour))}
+                                  className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
+                                />
                               ))}
 
-                              {barberRes.map(res => {
+                              {(filteredReservations || []).filter(r => r?.professionalId === 'pending' || r?.barberId === 'pending').map(res => {
                                 const [h, m] = (res?.time || '12:00').split(':').map(Number);
                                 const startMin = h * 60 + m;
                                 const duration = getReservationDuration(res, services);
-
                                 const topPx = ((startMin - 480) / 840) * 1120;
                                 const heightPx = (duration / 840) * 1120;
 
                                 return (
-                                  <div 
+                                  <div
                                     key={res?.id}
                                     onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
                                     style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                    className={`absolute left-1 right-1 px-2.5 py-1 rounded border shadow-md flex flex-col justify-between overflow-hidden cursor-pointer transition-all z-20 ${getStatusCardClasses(res?.status)}`}
+                                    className="absolute left-1 right-1 px-2.5 py-1 rounded border shadow bg-nexus-primary-soft border-nexus-primary/40 text-nexus-primary hover:opacity-80 transition-all cursor-pointer flex flex-col justify-between overflow-hidden"
                                   >
                                     <div className="min-w-0">
                                       <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
-                                      <p className="text-[9px] text-nexus-text-secondary truncate">{res?.serviceName}</p>
-                                    </div>
-                                    <span className="font-mono text-[8px] font-bold text-nexus-text-muted">{res?.time}</span>
-                                  </div>
-                                );
-                              })}
-
-                              {barberBl.map(bl => {
-                                const startMin = timeToMin(bl?.startTime);
-                                const endMin = timeToMin(bl?.endTime);
-                                const duration = endMin - startMin;
-
-                                const topPx = ((startMin - 480) / 840) * 1120;
-                                const heightPx = (duration / 840) * 1120;
-
-                                return (
-                                  <div 
-                                    key={bl?.id}
-                                    style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                    className="absolute left-1 right-1 px-2 py-1 rounded border shadow bg-nexus-error-bg border-nexus-error/30 text-nexus-error-text flex flex-col justify-between overflow-hidden cursor-default z-20"
-                                  >
-                                    <div className="min-w-0">
-                                      <p className="font-extrabold text-[9px] leading-tight flex items-center gap-1">
-                                        <XCircle className="w-3 h-3 text-nexus-error shrink-0" />
-                                        BLOQUEADO
-                                      </p>
-                                      <p className="text-[9px] truncate text-nexus-error-text/80">{bl?.reason}</p>
-                                    </div>
-                                    <div className="flex items-center justify-between text-[8px] text-nexus-text-muted mt-1">
-                                      <span>{bl?.startTime} - {bl?.endTime}</span>
-                                      <button 
-                                        onClick={() => handleDeleteBlockout(bl?.id)}
-                                        className="text-nexus-error hover:opacity-80 font-bold underline cursor-pointer"
-                                      >
-                                        Eliminar
-                                      </button>
+                                      <p className="text-[9px] truncate text-nexus-text-secondary">{res?.serviceName}</p>
                                     </div>
                                   </div>
                                 );
                               })}
-
                             </div>
-                          );
-                        })}
+                          )}
 
+                          {dayColumns.map(barber => {
+                            const barberRes = (filteredReservations || []).filter(r => r?.professionalId === barber?.id || r?.barberId === barber?.id);
+                            const barberBl = (blockouts || []).filter(bl => bl?.date === selectedDate && bl?.barberId === barber?.id);
+                            const barberDayAvailability = getBarberDayAvailability(barber, selectedDate);
+
+                            return (
+                              <div key={barber?.id} className="flex-1 relative min-w-[150px]">
+
+                                {hoursRange.map(hour => (
+                                  isHourWithinAvailability(barberDayAvailability, hour) ? (
+                                    <div
+                                      key={hour}
+                                      onClick={() => handleEmptySlotClick(barber?.id, formatHourLabel(hour))}
+                                      className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
+                                    />
+                                  ) : (
+                                    <div
+                                      key={hour}
+                                      className="h-10 w-full bg-nexus-border/30 border-b border-nexus-border/50 cursor-not-allowed"
+                                    />
+                                  )
+                                ))}
+
+                                {barberRes.map(res => {
+                                  const [h, m] = (res?.time || '12:00').split(':').map(Number);
+                                  const startMin = h * 60 + m;
+                                  const duration = getReservationDuration(res, services);
+                                  const topPx = ((startMin - 480) / 840) * 1120;
+                                  const heightPx = (duration / 840) * 1120;
+
+                                  return (
+                                    <div
+                                      key={res?.id}
+                                      onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
+                                      style={{ top: `${topPx}px`, height: `${heightPx}px` }}
+                                      className={`absolute left-1 right-1 px-2.5 py-1 rounded border shadow-md flex flex-col justify-between overflow-hidden cursor-pointer transition-all z-[5] ${getStatusCardClasses(res?.status)}`}
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
+                                        <p className="text-[9px] text-nexus-text-secondary truncate">{res?.serviceName}</p>
+                                      </div>
+                                      <span className="font-mono text-[8px] font-bold text-nexus-text-muted">{res?.time}</span>
+                                    </div>
+                                  );
+                                })}
+
+                                {barberBl.map(bl => {
+                                  const startMin = timeToMin(bl?.startTime);
+                                  const endMin = timeToMin(bl?.endTime);
+                                  const duration = endMin - startMin;
+                                  const topPx = ((startMin - 480) / 840) * 1120;
+                                  const heightPx = (duration / 840) * 1120;
+
+                                  return (
+                                    <div
+                                      key={bl?.id}
+                                      style={{ top: `${topPx}px`, height: `${heightPx}px` }}
+                                      className="absolute left-1 right-1 px-2 py-1 rounded border shadow bg-nexus-error-bg border-nexus-error/30 text-nexus-error-text flex flex-col justify-between overflow-hidden cursor-default z-[5]"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="font-extrabold text-[9px] leading-tight flex items-center gap-1">
+                                          <XCircle className="w-3 h-3 text-nexus-error shrink-0" />
+                                          BLOQUEADO
+                                        </p>
+                                        <p className="text-[9px] truncate text-nexus-error-text/80">{bl?.reason}</p>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[8px] text-nexus-text-muted mt-1">
+                                        <span>{bl?.startTime} - {bl?.endTime}</span>
+                                        <button
+                                          onClick={() => handleDeleteBlockout(bl?.id)}
+                                          className="text-nexus-error hover:opacity-80 font-bold underline cursor-pointer"
+                                        >
+                                          Eliminar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                              </div>
+                            );
+                          })}
+
+                        </div>
                       </div>
                     </div>
-
                   </div>
                 </div>
-              )}
+                );
+              })()}
+
 
               {agendaView === 'semana' && (
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
