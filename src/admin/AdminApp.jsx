@@ -91,7 +91,7 @@ const [activeTab, setActiveTab] = useState('agenda');
   };
   const [agendaView, setAgendaView] = useState('dia');
   const agendaBoxRef = useRef(null);
-  const agendaBoxHeight = useFillHeight(agendaBoxRef, [activeTab, agendaView]);
+  const agendaBoxHeight = useFillHeight(agendaBoxRef, [activeTab, agendaView], { min: 560 });
   const [inventoryTab, setInventoryTab] = useState('stock');
   const [showNewProductPanel, setShowNewProductPanel] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -4506,9 +4506,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
         </div>
 
-        <footer className="py-4 px-6 border-t border-nexus-border bg-nexus-background flex flex-col sm:flex-row items-center justify-between text-[10px] text-nexus-text-muted gap-2.5 font-mono">
-        <p>© 2026 GallyCorp Inc. Plataforma SaaS de Control & Reservas.</p>
-      </footer>
+        
 
     </main>
 
