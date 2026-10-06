@@ -17,6 +17,7 @@ export async function createAppointment({
   clientPhone,
   paymentMethod,
   branch,
+  clientId,
   bookedBy = 'client',
 }) {
   if (!negocioId || !professionalId || !date || !time || !serviceDuration || !services?.length) {
@@ -58,6 +59,7 @@ export async function createAppointment({
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
     const nuevaCita = {
+      ...(clientId ? { clientId } : {}),
       clientName: clientName?.trim() || '',
       clientPhone: clientPhone?.trim() || 'No especificado',
       professionalId,

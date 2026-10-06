@@ -32,6 +32,7 @@ export async function getBusinessContext(negocioId) {
     status: negocio.status || 'active',
     plan: negocio.plan || null,
     assistantConfig: negocio.assistantConfig || { enabled: false, capabilities: {} },
+    businessSettings: negocio.businessSettings || {},
     servicios,
     profesionales,
     sucursales,

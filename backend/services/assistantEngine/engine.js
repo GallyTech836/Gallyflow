@@ -10,26 +10,81 @@ import { getBusinessContext } from '../appointments/businessContext.js';
 import { getAvailableSlots } from '../appointments/availability.js';
 import { createAppointment } from '../appointments/createAppointment.js';
 import { getOrCreateConversation, updateConversation, resetConversation } from '../appointments/conversationState.js';
+import { professionalCanDo } from '../appointments/pendingModel.js';
+import { upsertClientFromPhone } from '../appointments/clientRecord.js';
+import { reevaluatePending } from '../appointments/pendingService.js';
+import { sendNotification } from '../notificationService.js';
+import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
+const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
+const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const DIAS_A_MOSTRAR = 7;
+const DIAS_A_BUSCAR = 14;
 
-// Próximos 7 días como opciones de fecha (formato YYYY-MM-DD + etiqueta).
-function proximosDias(cantidad = 7) {
+// Railway corre en UTC: este Date "local" tiene la fecha/hora del negocio,
+// que es lo que esperan getAvailableSlots (getHours/getDate) y proximosDias.
+function ahoraNegocio() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date());
+  const get = (t) => Number(parts.find((p) => p.type === t).value);
+  return new Date(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'));
+}
+
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function duracionServicio(servicio) {
+  return Number(servicio?.duration) || Number(servicio?.durationMin) || SERVICE_DURATION_DEFAULT;
+}
+
+// Mismo orden que el front (compareServicios): primero `order`, luego createdAt.
+function ordenServicios(a, b) {
+  const ao = Number.isFinite(a?.order) ? a.order : null;
+  const bo = Number.isFinite(b?.order) ? b.order : null;
+  if (ao !== null && bo !== null) return ao - bo;
+  if (ao !== null) return -1;
+  if (bo !== null) return 1;
+  return (a?.createdAt || 0) - (b?.createdAt || 0);
+}
+
+// Servicios que al menos un profesional activo realiza.
+function serviciosOfrecidos(ctx) {
+  return [...ctx.servicios]
+    .sort(ordenServicios)
+    .filter((s) => ctx.profesionales.some((p) => professionalCanDo(p, [s.id])));
+}
+
+function profesionalesPara(ctx, serviceId) {
+  return ctx.profesionales.filter((p) => professionalCanDo(p, [serviceId]));
+}
+
+// Próximos días en que: el negocio abre, el profesional trabaja y el servicio se ofrece.
+function proximosDias(ctx, profesional, servicio) {
+  const schedule = ctx.businessSettings?.schedule || [];
+  const base = ahoraNegocio();
   const dias = [];
-  const hoy = new Date();
-  for (let i = 0; i < cantidad; i++) {
-    const d = new Date(hoy);
-    d.setDate(hoy.getDate() + i);
-    const iso = d.toISOString().slice(0, 10);
-    const etiqueta = d.toLocaleDateString('es-BO', { weekday: 'long', day: 'numeric', month: 'short' });
-    dias.push({ id: iso, label: etiqueta });
+  for (let i = 0; i < DIAS_A_BUSCAR && dias.length < DIAS_A_MOSTRAR; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i, 12);
+    const dayName = DAY_NAMES_MON_FIRST[(d.getDay() + 6) % 7];
+
+    const negocioDia = schedule.find((x) => x?.day === dayName);
+    if (negocioDia && negocioDia.status !== 'Disponible') continue;
+    const proDia = (profesional?.availability || []).find((x) => x?.day === dayName);
+    if (!proDia || proDia.status !== 'Disponible') continue;
+    if (servicio?.availableDays?.length && !servicio.availableDays.includes(dayName)) continue;
+
+    const etiqueta = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : d.toLocaleDateString('es-BO', { weekday: 'long', day: 'numeric', month: 'short' });
+    dias.push({ id: isoLocal(d), label: etiqueta });
   }
   return dias;
 }
 
-async function slotsParaFecha(negocioId, profesional, fecha, duracion) {
-  const negocioRef = db.collection('negocios').doc(negocioId);
+async function slotsParaFecha(ctx, profesional, fecha, duracion) {
+  const negocioRef = db.collection('negocios').doc(ctx.negocioId);
   const [citasSnap, bloqueosSnap] = await Promise.all([
     negocioRef.collection('citas').where('date', '==', fecha).get(),
     negocioRef.collection('horariosBloqueados').where('date', '==', fecha).get(),
@@ -40,7 +95,25 @@ async function slotsParaFecha(negocioId, profesional, fecha, duracion) {
     profesional,
     citasDelNegocio: citasSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     bloqueos: bloqueosSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    businessSchedule: ctx.businessSettings?.schedule || [],
+    aplicarAnticipacion: true,
+    minAdvanceMinutes: ctx.businessSettings?.minAdvanceMinutes || 0,
+    ahora: ahoraNegocio(),
   });
+}
+
+// Avisos después de crear la cita (no bloquean la respuesta al cliente).
+function avisarNuevaCita(negocioId, cita) {
+  sendNotification({
+    tipo: 'RESERVA_CREADA_CLIENTE',
+    negocioId,
+    data: { clientName: cita.clientName, time: cita.time },
+    targetProfessionalId: cita.professionalId,
+  }).catch((err) => logger.warn('[assistantEngine] Push falló:', err.message));
+
+  // Este profesional se ocupó: alguna Pendiente puede quedar con un único candidato.
+  reevaluatePending({ negocioId, date: cita.date })
+    .catch((err) => logger.warn('[assistantEngine] reevaluatePending falló:', err.message));
 }
 
 function listaNumerada(items, getLabel) {
@@ -77,41 +150,54 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     }
 
     case 'choosing_service': {
+      const servicios = serviciosOfrecidos(context);
       const idx = parseInt(texto, 10) - 1;
-      const servicio = context.servicios[idx];
+      const servicio = servicios[idx];
       if (!servicio) return responder(`No entendí. \n\n${mensajeServicios(context)}`, conversation);
 
+      const pros = profesionalesPara(context, servicio.id);
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'choosing_staff',
-        selectedService: { serviceId: servicio.id, serviceName: servicio.name, price: servicio.price, duration: servicio.durationMin || SERVICE_DURATION_DEFAULT },
+        selectedService: { serviceId: servicio.id, serviceName: servicio.name, price: servicio.price, duration: duracionServicio(servicio) },
+        staffOptionsIds: pros.map((p) => p.id),
       });
-      return responder(mensajeProfesionales(context), conversation);
+      return responder(mensajeProfesionales(pros), conversation);
     }
 
     case 'choosing_staff': {
+      const pros = (conversation.staffOptionsIds || [])
+        .map((id) => context.profesionales.find((p) => p.id === id))
+        .filter(Boolean);
       const idx = parseInt(texto, 10) - 1;
-      const profesional = context.profesionales[idx];
-      if (!profesional) return responder(`No entendí. \n\n${mensajeProfesionales(context)}`, conversation);
+      const profesional = pros[idx];
+      if (!profesional) return responder(`No entendí. \n\n${mensajeProfesionales(pros)}`, conversation);
+
+      const servicio = context.servicios.find((s) => s.id === conversation.selectedService?.serviceId);
+      const dias = proximosDias(context, profesional, servicio);
+      if (dias.length === 0) {
+        return responder(`${profesional.name} no tiene días disponibles próximamente. Elige otro:\n\n${mensajeProfesionales(pros)}`, conversation);
+      }
 
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'choosing_date',
         selectedStaff: { id: profesional.id, name: profesional.name, branch: profesional.branch || '' },
+        dateOptionsCache: dias,
       });
-      return responder(mensajeFechas(), conversation);
+      return responder(mensajeFechas(dias), conversation);
     }
 
     case 'choosing_date': {
-      const dias = proximosDias();
+      const dias = conversation.dateOptionsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const dia = dias[idx];
-      if (!dia) return responder(`No entendí. \n\n${mensajeFechas()}`, conversation);
+      if (!dia) return responder(`No entendí. \n\n${mensajeFechas(dias)}`, conversation);
 
       const profesional = context.profesionales.find((p) => p.id === conversation.selectedStaff.id);
       const duracion = conversation.selectedService.duration;
-      const slots = await slotsParaFecha(negocioId, profesional, dia.id, duracion);
+      const slots = await slotsParaFecha(context, profesional, dia.id, duracion);
 
       if (slots.length === 0) {
-        return responder(`No hay horarios libres ese día.\n\n${mensajeFechas()}`, conversation);
+        return responder(`No hay horarios libres ese día.\n\n${mensajeFechas(dias)}`, conversation);
       }
 
       conversation = await updateConversation(negocioId, phone, {
@@ -147,8 +233,16 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
     case 'confirming': {
       if (/^1$|confirmar|si|sí/i.test(texto)) {
+        let cita;
         try {
-          const cita = await createAppointment({
+          const clientId = await upsertClientFromPhone({
+            negocioId,
+            phone,
+            name: conversation.clientName,
+            date: conversation.selectedDate,
+            serviceName: conversation.selectedService.serviceName,
+          });
+          cita = await createAppointment({
             negocioId,
             professionalId: conversation.selectedStaff.id,
             date: conversation.selectedDate,
@@ -157,15 +251,22 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
             services: [conversation.selectedService],
             clientName: conversation.clientName,
             clientPhone: phone,
+            clientId,
+            branch: conversation.selectedStaff.branch || '',
             paymentMethod: 'Por definir',
             bookedBy: 'assistant',
           });
-          conversation = await resetConversation(negocioId, phone);
-          return responder(`✅ Cita confirmada para el ${cita.date} a las ${cita.time}. ¡Gracias!`, conversation);
         } catch (err) {
-          conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date' });
-          return responder(`Ese horario ya no está disponible. ${mensajeFechas()}`, conversation);
+          logger.warn('[assistantEngine] createAppointment falló:', err.message);
+          const profesional = context.profesionales.find((p) => p.id === conversation.selectedStaff.id);
+          const servicio = context.servicios.find((s) => s.id === conversation.selectedService?.serviceId);
+          const dias = proximosDias(context, profesional, servicio);
+          conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias });
+          return responder(`Ese horario ya no está disponible. ${mensajeFechas(dias)}`, conversation);
         }
+        avisarNuevaCita(negocioId, cita);
+        conversation = await resetConversation(negocioId, phone);
+        return responder(`✅ Cita confirmada para el ${cita.date} a las ${cita.time}. ¡Gracias!`, conversation);
       }
       if (/^2$|cancelar/i.test(texto)) {
         conversation = await resetConversation(negocioId, phone);
@@ -184,13 +285,15 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita`;
   }
   function mensajeServicios(ctx) {
-    return `¿Qué servicio deseas?\n\n${listaNumerada(ctx.servicios, (s) => `${s.name} - ${s.priceVariable === true ? 'Desde Bs ' : ''}${s.price}`)}`;
+    const servicios = serviciosOfrecidos(ctx);
+    if (servicios.length === 0) return 'Por ahora no hay servicios disponibles para reservar.';
+    return `¿Qué servicio deseas?\n\n${listaNumerada(servicios, (s) => `${s.name} - ${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`)}`;
   }
-  function mensajeProfesionales(ctx) {
-    return `¿Con quién deseas atenderte?\n\n${listaNumerada(ctx.profesionales, (p) => p.name)}`;
+  function mensajeProfesionales(pros) {
+    return `¿Con quién deseas atenderte?\n\n${listaNumerada(pros, (p) => p.name)}`;
   }
-  function mensajeFechas() {
-    return `¿Qué día?\n\n${listaNumerada(proximosDias(), (d) => d.label)}`;
+  function mensajeFechas(dias) {
+    return `¿Qué día?\n\n${listaNumerada(dias, (d) => d.label)}`;
   }
   function mensajeHoras(slots) {
     return `¿Qué horario?\n\n${listaNumerada(slots, (h) => h)}`;

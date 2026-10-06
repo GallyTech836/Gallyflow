@@ -59,6 +59,8 @@ export function getAvailableSlots({
   citasDelNegocio = [],
   bloqueos = [],
   aplicarAnticipacion = false,
+  minAdvanceMinutes = 30,
+  businessSchedule = [],
   ahora = new Date(),
 }) {
   if (!fecha || !profesional) return [];
@@ -67,8 +69,15 @@ export function getAvailableSlots({
   const dayAvailability = (profesional.availability || []).find((a) => a?.day === dayName);
   if (!dayAvailability || dayAvailability.status !== 'Disponible') return [];
 
-  const startOfDayMin = timeToMin(dayAvailability.start || '00:00');
-  const endOfDayMin = timeToMin(dayAvailability.end || '00:00');
+  // Horario del negocio (businessSettings.schedule): si ese día está cerrado
+  // no hay horas; si está abierto, se recorta la jornada del profesional.
+  const businessDay = (businessSchedule || []).find((d) => d?.day === dayName);
+  if (businessDay && businessDay.status !== 'Disponible') return [];
+  const businessStartMin = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
+  const businessEndMin = businessDay ? timeToMin(businessDay.end || '23:59') : 24 * 60 - 1;
+
+  const startOfDayMin = Math.max(timeToMin(dayAvailability.start || '00:00'), businessStartMin);
+  const endOfDayMin = Math.min(timeToMin(dayAvailability.end || '00:00'), businessEndMin);
   if (Number.isNaN(startOfDayMin) || Number.isNaN(endOfDayMin) || endOfDayMin <= startOfDayMin) {
     return [];
   }
@@ -90,7 +99,7 @@ export function getAvailableSlots({
   const esHoy = fecha === todayStr;
   const nowMin = ahora.getHours() * 60 + ahora.getMinutes();
   const cumpleAnticipacion = (hourStr) =>
-    !aplicarAnticipacion || !esHoy || timeToMin(hourStr) >= nowMin + 30;
+    !aplicarAnticipacion || !esHoy || timeToMin(hourStr) >= nowMin + minAdvanceMinutes;
 
   const hours = [];
   for (let slotStart = startOfDayMin; slotStart < endOfDayMin; slotStart += SLOT_STEP) {
