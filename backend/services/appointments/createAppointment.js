@@ -103,6 +103,8 @@ export async function createPendingAppointment({
   clientPhone,
   clientId,
   paymentMethod,
+  branch,
+  candidateIds,
   bookedBy = 'client',
 }) {
   if (!negocioId || !date || !time || !serviceDuration || !services?.length) {
@@ -111,6 +113,7 @@ export async function createPendingAppointment({
 
   const negocioRef = db.collection('negocios').doc(negocioId);
   const citasRef = negocioRef.collection('citas');
+  const soloEstos = Array.isArray(candidateIds) && candidateIds.length ? new Set(candidateIds) : null;
 
   return db.runTransaction(async (tx) => {
     const [negocioSnap, prosSnap, citasSnap, bloqSnap] = await Promise.all([
@@ -121,7 +124,9 @@ export async function createPendingAppointment({
     ]);
 
     const candidatos = getPendingCandidates({
-      professionals: prosSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      professionals: prosSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => !soloEstos || soloEstos.has(p.id)),
       serviceIds: services.map((s) => s.serviceId),
       fecha: date,
       time,
@@ -153,7 +158,7 @@ export async function createPendingAppointment({
       paymentMethod: paymentMethod || '',
       bookedBy,
       notes: '',
-      branch: '',
+      branch: branch || '',
       createdAt: nowIso,
       updatedAt: nowIso,
     };

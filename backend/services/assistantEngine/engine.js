@@ -112,6 +112,24 @@ function prosElegidos(ctx, conv) {
   return ids.map((id) => ctx.profesionales.find((p) => p.id === id)).filter(Boolean);
 }
 
+// Opciones "Cualquier profesional": una por sucursal con 2+ profesionales que
+// hacen los servicios. La cita Pendiente se guarda con esa sucursal (la agenda
+// de AdminApp filtra por sucursal) y solo compiten candidatos de esa sucursal.
+function opcionesCualquiera(pros) {
+  const porSucursal = new Map();
+  for (const p of pros) {
+    const b = p.branch || '';
+    if (!porSucursal.has(b)) porSucursal.set(b, []);
+    porSucursal.get(b).push(p.id);
+  }
+  const grupos = [...porSucursal.entries()].filter(([, ids]) => ids.length > 1);
+  return grupos.map(([branch, ids]) => ({
+    branch,
+    candidateIds: ids,
+    label: grupos.length > 1 && branch ? `Cualquier profesional (${branch})` : 'Cualquier profesional',
+  }));
+}
+
 // ───────────────────────── Días y horas ─────────────────────────
 
 // Próximos días en que: el negocio abre, al menos uno de `pros` trabaja y
@@ -309,13 +327,14 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         .map((id) => context.profesionales.find((p) => p.id === id))
         .filter(Boolean);
       const idx = parseInt(texto, 10) - 1;
-      const eligeCualquiera = pros.length > 1 && (idx === pros.length || /cualquier/i.test(texto));
+      const opciones = opcionesCualquiera(pros);
       const profesional = pros[idx];
-      if (!profesional && !eligeCualquiera) return responder(`No entendí. \n\n${mensajeProfesionales(pros)}`, conversation);
+      const cualquiera = opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null);
+      if (!profesional && !cualquiera) return responder(`No entendí. \n\n${mensajeProfesionales(pros)}`, conversation);
 
-      const selectedStaff = eligeCualquiera
-        ? { id: PENDING_ID, name: 'Cualquier profesional', branch: '', candidateIds: pros.map((p) => p.id) }
-        : { id: profesional.id, name: profesional.name, branch: profesional.branch || '' };
+      const selectedStaff = profesional
+        ? { id: profesional.id, name: profesional.name, branch: profesional.branch || '' }
+        : { id: PENDING_ID, name: cualquiera.label, branch: cualquiera.branch, candidateIds: cualquiera.candidateIds };
 
       const dias = diasParaConversacion(context, { ...conversation, selectedStaff });
       if (dias.length === 0) {
@@ -417,7 +436,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         bookedBy: 'assistant',
       };
       cita = esPendiente
-        ? await createPendingAppointment(datos)
+        ? await createPendingAppointment({ ...datos, branch: conv.selectedStaff.branch || '', candidateIds: conv.selectedStaff.candidateIds })
         : await createAppointment({ ...datos, professionalId: conv.selectedStaff.id, branch: conv.selectedStaff.branch || '' });
     } catch (err) {
       logger.warn('[assistantEngine] crear cita falló:', err.message);
@@ -464,8 +483,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   }
   function mensajeProfesionales(pros) {
     const lista = listaNumerada(pros, (p) => p.name);
-    const cualquiera = pros.length > 1 ? `\n${pros.length + 1}. Cualquier profesional` : '';
-    return `¿Con quién deseas atenderte?\n\n${lista}${cualquiera}`;
+    const extra = opcionesCualquiera(pros).map((o, i) => `\n${pros.length + i + 1}. ${o.label}`).join('');
+    return `¿Con quién deseas atenderte?\n\n${lista}${extra}`;
   }
   function mensajeFechas(dias) {
     return `¿Qué día?\n\n${listaNumerada(dias, (d) => d.label)}`;
