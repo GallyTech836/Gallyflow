@@ -38,7 +38,15 @@ export async function getRecipients(negocioId, roles, options = {}) {
   // admins, que siempre deben enterarse) reciben la notificación. Si no
   // viene (ej. cita sin asignar todavía), se mantiene el broadcast a
   // todo el negocio, igual que antes.
-  if (options.targetProfessionalId && options.targetProfessionalId !== 'pending') {
+  if (options.onlyTargetProfessional && options.targetProfessionalId) {
+    // Recordatorios: solo el profesional dueño de la cita, sin avisar a admins.
+    recipients = recipients.filter((u) => u.uid === options.targetProfessionalId);
+  } else if (Array.isArray(options.targetProfessionalIds)) {
+    // Lista de candidatos (Pendiente): admins + solo esos profesionales.
+    // Lista vacía => solo admins; nunca se avisa a quien no hace el servicio.
+    const ids = new Set(options.targetProfessionalIds);
+    recipients = recipients.filter((u) => u.rol === 'admin' || ids.has(u.uid));
+  } else if (options.targetProfessionalId && options.targetProfessionalId !== 'pending') {
     recipients = recipients.filter(
       (u) => u.rol === 'admin' || u.uid === options.targetProfessionalId
     );
@@ -69,10 +77,12 @@ export async function sendDirectNotification({ oneSignalId, tipo, data }) {
   }
 }
 
-export async function sendNotification({ tipo, negocioId, data, actorUid, targetProfessionalId }) {
+export async function sendNotification({ tipo, negocioId, data, actorUid, targetProfessionalId, targetProfessionalIds, onlyTargetProfessional }) {
   const recipients = await getRecipients(negocioId, ['admin', 'barber'], {
     excludeUid: actorUid,
     targetProfessionalId,
+    targetProfessionalIds,
+    onlyTargetProfessional,
   });
 
   if (recipients.length === 0) {

@@ -184,7 +184,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita`;
   }
   function mensajeServicios(ctx) {
-    return `¿Qué servicio deseas?\n\n${listaNumerada(ctx.servicios, (s) => `${s.name} - ${s.price}`)}`;
+    return `¿Qué servicio deseas?\n\n${listaNumerada(ctx.servicios, (s) => `${s.name} - ${s.priceVariable === true ? 'Desde Bs ' : ''}${s.price}`)}`;
   }
   function mensajeProfesionales(ctx) {
     return `¿Con quién deseas atenderte?\n\n${listaNumerada(ctx.profesionales, (p) => p.name)}`;

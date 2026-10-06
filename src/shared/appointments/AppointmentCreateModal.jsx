@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown } from 'lucide-react';
+import { formatServicePrice } from '../servicePricing/servicePricing';
 import { calculateTotals } from './serviceSelection';
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -86,6 +87,7 @@ export default function AppointmentCreateModal({
   const [showClientList, setShowClientList] = useState(false);
   const [showServicesList, setShowServicesList] = useState(false);
   const [isNewClient, setIsNewClient] = useState(false);
+  const [showClientPhone, setShowClientPhone] = useState(false);
 
   // ── Derivados ──────────────────────────────────────────────────────
   const detectedCountry = useMemo(() => detectPhoneCountry(draft.phone), [draft.phone]);
@@ -142,6 +144,9 @@ export default function AppointmentCreateModal({
   }, [servicesForDate]);
 
   const change = (field, value) => setDraft(prev => ({ ...prev, [field]: value }));
+  const selectedClient = !isNewClient && draft.clientId && draft.clientName
+    ? { name: draft.clientName, phone: draft.phone }
+    : null;
 
   const toggleService = (serviceId) => {
     setDraft(prev => ({
@@ -162,6 +167,7 @@ export default function AppointmentCreateModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (draft.serviceIds.length === 0) return;
+    if (!String(draft.clientName || '').trim()) return;
   
     const servicesForCita = servicesForDate
       .filter(s => draft.serviceIds.includes(s.id))
@@ -197,7 +203,40 @@ export default function AppointmentCreateModal({
           {/* ── Cliente ─────────────────────────────────────────── */}
           <div className="relative">
             <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Cliente *</label>
-            <div className="flex gap-2">
+            {selectedClient && (
+              <div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowClientPhone(v => !v)}
+                    className="flex-1 min-w-0 flex items-center justify-between gap-2 bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text text-left cursor-pointer"
+                  >
+                    <span className="truncate font-bold">{selectedClient.name}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-nexus-text-secondary transition-transform ${showClientPhone ? 'rotate-180' : ''}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      change('clientId', null);
+                      change('clientName', '');
+                      change('phone', '');
+                      setClientSearch('');
+                      setShowClientPhone(false);
+                      setShowClientList(true);
+                    }}
+                    className="px-2.5 py-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
+                  >
+                    Cambiar
+                  </button>
+                </div>
+                {showClientPhone && (
+                  <p className="mt-1.5 px-2.5 py-1.5 bg-nexus-background border border-nexus-border rounded-lg text-xs text-nexus-text font-mono">
+                    {selectedClient.phone && selectedClient.phone !== 'N/A' ? selectedClient.phone : 'Teléfono no registrado'}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className={`flex gap-2 ${selectedClient ? 'hidden' : ''}`}>
               <div className="relative flex-1">
                 <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
                   <Search className="w-3.5 h-3.5 text-nexus-text-muted" />
@@ -213,7 +252,7 @@ export default function AppointmentCreateModal({
               </div>
               <button
                 type="button"
-                onClick={() => { setIsNewClient(v => !v); change('clientName', ''); change('phone', ''); }}
+                onClick={() => { setIsNewClient(v => !v); change('clientName', ''); change('phone', ''); change('clientId', null); setClientSearch(''); }}
                 className="px-2.5 py-2 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
               >
                 {isNewClient ? 'Elegir Existente' : '+ Nuevo Cliente'}
@@ -319,7 +358,7 @@ export default function AppointmentCreateModal({
                       checked={draft.serviceIds.includes(s?.id)}
                       onChange={() => toggleService(s?.id)}
                     />
-                    {s?.name} ({s?.price} Bs)
+                    {s?.name} ({formatServicePrice(s)})
                   </label>
                 ))}
               </div>
@@ -420,6 +459,10 @@ export default function AppointmentCreateModal({
             />
           </div>
 
+          {!String(draft.clientName || '').trim() && (
+            <p className="text-[10px] text-nexus-error-text">Selecciona un cliente (o crea uno nuevo) para poder reservar.</p>
+          )}
+
           {/* ── Botones ──────────────────────────────────────── */}
           <div className="flex items-center justify-end gap-2.5 pt-3">
             <button
@@ -431,7 +474,8 @@ export default function AppointmentCreateModal({
             </button>
             <button
               type="submit"
-              className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer"
+              disabled={!String(draft.clientName || '').trim()}
+              className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Confirmar Reserva
             </button>

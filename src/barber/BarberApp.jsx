@@ -8,13 +8,20 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pi
 import { LogOut } from 'lucide-react';
 import { useBarberAuth } from './useBarberAuth';
 import { useServicios } from '../firebase/useServicios';
+import { isOpenPendingCita, professionalCanDo, getCitaServiceIds } from '../shared/appointments/pendingModel';
+import { reevaluatePending } from '../shared/appointments/pendingApi';
+import { describeAppointmentChanges } from '../shared/appointments/changeSummary';
 import BarberLoginPage from './BarberLoginPage';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import AppointmentStatusBadge from '../shared/appointments/AppointmentStatusBadge';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
-import { FIELD_PERMISSIONS } from '../shared/appointments/permissions';
+import { getEffectiveFieldPermissions } from '../shared/appointments/permissions';
+import { normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
+import PersonalBookingLink from '../shared/booking/PersonalBookingLink';
+import Avatar from '../shared/avatar/Avatar';
+import { buildPersonalBookingUrl } from '../shared/booking/personalLink';
 import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
@@ -312,6 +319,13 @@ useEffect(() => {
   return () => unsub();
 }, [negocioId, barberUser]);
 
+const staffPerms = useMemo(() => normalizeStaffPermissions(activeBarber?.permissions), [activeBarber]);
+const isVisibleAppt = (appt) => staffPerms.viewOthersAppointments || matchesBarber(appt, activeBarber?.id);
+useEffect(() => {
+  if (activeTab === "comisiones" && !staffPerms.viewCommissions) setActiveTab("agenda");
+  if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab("agenda");
+}, [activeTab, staffPerms]);
+
 // --- RANGO DE FECHAS QUE MUESTRA LA PANTALLA (Día / Semana / Mes / Año) ---
 // Mes incluye las 42 celdas de la grilla (días de meses vecinos). Solo se descarga este rango.
 const barberRange = useMemo(() => {
@@ -495,6 +509,7 @@ const fetchByDate = async (subcollection, date) => {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast("Cita agendada correctamente");
       notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
+      reevaluatePending(negocioId, newAppt.date);
     } catch (err) {
       triggerToast("Error al agendar la cita: " + err.message, "error");
       return;
@@ -607,6 +622,7 @@ const fetchByDate = async (subcollection, date) => {
 
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'horariosBloqueados'), newBlock);
+      reevaluatePending(negocioId, newBlock.date);
       triggerToast("Horario administrativo bloqueado");
     } catch (err) {
       triggerToast("Error al bloquear el horario: " + err.message, "error");
@@ -623,6 +639,7 @@ const fetchByDate = async (subcollection, date) => {
   };
 
   const updateStatus = async (apptId, nextStatus, paymentMethod) => {
+    if (!staffPerms.editAppointments) { triggerToast('No tienes permiso para editar citas.', 'error'); return; }
     try {
       const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
       const payload = { status: nextStatus, updatedAt: new Date().toISOString() };
@@ -633,6 +650,10 @@ const fetchByDate = async (subcollection, date) => {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
     }
   };
+
+  const managingPerms = managingAppt && !matchesBarber(managingAppt, activeBarber?.id)
+    ? { ...staffPerms, editAppointments: false, deleteAppointments: false, changeAppointmentClient: false }
+    : staffPerms;
   const handleChangeManagingField = (field, value) => {
     setManagingAppt(prev => (prev ? { ...prev, [field]: value } : prev));
   };
@@ -642,7 +663,8 @@ const fetchByDate = async (subcollection, date) => {
     if (!managingAppt) return;
     // Construir el payload solo con los campos que Barber tiene permiso
     // de editar según permissions.js — sin hardcodear campo a campo.
-    const allowed = FIELD_PERMISSIONS['barber'] || {};
+    if (!managingPerms.editAppointments) { setManagingAppt(null); return; }
+    const allowed = getEffectiveFieldPermissions('barber', managingPerms) || {};
     const payload = Object.entries(allowed)
       .filter(([, canEdit]) => canEdit)
       .reduce((acc, [field]) => {
@@ -653,16 +675,20 @@ const fetchByDate = async (subcollection, date) => {
       setManagingAppt(null);
       return;
     }
+    // Cita original (antes de editar) para decir qué cambió en la notificación.
+    const before = appointments.find(a => a.id === managingAppt.id);
+    const changes = describeAppointmentChanges(before, { ...before, ...payload });
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, updatedAt: new Date().toISOString() });
       triggerToast('Cita actualizada');
       notify(
         payload.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
-        { citaId: managingAppt.id, clientName: managingAppt.clientName, time: managingAppt.time },
+        { citaId: managingAppt.id, clientName: managingAppt.clientName, time: managingAppt.time, changes },
         barberUser?.id,
         barberUser?.id
       );
+      reevaluatePending(negocioId, managingAppt.date);
     } catch (err) {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
     }
@@ -670,6 +696,7 @@ const fetchByDate = async (subcollection, date) => {
   };
 
   const handleBarberCreateReservation = async (draft) => {
+    if (!staffPerms.createAppointments) { triggerToast('No tienes permiso para crear citas.', 'error'); return; }
     let bloqueosDeLaFecha = blockedSlots;
     if (!isDateLoaded(draft.date)) {
       try {
@@ -729,6 +756,7 @@ const fetchByDate = async (subcollection, date) => {
       professionalId: activeBarber.id,
       barberId: activeBarber.id,
       clientName: draft.clientName,
+      clientPhone: (draft.phone || (clientObj.phone !== 'N/A' ? clientObj.phone : '') || ''),
       service: draft.serviceName,
       serviceName: draft.serviceName,
       serviceId: draft.serviceId,
@@ -750,6 +778,7 @@ const fetchByDate = async (subcollection, date) => {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast('Cita agendada correctamente');
       notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
+      reevaluatePending(negocioId, newAppt.date);
     } catch (err) {
       triggerToast('Error al agendar: ' + err.message, 'error');
     }
@@ -787,6 +816,7 @@ const fetchByDate = async (subcollection, date) => {
   };
 
   const deleteAppointment = async (apptId) => {
+    if (!staffPerms.deleteAppointments) { triggerToast('No tienes permiso para eliminar citas.', 'error'); return; }
     const targetAppt = appointments.find(a => a.id === apptId);
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', apptId));
@@ -1399,6 +1429,15 @@ const fetchByDate = async (subcollection, date) => {
                       const slotAppointments = filteredAppointments.filter(appt => appt.time.startsWith(prefix));
                       const hasAppt = slotAppointments.length > 0;
 
+                      // Pendientes (sin profesional) que este profesional podría atender.
+                      // Solo informativas: no ocupan el horario ni se cuentan como citas.
+                      const slotPendings = appointments.filter(a =>
+                        isOpenPendingCita(a) &&
+                        a.date === selectedDate &&
+                        (a.time || '').startsWith(prefix) &&
+                        professionalCanDo(activeBarber, getCitaServiceIds(a))
+                      );
+
                       // Bloqueo administrativo en este rango de hora
                       const activeHourNum = parseInt(prefix, 10);
                       const isBlocked = blockedSlots.find(block => {
@@ -1415,6 +1454,13 @@ const fetchByDate = async (subcollection, date) => {
                           </div>
 
                           <div className="flex-1 p-3 flex flex-col gap-2.5 justify-center">
+                            {slotPendings.map(pa => (
+                              <div key={pa.id} className="border border-dashed border-nexus-warning/60 bg-nexus-surface-hover text-nexus-warning-text rounded-2xl px-4 py-2 select-none">
+                                <span className="text-[10px] font-black tracking-widest uppercase block">PENDIENTE · {pa.time}</span>
+                                <span className="text-xs font-semibold block">Hay una reserva sin profesional asignado</span>
+                                <span className="text-[10px] opacity-80 block">{pa.serviceName}</span>
+                              </div>
+                            ))}
                             {isBlocked ? (
                               /* DISEÑO SLOT BLOQUEADO ADMINISTRATIVAMENTE */
                               <div className="bg-nexus-error-bg text-nexus-error-text border border-nexus-error/25 rounded-2xl p-4 flex items-center gap-3">
@@ -1457,7 +1503,7 @@ const fetchByDate = async (subcollection, date) => {
                                         {getServiceDuration(services, appt)}
                                       </span>
                                       <span>•</span>
-                                      <span className="font-black text-nexus-text">{appt.price} Bs</span>
+                                      {staffPerms.viewFinancials && <span className="font-black text-nexus-text">{appt.price} Bs</span>}
                                     </div>
                                   </div>
 
@@ -1530,7 +1576,7 @@ const fetchByDate = async (subcollection, date) => {
                                   {getServiceDuration(services, appt)}
                                 </span>
                                 <span>•</span>
-                                <span className="text-nexus-success-text font-bold">{appt.price} Bs</span>
+                                {staffPerms.viewFinancials && <span className="text-nexus-success-text font-bold">{appt.price} Bs</span>}
                               </div>
                             </div>
                           </div>
@@ -1793,10 +1839,11 @@ const fetchByDate = async (subcollection, date) => {
 
                 <div className="relative pt-6">
                   <div className="relative inline-block">
-                    <img 
-                      src={activeBarber.avatar} 
-                      alt={activeBarber.name} 
+                  <Avatar
+                      src={activeBarber.avatar}
+                      name={activeBarber.name}
                       className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-nexus-primary/20 shadow-xl"
+                      textClassName="text-3xl"
                     />
                     <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-nexus-success border-2 border-nexus-surface animate-pulse"></div>
                   </div>
@@ -1805,6 +1852,8 @@ const fetchByDate = async (subcollection, date) => {
                   <span className="text-xs text-nexus-primary font-bold uppercase tracking-wider">{activeBarber.role}</span>
                   <p className="text-[11px] text-nexus-text-muted mt-1">Nexus Staff</p>
                 </div>
+
+                <PersonalBookingLink url={buildPersonalBookingUrl(negocioId, activeBarber.id)} onToast={triggerToast} />
 
                 <div className="space-y-3 pt-4">
                   <button 
@@ -1838,7 +1887,7 @@ const fetchByDate = async (subcollection, date) => {
       </main>
 
       {/* BOTÓN FLOTANTE "+" DE AGENDA */}
-      {activeTab === "agenda" && (
+      {activeTab === "agenda" && staffPerms.createAppointments && (
         <button 
           onClick={() => {
             setIsCreateModalOpen(true); 
@@ -1860,6 +1909,7 @@ const fetchByDate = async (subcollection, date) => {
             </div>
 
             <div className="space-y-3 pt-2">
+            {staffPerms.createAppointments &&
               <button
                 onClick={() => {
                   setIsModalOpenSlot(false);
@@ -1869,7 +1919,8 @@ const fetchByDate = async (subcollection, date) => {
               >
                 <Icons.Calendar className="w-4 h-4 text-white" />
                 Crear Nueva Reserva
-              </button>
+                
+              </button>}
 
               <button
                 onClick={() => {
@@ -2006,6 +2057,9 @@ const fetchByDate = async (subcollection, date) => {
           role="barber"
           services={services}
           professionals={activeBarber ? [activeBarber] : []}
+          clients={clientes}
+        staffPermissions={managingPerms}
+        showPrices={staffPerms.viewFinancials}
           paymentMethods={businessSettings.paymentMethods}
           onClose={() => setManagingAppt(null)}
           onChangeField={handleChangeManagingField}
@@ -2104,7 +2158,7 @@ const fetchByDate = async (subcollection, date) => {
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
           { id: "rendimiento", label: "Rendimiento", icon: Icons.TrendingUp },
           { id: "perfil", label: "Perfil", icon: Icons.User }
-        ].map(tab => {
+        ].filter(tab => (tab.id !== "comisiones" || staffPerms.viewCommissions) && (tab.id !== "rendimiento" || staffPerms.viewFinancials)).map(tab => {
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

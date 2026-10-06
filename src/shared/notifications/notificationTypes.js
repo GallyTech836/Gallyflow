@@ -12,4 +12,7 @@ export const NotificationType = {
   // No confundir con RESERVA_CREADA_CLIENTE, que en realidad notifica al
   // staff (admin/barber) de que un cliente reservó.
   RESERVA_CONFIRMADA_CLIENTE: 'RESERVA_CONFIRMADA_CLIENTE',
+  // Pendiente (sin profesional): aviso a candidatos y aviso de asignación.
+  RESERVA_PENDIENTE: 'RESERVA_PENDIENTE',
+  RESERVA_PENDIENTE_ASIGNADA: 'RESERVA_PENDIENTE_ASIGNADA',
 };

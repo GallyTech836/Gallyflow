@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { createAppointment } from '../services/appointments/createAppointment.js';
+import { processPendingCita, reevaluatePending } from '../services/appointments/pendingService.js';
+import { pendingRateLimit } from '../middlewares/rateLimit.middleware.js';
 import { logger } from '../utils/logger.js';
 
 const router = Router();
@@ -11,6 +13,28 @@ router.post('/appointments', async (req, res) => {
   } catch (err) {
     logger.warn('[appointments.routes] createAppointment falló:', err.message);
     return res.status(409).json({ error: err.message });
+  }
+});
+
+// Citas "Pendiente": evaluar una recién creada / reevaluar una fecha.
+// Idempotentes (transacción): se pueden llamar las veces que haga falta.
+router.post('/appointments/pending/process', pendingRateLimit, async (req, res) => {
+  try {
+    const result = await processPendingCita(req.body || {});
+    return res.status(200).json({ ok: true, result });
+  } catch (err) {
+    logger.warn('[appointments.routes] processPendingCita falló:', err.message);
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/appointments/pending/reevaluate', pendingRateLimit, async (req, res) => {
+  try {
+    const result = await reevaluatePending(req.body || {});
+    return res.status(200).json({ ok: true, result });
+  } catch (err) {
+    logger.warn('[appointments.routes] reevaluatePending falló:', err.message);
+    return res.status(400).json({ error: err.message });
   }
 });
 

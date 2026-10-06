@@ -7,11 +7,19 @@ import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
 import { notify, NotificationType } from '../shared/notifications';
 import { calculateTotals } from '../shared/appointments/serviceSelection';
+import { formatServicePrice, formatAmount } from '../shared/servicePricing/servicePricing';
+import DirectionsButton from '../shared/location/DirectionsButton';
+import WhatsAppButton from '../shared/location/WhatsAppButton';
+import Avatar from '../shared/avatar/Avatar';
+import { buildDirectionsUrl } from '../shared/location/mapsLink';
+import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { compareServicios } from '../firebase/useServicios';
 import { confirmBookingToClient } from './useClientBookingConfirmation';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
+import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
+import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -51,7 +59,6 @@ export default function App({ negocioSlug } = {}) {
     setSelectedBarber(null);
     setSelectedDate(null);
     setSelectedHour(null);
-    setPaymentMethod(null);
     setClientName('');
     setClientPhone('');
     setLoading(false);
@@ -128,6 +135,7 @@ export default function App({ negocioSlug } = {}) {
           id: d.id,
           name: data.name,
           price: Number(data.price || 0),
+          priceVariable: data.priceVariable === true,
           promoPrice: data.promoPrice ? Number(data.promoPrice) : undefined,
           duration: `${data.duration || 30} min`,
           durationMin: Number(data.duration || 30),
@@ -194,6 +202,20 @@ export default function App({ negocioSlug } = {}) {
     });
     return () => unsub();
   }, [negocioId]);
+
+  // === LINK PERSONAL DE UN PROFESIONAL: /reservar?negocio=slug&pro=ID ===
+  const personalProId = useMemo(() => new URLSearchParams(window.location.search).get('pro'), []);
+  const personalBarber = personalProId ? barbers.find(b => b.id === personalProId && !b.isPending) : null;
+  const isPersonalLink = !!personalBarber;
+  const stepOffset = isPersonalLink ? 2 : 0;
+  useEffect(() => {
+    if (!personalBarber) return;
+    if (selectedBarber !== personalBarber) setSelectedBarber(personalBarber);
+    const branch =
+      branches.find(b => b.id === personalBarber.branch || b.name === personalBarber.branch) ||
+      (branches.length === 1 ? branches[0] : null);
+    if ((branch?.id || null) !== (selectedBranch?.id || null)) setSelectedBranch(branch);
+  }, [personalBarber, branches, selectedBarber, selectedBranch]);
 
   // === CITAS EXISTENTES DEL NEGOCIO (para calcular disponibilidad real) ===
   // Solo se consultan las citas y bloqueos de la fecha elegida (selectedDate).
@@ -266,9 +288,27 @@ export default function App({ negocioSlug } = {}) {
   }, [services, selectedDate]);
 
   const servicesForProfessional = useMemo(() => {
-    // "Pendiente" puede ofrecer todos los servicios
+    // "Pendiente": se ofrecen los servicios que al menos un profesional activo
+    // pueda realizar y esté libre en la hora elegida (candidatos). Mientras no
+    // haya hora/datos cargados, se muestran todos como antes.
     if (!selectedBarber || selectedBarber.isPending) {
-      return servicesForDate;
+      const pros = barbers.filter(b => !b.isPending);
+      if (pros.length === 0 || !selectedDate || !selectedHour ||
+          citasFecha !== selectedDate || bloqueosFecha !== selectedDate) {
+        return servicesForDate;
+      }
+      return servicesForDate.filter(service =>
+        getPendingCandidates({
+          professionals: pros,
+          serviceIds: [service.id],
+          fecha: selectedDate,
+          time: selectedHour,
+          duration: service.durationMin || 30,
+          citas: citasNegocio,
+          bloqueos: blockouts,
+          businessSchedule: businessSettings?.schedule || [],
+        }).length > 0
+      );
     }
   
     // En Firestore, `services` del profesional es un array de objetos
@@ -284,7 +324,7 @@ export default function App({ negocioSlug } = {}) {
     return servicesForDate.filter(service =>
       assignedIds.has(String(service.id))
     );
-  }, [servicesForDate, selectedBarber]);
+  }, [servicesForDate, selectedBarber, barbers, selectedDate, selectedHour, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
   const availableHours = useMemo(() => {
     const serviceDuration = selectedServices[0]?.durationMin || 30;
 
@@ -293,12 +333,14 @@ export default function App({ negocioSlug } = {}) {
     const isToday = selectedDate === todayStr;
     const nowMin = now.getHours() * 60 + now.getMinutes();
 
-    // Anticipación mínima configurada en Configuración → Negocio (0 = sin restricción).
-    // Solo aplica si la fecha elegida es hoy.
     const minAdvance = businessSettings?.minAdvanceMinutes || 0;
     const cumpleAnticipacion = (hourStr) => !isToday || timeToMin(hourStr) >= nowMin + minAdvance;
 
-    if (!selectedBarber || selectedBarber.isPending) {
+    const eligePendiente = !selectedBarber || selectedBarber.isPending;
+    const realBarbers = barbers.filter(b => !b.isPending);
+
+    // Negocio sin profesionales activos: comportamiento anterior para "Pendiente".
+    if (eligePendiente && realBarbers.length === 0) {
       if (selectedDate) {
         const pendingDate = new Date(selectedDate + "T12:00:00");
         const pendingDayName = DAY_NAMES_MON_FIRST[(pendingDate.getDay() + 6) % 7];
@@ -307,76 +349,85 @@ export default function App({ negocioSlug } = {}) {
       }
       return DEFAULT_HOURS.filter(cumpleAnticipacion);
     }
+
     if (!selectedDate) return [];
-    // Espera a tener las citas y bloqueos de ESTA fecha antes de mostrar horarios libres.
     if (citasFecha !== selectedDate || bloqueosFecha !== selectedDate) return [];
 
     const date = new Date(selectedDate + "T12:00:00");
     const dayName = DAY_NAMES_MON_FIRST[(date.getDay() + 6) % 7];
-    const dayAvailability = (selectedBarber.availability || []).find(a => a?.day === dayName);
 
-    if (!dayAvailability || dayAvailability.status !== 'Disponible') return [];
-
-    // Horario general del negocio (Configuración → Negocio). Si el negocio está
-    // cerrado ese día, no hay horarios, sin importar la disponibilidad del profesional.
     const businessDay = (businessSettings?.schedule || []).find(d => d?.day === dayName);
     if (businessDay && businessDay.status !== 'Disponible') return [];
 
-    const barberStartMin = timeToMin(dayAvailability.start || '00:00');
-    const barberEndMin = timeToMin(dayAvailability.end || '00:00');
-    const businessStartMin = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
-    const businessEndMin = businessDay ? timeToMin(businessDay.end || '23:59') : (24 * 60 - 1);
+    const SLOT_STEP = 30;
 
-    // La ventana real es la intersección entre el horario del profesional y el del negocio.
-    const startOfDayMin = Math.max(barberStartMin, businessStartMin);
-    const endOfDayMin = Math.min(barberEndMin, businessEndMin);
-    if (isNaN(startOfDayMin) || isNaN(endOfDayMin) || endOfDayMin <= startOfDayMin) return [];
+    // Horas libres de UN profesional ese día.
+    const freeHoursOf = (barber) => {
+      const dayAvailability = (barber.availability || []).find(a => a?.day === dayName);
+      if (!dayAvailability || dayAvailability.status !== 'Disponible') return [];
 
-    const citasDelBarbero = citasNegocio.filter(c =>
-      c?.date === selectedDate &&
-      (c?.professionalId === selectedBarber.id || c?.barberId === selectedBarber.id) &&
-      c?.status !== 'cancelled'
-    );
+      const barberStartMin = timeToMin(dayAvailability.start || '00:00');
+      const barberEndMin = timeToMin(dayAvailability.end || '00:00');
+      const businessStartMin = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
+      const businessEndMin = businessDay ? timeToMin(businessDay.end || '23:59') : (24 * 60 - 1);
 
-    const bloqueosDelBarbero = blockouts.filter(b =>
-      b?.date === selectedDate &&
-      (b?.barberId === selectedBarber.id || b?.professionalId === selectedBarber.id)
-    );
+      const startOfDayMin = Math.max(barberStartMin, businessStartMin);
+      const endOfDayMin = Math.min(barberEndMin, businessEndMin);
+      if (isNaN(startOfDayMin) || isNaN(endOfDayMin) || endOfDayMin <= startOfDayMin) return [];
 
-    const SLOT_STEP = 30; // minutos entre cada horario mostrado (09:00, 09:30, ...)
-    const hours = [];
-    for (let slotStart = startOfDayMin; slotStart < endOfDayMin; slotStart += SLOT_STEP) {
-      const hourStr = minToTime(slotStart);
-      const slotEnd = slotStart + serviceDuration;
+      const citasDelBarbero = citasNegocio.filter(c =>
+        c?.date === selectedDate &&
+        (c?.professionalId === barber.id || c?.barberId === barber.id) &&
+        c?.status !== 'cancelled'
+      );
+      const bloqueosDelBarbero = blockouts.filter(b =>
+        b?.date === selectedDate &&
+        (b?.barberId === barber.id || b?.professionalId === barber.id)
+      );
 
-      // Se permite iniciar el servicio en cualquier horario dentro de la
-      // jornada, incluso si termina después del cierre (el profesional
-      // puede quedarse atendiendo el último cliente del día).
+      const hours = [];
+      for (let slotStart = startOfDayMin; slotStart < endOfDayMin; slotStart += SLOT_STEP) {
+        const slotEnd = slotStart + serviceDuration;
 
-      // No debe cruzarse con ninguna cita ya existente de ese profesional
-      const seCruza = citasDelBarbero.some(c => {
-        const cDuration = c?.duration || 30;
-        const cStart = timeToMin(c?.time);
-        const cEnd = cStart + cDuration;
-        return slotStart < cEnd && slotEnd > cStart;
-      });
-      if (seCruza) continue;
+        const seCruza = citasDelBarbero.some(c => {
+          const cStart = timeToMin(c?.time);
+          const cEnd = cStart + (c?.duration || 30);
+          return slotStart < cEnd && slotEnd > cStart;
+        });
+        if (seCruza) continue;
 
-      // No debe cruzarse con ningún bloqueo administrativo del profesional
-      const seCruzaBloqueo = bloqueosDelBarbero.some(b => {
-        const bStart = timeToMin(b?.startTime);
-        const bEnd = timeToMin(b?.endTime);
-        return slotStart < bEnd && slotEnd > bStart;
-      });
-      if (seCruzaBloqueo) continue;
+        const seCruzaBloqueo = bloqueosDelBarbero.some(b => {
+          const bStart = timeToMin(b?.startTime);
+          const bEnd = timeToMin(b?.endTime);
+          return slotStart < bEnd && slotEnd > bStart;
+        });
+        if (seCruzaBloqueo) continue;
 
-      if (!cumpleAnticipacion(hourStr)) continue;
+        hours.push(minToTime(slotStart));
+      }
+      return hours;
+    };
 
-      hours.push(hourStr);
+    // "Pendiente": la hora aparece si AL MENOS UN profesional activo que pueda
+    // realizar el/los servicio(s) la tiene libre. Una cita Pendiente existente
+    // NUNCA resta capacidad ni oculta la hora (solo es un indicador visual).
+    if (eligePendiente) {
+      const selectedIds = selectedServices.map(s => s.id);
+      const pool = realBarbers.filter(b =>
+        selectedIds.length > 0
+          ? professionalCanDo(b, selectedIds)
+          : getProfessionalServiceIds(b).size > 0
+      );
+      const hoursSet = new Set();
+      pool.forEach(b => freeHoursOf(b).forEach(h => hoursSet.add(h)));
+      return [...hoursSet].filter(cumpleAnticipacion).sort();
     }
-    return hours;
-  }, [selectedBarber, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
 
+    // Profesional elegido: sus horas libres.
+    return freeHoursOf(selectedBarber).filter(cumpleAnticipacion);
+  }, [selectedBarber, barbers, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
+
+  const hasVariablePrice = selectedServices.some(s => s.priceVariable);
   const calculateTotal = useMemo(() => {
     return selectedServices.reduce((acc, curr) => {
       if (isTuesday && (curr.id === 'sr' || curr.id === 'jr')) {
@@ -437,6 +488,30 @@ export default function App({ negocioSlug } = {}) {
       }
     }
 
+    // "Pendiente": debe existir al menos un candidato (activo + hace TODOS los
+    // servicios + libre durante la duración total) o se vuelve a elegir hora.
+    if ((!selectedBarber || selectedBarber.isPending) && selectedDate && selectedHour) {
+      const pros = barbers.filter(b => !b.isPending);
+      if (pros.length > 0) {
+        const candidates = getPendingCandidates({
+          professionals: pros,
+          serviceIds: selectedServices.map(s => s.id),
+          fecha: selectedDate,
+          time: selectedHour,
+          duration: selectedServices.reduce((acc, s) => acc + (s?.durationMin || 30), 0),
+          citas: citasNegocio,
+          bloqueos: blockouts,
+          businessSchedule: businessSettings?.schedule || [],
+        });
+        if (candidates.length === 0) {
+          triggerToast('Ese horario ya no está disponible para estos servicios. Elige otro horario.', 'error');
+          setSelectedHour(null);
+          setStep(3);
+          return;
+        }
+      }
+    }
+
     setStep(5);
   };
 
@@ -480,6 +555,31 @@ export default function App({ negocioSlug } = {}) {
       const { totalPrice, totalDuration } = calculateTotals(servicesForCita);
       const professionalId = selectedBarber.isPending ? 'pending' : selectedBarber.id;
 
+      // "Pendiente": revalida que siga existiendo algún candidato. La asignación
+      // automática (si queda UN solo candidato) la decide el backend en una
+      // transacción, para no duplicar lógica ni competir entre clientes.
+      if (selectedBarber.isPending) {
+        const pros = barbers.filter(b => !b.isPending);
+        if (pros.length > 0) {
+          const candidates = getPendingCandidates({
+            professionals: pros,
+            serviceIds: servicesForCita.map(sv => sv.serviceId),
+            fecha: selectedDate,
+            time: selectedHour,
+            duration: totalDuration,
+            citas: citasNegocio,
+            bloqueos: blockouts,
+            businessSchedule: businessSettings?.schedule || [],
+          });
+          if (candidates.length === 0) {
+            triggerToast('Ese horario ya no está disponible. Elige otro horario.', 'error');
+            setSelectedHour(null);
+            setStep(3);
+            return;
+          }
+        }
+      }
+
       // Misma colección que usan Admin y Barber: negocios/{negocioId}/citas.
       // Se guarda el array completo en `services[]`, y además se mantienen
       // serviceId/serviceName/price/duration a nivel raíz como alias de
@@ -522,7 +622,7 @@ export default function App({ negocioSlug } = {}) {
         console.warn('[Cliente] No se pudo guardar en la base de clientes:', err?.message || err);
       }
 
-      await addDoc(collection(db, 'negocios', negocioId, 'citas'), {
+      const citaRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), {
         ...(savedClientId ? { clientId: savedClientId } : {}),
         clientName: clientName.trim(),
         clientPhone: clientPhone.trim() || 'No especificado',
@@ -543,11 +643,23 @@ export default function App({ negocioSlug } = {}) {
         createdAt: nowIso,
         updatedAt: nowIso
       });
-      notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, professionalId);
+      if (professionalId === 'pending') {
+        // El backend asigna (si hay un único candidato) o avisa SOLO a los candidatos.
+        // Si no responde, se avisa únicamente a los administradores.
+        processPendingCita(negocioId, citaRef.id).then((r) => {
+          if (!r) {
+            notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, undefined, []);
+          }
+        });
+      } else {
+        notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, professionalId);
+        // Este profesional se ocupó: puede que alguna Pendiente ya tenga un único candidato.
+        reevaluatePending(negocioId, selectedDate);
+      }
       // Sin "await" a propósito: la confirmación visual (SuccessStep) no
       // debe esperar al diálogo de permiso de notificaciones del navegador.
       confirmBookingToClient({ time: selectedHour });
-      setStep(7); 
+      setStep(6); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);
       triggerToast("Error al guardar reserva. Inténtalo de nuevo.");
@@ -558,7 +670,7 @@ export default function App({ negocioSlug } = {}) {
 
   const renderStep = () => {
     switch(step) {
-      case 0: return <Home onNext={() => setStep(1)} heroConfig={heroConfig} />;
+      case 0: return <Home onNext={() => setStep(isPersonalLink ? 3 : 1)} heroConfig={heroConfig} branches={branches} proName={personalBarber?.name} />;
       case 1: return <BranchStep 
         branches={branches}
         selected={selectedBranch}
@@ -580,7 +692,7 @@ export default function App({ negocioSlug } = {}) {
         currentMonth={currentCalendarMonth}
         setCurrentMonth={setCurrentCalendarMonth}
         onNext={() => setStep(4)} 
-        onBack={() => setStep(2)} 
+        onBack={() => setStep(isPersonalLink ? 0 : 2)}
       />;
       case 4: return <ServicesStep 
       services={servicesForProfessional}
@@ -589,6 +701,7 @@ export default function App({ negocioSlug } = {}) {
         onNext={handleServicesNext} 
         onBack={() => setStep(3)} 
         total={calculateTotal}
+        hasVariable={hasVariablePrice}
       />;
       case 5: return <ConfirmStep 
         name={clientName} setName={setClientName} 
@@ -598,6 +711,8 @@ export default function App({ negocioSlug } = {}) {
         selectedBarber={selectedBarber}
         selectedDate={selectedDate}
         selectedHour={selectedHour}
+        branch={selectedBranch}
+        hasVariable={hasVariablePrice}
         onConfirm={handleBooking} 
         loading={loading}
         onBack={() => setStep(4)} 
@@ -609,6 +724,8 @@ export default function App({ negocioSlug } = {}) {
         selectedBarber={selectedBarber}
         selectedServices={selectedServices}
         total={calculateTotal}
+        hasVariable={hasVariablePrice}
+        branch={selectedBranch}
       />;
       default: return <Home heroConfig={heroConfig} />;
     }
@@ -641,6 +758,7 @@ export default function App({ negocioSlug } = {}) {
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
         <div className="absolute top-[40%] right-[-10%] w-[35%] h-[35%] bg-nexus-accent/5 blur-[120px] rounded-full" />
       </div>
+      
 
       <main className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col p-5 sm:p-6 justify-between">
         
@@ -648,7 +766,7 @@ export default function App({ negocioSlug } = {}) {
           <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
             <button 
               onClick={() => {
-                if (step === 1) setStep(0);
+                if (step === 1 || (isPersonalLink && step === 3)) setStep(0);
                 else setStep(step - 1);
               }}
               className="p-1.5 rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary hover:text-nexus-text transition-colors"
@@ -656,7 +774,7 @@ export default function App({ negocioSlug } = {}) {
               <ChevronLeft size={16} />
             </button>
             <div className="flex gap-1.5">
-              {[1, 2, 3, 4, 5].map((s) => (
+            {[1, 2, 3, 4, 5].filter((s) => s > stepOffset).map((s) => (
                 <div 
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -669,7 +787,7 @@ export default function App({ negocioSlug } = {}) {
                 />
               ))}
             </div>
-            <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold font-mono">Paso {step}/5</span>
+            <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold font-mono">Paso {step - stepOffset}/{5 - stepOffset}</span>
           </div>
         )}
         
@@ -706,9 +824,15 @@ export default function App({ negocioSlug } = {}) {
 
 // === COMPONENTES DE PANTALLA ===
 
-const Home = ({ onNext, heroConfig }) => (
+const Home = ({ onNext, heroConfig, branches = [], proName = '' }) => (
   <div className="flex-1 flex flex-col justify-center items-center text-center py-10 animate-scale-up">
     <HeroDisplay config={heroConfig || DEFAULT_HERO_CONFIG} onReservar={onNext} />
+    {proName && (
+      <p className="mt-4 text-xs text-nexus-text-secondary">
+        Reservando con <span className="font-bold text-nexus-primary">{proName}</span>
+      </p>
+    )}
+    
   </div>
 );
 
@@ -748,6 +872,10 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => (
                     <Clock3 size={10} /> {b.schedule}
                   </p>
                 )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <DirectionsButton branch={b} compact />
+                  <WhatsAppButton phone={b.phone} message="Hola, quiero consultar sobre una cita." compact />
+                </div>
               </div>
               {selected?.id === b.id && (
                 <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white shrink-0">
@@ -762,7 +890,7 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => (
   </div>
 );
 
-const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
+const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable = false }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
       <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Servicios</h2>
@@ -814,7 +942,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
                       <span className="text-xs font-black text-nexus-success-text">{s.promoPrice} Bs</span>
                     </div>
                   ) : (
-                    <span className="text-xs font-bold text-nexus-text">{s.price} Bs</span>
+                    <span className="text-xs font-bold text-nexus-text">{formatServicePrice(s)}</span>
                   )}
                 </div>
               </div>
@@ -833,7 +961,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total }) => (
         </div>
         <div className="text-right">
           <span className="text-nexus-text-muted text-[9px] uppercase block tracking-wider font-semibold">Total Estimado</span>
-          <span className="text-xl font-black text-nexus-text">{total} Bs</span>
+          <span className="text-xl font-black text-nexus-text">{formatAmount(total, hasVariable)}</span>
         </div>
       </div>
       <button 
@@ -870,7 +998,7 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => (
                 <Sparkles size={24} className="animate-pulse" />
               </div>
             ) : (
-              <img src={b.image} className="w-14 h-14 rounded-xl object-cover border border-nexus-border" alt={b.name} />
+              <Avatar src={b.image} name={b.name} className="w-14 h-14 rounded-xl object-cover border border-nexus-border" textClassName="text-base" />
             )}
             
             <div className="flex-1 text-left">
@@ -1110,6 +1238,8 @@ const ConfirmStep = ({
   selectedBarber, 
   selectedDate, 
   selectedHour, 
+  branch,
+  hasVariable = false,
   onConfirm, 
   loading 
 }) => (
@@ -1161,11 +1291,13 @@ const ConfirmStep = ({
           
           <div className="flex justify-between pt-1">
             <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-            <span className="text-base font-black text-nexus-success-text">{total} Bs</span>
+            <span className="text-base font-black text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
           </div>
         </div>
       </form>
     </div>
+
+    
 
     {/* CTA FINAL DE PÁGINA */}
     <div className="pt-6 mt-6 border-t border-nexus-border">
@@ -1184,12 +1316,12 @@ const ConfirmStep = ({
   </div>
 );
 
-const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total }) => {
+const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, hasVariable = false, branch = null }) => {
 
   useEffect(() => {
     const timer = setTimeout(() => {
       onReset();
-    }, 10000);
+    }, 30000);
 
     return () => clearTimeout(timer);
   }, [onReset]);
@@ -1247,15 +1379,32 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           {typeof total === 'number' && (
             <div className="flex justify-between pt-1">
               <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-              <span className="text-base font-black text-nexus-success-text">{total} Bs</span>
+              <span className="text-base font-black text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
             </div>
           )}
         </div>
       )}
 
-      <p className="text-nexus-primary text-[11px] font-semibold">
-        Volviendo al inicio...
-      </p>
+      
+
+{branch && (buildDirectionsUrl(branch) || buildWhatsAppUrl(branch.phone)) && (
+        <div className="w-full space-y-2">
+          <p className="text-[11px] text-nexus-text-secondary">
+            ¿Cómo llegar o tienes dudas? Escríbenos.
+          </p>
+          <div className="flex items-stretch gap-2">
+            <div className="flex-1"><DirectionsButton branch={branch} /></div>
+            <div className="flex-1">
+              <WhatsAppButton
+                phone={branch.phone}
+                message={`Hola, acabo de reservar una cita${fechaLegible ? ` para el ${fechaLegible}` : ''}${selectedHour ? ` a las ${selectedHour} Hrs` : ''}.`}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      
 
       <div className="w-full">
         <button

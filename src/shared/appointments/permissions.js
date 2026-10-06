@@ -4,6 +4,7 @@
 // apoyadas en las transiciones definidas en statusModel.js.
 
 import { getNextStates } from './statusModel';
+import { normalizeStaffPermissions } from '../staffPermissions/staffPermissionsModel';
 
 export const ROLES = {
   ADMIN: 'admin',
@@ -15,6 +16,8 @@ export const ROLES = {
 export const FIELD_PERMISSIONS = {
   [ROLES.ADMIN]: {
     clientName: true,
+    clientId: true,
+    clientPhone: true,
     professionalId: true,
     serviceId: true,
     services: true,
@@ -28,6 +31,8 @@ export const FIELD_PERMISSIONS = {
   },
   [ROLES.BARBER]: {
     clientName: false,
+    clientId: false,
+    clientPhone: false,
     professionalId: false,
     serviceId: true,
     services: true,
@@ -44,9 +49,19 @@ export const FIELD_PERMISSIONS = {
 /**
  * Indica si el rol puede editar un campo específico de la cita.
  */
-export function canEditField(role, field) {
-  const fields = FIELD_PERMISSIONS[role];
+export function canEditField(role, field, staffPermissions = null) {
+  const fields = getEffectiveFieldPermissions(role, staffPermissions);
   return !!(fields && fields[field]);
+}
+
+export function getEffectiveFieldPermissions(role, staffPermissions = null) {
+  const base = FIELD_PERMISSIONS[role] || {};
+  if (role !== ROLES.BARBER || !staffPermissions) return base;
+  const sp = normalizeStaffPermissions(staffPermissions);
+  if (!sp.editAppointments) {
+    return Object.keys(base).reduce((acc, k) => ({ ...acc, [k]: false }), {});
+  }
+  return { ...base, clientName: sp.changeAppointmentClient, clientId: sp.changeAppointmentClient, clientPhone: sp.changeAppointmentClient };
 }
 
 // Permisos de acciones que no son edición de campos.
@@ -66,8 +81,10 @@ export const ACTION_PERMISSIONS = {
 /**
  * Indica si el rol puede eliminar físicamente una cita (deleteDoc).
  */
-export function canHardDelete(role) {
-  return !!(ACTION_PERMISSIONS[role] && ACTION_PERMISSIONS[role].canHardDelete);
+export function canHardDelete(role, staffPermissions = null) {
+  const base = !!(ACTION_PERMISSIONS[role] && ACTION_PERMISSIONS[role].canHardDelete);
+  if (role !== ROLES.BARBER || !staffPermissions) return base;
+  return base && normalizeStaffPermissions(staffPermissions).deleteAppointments;
 }
 
 /**
@@ -82,7 +99,8 @@ export function canCancel(role) {
  * desde el estado actual, combinando la regla general de
  * statusModel con cualquier restricción adicional del rol.
  */
-export function getAllowedNextStates(role, currentStatus) {
+export function getAllowedNextStates(role, currentStatus, staffPermissions = null) {
+  if (role === ROLES.BARBER && staffPermissions && !normalizeStaffPermissions(staffPermissions).editAppointments) return [];
   const baseNextStates = getNextStates(currentStatus);
   const perms = ACTION_PERMISSIONS[role];
   if (!perms) return [];

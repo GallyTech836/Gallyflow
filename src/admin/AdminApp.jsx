@@ -7,6 +7,11 @@ import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
+import { getPendingCandidates, getCitaServiceIds } from '../shared/appointments/pendingModel';
+import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
+import { describeAppointmentChanges } from '../shared/appointments/changeSummary';
+import { getLabel as getStatusLabel } from '../shared/appointments/statusModel';
+import { useFillHeight } from '../shared/layout/useFillHeight';
 import { useNegocio } from '../firebase/useNegocio';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPlan/useNegocioPlan';
@@ -17,6 +22,10 @@ import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModa
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { uploadImage } from '../shared/cloudinary/uploadImage';
+import { formatServicePrice } from '../shared/servicePricing/servicePricing';
+import { STAFF_PERMISSION_OPTIONS, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
+import ClientProfileModal from '../shared/clients/ClientProfileModal';
+import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
 import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
@@ -81,6 +90,8 @@ const [activeTab, setActiveTab] = useState('agenda');
     syncingDayScrollRef.current = false;
   };
   const [agendaView, setAgendaView] = useState('dia');
+  const agendaBoxRef = useRef(null);
+  const agendaBoxHeight = useFillHeight(agendaBoxRef, [activeTab, agendaView]);
   const [inventoryTab, setInventoryTab] = useState('stock');
   const [showNewProductPanel, setShowNewProductPanel] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -400,7 +411,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     pin: '',
     password: '',
     confirmPassword: '',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    avatar: '',
     active: true,
     services: [], 
     availability: [
@@ -416,6 +427,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
   const [serviceSearch, setServiceSearch] = useState('');
   const [serviceTab, setServiceTab] = useState('Todos');
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState(null);
 
   const [newService, setNewService] = useState({ 
     name: '', 
@@ -1712,17 +1725,43 @@ const { businessSettings } = useBusinessSettings(negocioId);
     };
 
     try {
-      await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
+      const citaRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
       bumpCitasTick();
-      notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
+      if (targetProfessionalId === 'pending') {
+        // El backend asigna si hay UN solo candidato, o avisa solo a los candidatos.
+        processPendingCita(negocioId, citaRef.id).then((r) => {
+          if (!r) notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, undefined, []);
+        });
+      } else {
+        notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
+        // Ese profesional se ocupó: puede que una Pendiente ya tenga un único candidato.
+        reevaluatePending(negocioId, reservationObj.date);
+      }
     } catch (err) { triggerToast('Error al guardar: ' + err.message, 'error'); return; }
 
     setActiveModal(null);
   };
 
+  // Candidatos para asignar manualmente una Pendiente: activos + hacen el servicio
+  // + libres a esa hora (mismo cálculo que usa el backend). null si no es Pendiente.
+  const pendingEditCandidates = useMemo(() => {
+    if (!editingReservation || editingReservation._originalProfessionalId !== 'pending') return null;
+    return getPendingCandidates({
+      professionals: barbers.filter(b => b?.active),
+      serviceIds: getCitaServiceIds(editingReservation),
+      fecha: editingReservation.date,
+      time: editingReservation.time,
+      duration: Number(editingReservation.duration) > 0 ? Number(editingReservation.duration) : 30,
+      citas: reservations,
+      bloqueos: blockouts,
+      businessSchedule: businessSettings?.schedule || [],
+      ignoreCitaId: editingReservation.id,
+    });
+  }, [editingReservation, barbers, reservations, blockouts, businessSettings]);
+
   const handleOpenEditReservation = (res) => {
     const services = res.services && res.services.length > 0 ? res.services : getServicesFromCita(res);
-    setEditingReservation({ ...res, services });
+    setEditingReservation({ ...res, services, _originalProfessionalId: res.professionalId || res.barberId || 'pending' });
     setActiveModal('edit-reservation');
   };
 
@@ -1747,6 +1786,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
   
     const updatedRecord = {
       clientName: editingReservation.clientName,
+      clientId: editingReservation.clientId || '',
+      clientPhone: editingReservation.clientPhone || '',
       professionalId: targetProfessionalId,
       barberId: targetProfessionalId, // alias
       services: currentServices,
@@ -1766,17 +1807,49 @@ const { businessSettings } = useBusinessSettings(negocioId);
       branch: targetProfessionalId !== 'pending' ? (assignedBarber?.branch || editingReservation.branch || selectedBranch) : (editingReservation.branch || selectedBranch),
       updatedAt: new Date().toISOString()
     };
+
+    // Asignación manual de una Pendiente: deja de ser pendiente y se avisa al profesional.
+    const esAsignacionManual =
+      editingReservation._originalProfessionalId === 'pending' &&
+      targetProfessionalId !== 'pending' &&
+      editingReservation.status !== 'cancelled';
+    if (esAsignacionManual) {
+      updatedRecord.assignedFromPending = true;
+      updatedRecord.assignmentMode = 'manual';
+      updatedRecord.pendingAssignedAt = updatedRecord.updatedAt;
+    }
   
+    // Foto de la cita ANTES de guardar, para decir qué cambió en la notificación.
+    const before = findCitaById(editingReservation.id);
+
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', editingReservation.id), updatedRecord);
       bumpCitasTick();
-      notify(
-        editingReservation.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
-        negocioId,
-        { citaId: editingReservation.id, clientName: editingReservation.clientName, time: editingReservation.time },
-        user?.uid,
-        targetProfessionalId
-      );
+      if (esAsignacionManual) {
+        notify(
+          NotificationType.RESERVA_PENDIENTE_ASIGNADA,
+          negocioId,
+          { citaId: editingReservation.id, clientName: editingReservation.clientName, time: editingReservation.time, serviceName: updatedRecord.serviceName },
+          user?.uid,
+          targetProfessionalId
+        );
+      } else {
+        const cancelada = editingReservation.status === 'cancelled';
+        const changes = describeAppointmentChanges(before, updatedRecord, { professionals: barbers });
+        // Si no cambió nada relevante (se abrió y se guardó igual), no se molesta a nadie.
+        if (cancelada || changes.length > 0) {
+          notify(
+            cancelada ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
+            negocioId,
+            { citaId: editingReservation.id, clientName: editingReservation.clientName, time: editingReservation.time, changes },
+            user?.uid,
+            targetProfessionalId === 'pending' ? undefined : targetProfessionalId,
+            targetProfessionalId === 'pending' ? [] : undefined
+          );
+        }
+      }
+      // El horario/estado cambió: reevalúa las Pendientes de esa fecha.
+      reevaluatePending(negocioId, editingReservation.date);
     } catch (err) {
       triggerToast('Error al modificar la cita: ' + err.message, 'error');
       return;
@@ -1842,6 +1915,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'horariosBloqueados'), newBl);
+      reevaluatePending(negocioId, newBl.date);
       triggerToast('¡Horario bloqueado con éxito!');
       setActiveModal(null);
     } catch (err) {
@@ -1862,13 +1936,16 @@ const { businessSettings } = useBusinessSettings(negocioId);
     try {
       const payload = { status, updatedAt: new Date().toISOString() };
       if (paymentMethod) payload.paymentMethod = paymentMethod;
+      const targetReservation = findCitaById(id); // antes de guardar: estado anterior
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), payload);
       bumpCitasTick();
-      const targetReservation = findCitaById(id);
+      const changes = targetReservation
+        ? describeAppointmentChanges(targetReservation, { ...targetReservation, ...payload }, { professionals: barbers })
+        : [`Estado: ${getStatusLabel(status)}`];
       notify(
         status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
-        { citaId: id, status, clientName: targetReservation?.clientName, time: targetReservation?.time },
+        { citaId: id, status, clientName: targetReservation?.clientName, time: targetReservation?.time, changes },
         user?.uid,
         targetReservation?.professionalId || targetReservation?.barberId
       );
@@ -1935,7 +2012,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
           address: newBranch.address,
           schedule: newBranch.schedule || '',
           lat: newBranch.lat,
-          lng: newBranch.lng
+          lng: newBranch.lng,
+          mapsUrl: (newBranch.mapsUrl || '').trim()
         });
         triggerToast('Sucursal actualizada con éxito.');
         setEditingBranchId(null);
@@ -1947,6 +2025,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           schedule: newBranch.schedule || '',
           lat: newBranch.lat,
           lng: newBranch.lng,
+          mapsUrl: (newBranch.mapsUrl || '').trim(),
           active: true,
           createdAt: new Date().toISOString()
         });
@@ -1985,19 +2064,52 @@ const { businessSettings } = useBusinessSettings(negocioId);
     }
 
     const durationMin = Number(newService.duration || 30);
-    const serviceObj = {
-      name: newService.name,
-      price: Number(newService.price),
-      promoPrice: null,
-      duration: durationMin,
-      category: 'Tratamiento',
-      availableDays: newService.availableDays || []
-    };
-
-    await agregarServicio(serviceObj);
-    triggerToast('Servicio creado con éxito.');
+    if (editingServiceId) {
+      await editarServicio(editingServiceId, {
+        name: newService.name,
+        price: Number(newService.price),
+        priceVariable: !!newService.priceVariable,
+        duration: durationMin,
+        availableDays: newService.availableDays || []
+      });
+      triggerToast('Servicio actualizado.');
+    } else {
+      await agregarServicio({
+        name: newService.name,
+        price: Number(newService.price),
+        priceVariable: !!newService.priceVariable,
+        promoPrice: null,
+        duration: durationMin,
+        category: 'Tratamiento',
+        availableDays: newService.availableDays || []
+      });
+      triggerToast('Servicio creado con éxito.');
+    }
     setActiveModal(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setEditingServiceId(null);
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+  };
+
+  const openNewServiceModal = () => {
+    setEditingServiceId(null);
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setActiveModal('add-service');
+  };
+
+  const handleEditService = (s) => {
+    setEditingServiceId(s.id);
+    setNewService({
+      name: s.name || '',
+      price: String(s.price ?? ''),
+      duration: String(s.duration || 30),
+      category: s.category || 'Tratamiento',
+      promoPrice: s.promoPrice || '',
+      priceVariable: s.priceVariable === true,
+      availableDays: Array.isArray(s.availableDays) && s.availableDays.length > 0
+        ? s.availableDays
+        : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+    });
+    setActiveModal('add-service');
   };
 
   const handleDeleteService = async (id) => {
@@ -2084,7 +2196,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       pin: '',
       password: '',
       confirmPassword: '',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      avatar: '',
       active: true,
       services: [],
       availability: [
@@ -2127,6 +2239,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         avatar: newBarber.avatar,
         active: newBarber.active,
         services: newBarber.services,
+        permissions: normalizeStaffPermissions(newBarber.permissions),
         availability: newBarber.availability
       };
       try {
@@ -2136,6 +2249,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           password: newBarber.password,
         });
         triggerToast('¡Perfil del profesional actualizado!');
+        reevaluatePending(negocioId); // activo/horario/servicios pueden cambiar los candidatos
       } catch (err) {
         triggerToast('Error al actualizar el profesional: ' + err.message, 'error');
       }
@@ -2166,6 +2280,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           attendance: { in: null, out: null, status: 'inactive' },
           performance: { servicesCount: 0, totalGenerated: 0 },
           services: newBarber.services,
+          permissions: normalizeStaffPermissions(newBarber.permissions),
           availability: newBarber.availability
         });
 
@@ -2190,9 +2305,10 @@ const { businessSettings } = useBusinessSettings(negocioId);
       pin: barber.pin || '',
       password: barber.password || '',
       confirmPassword: barber.password || '',
-      avatar: barber.avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      avatar: hasRealAvatar(barber.avatar) ? barber.avatar : '',
       active: barber.active !== undefined ? barber.active : true,
       services: barber.services || [],
+      permissions: normalizeStaffPermissions(barber.permissions),
       availability: barber.availability || [
         { day: 'Lunes', status: 'Disponible', start: '09:00', end: '19:00' },
         { day: 'Martes', status: 'Disponible', start: '09:00', end: '19:00' },
@@ -2212,6 +2328,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       await deleteDoc(doc(db, 'negocios', negocioId, 'profesionales', id));
       await deleteDoc(doc(db, 'usuarios', id));
       triggerToast('Perfil del profesional eliminado con éxito.');
+      reevaluatePending(negocioId);
     } catch (err) {
       triggerToast('Error al eliminar el profesional: ' + err.message, 'error');
     }
@@ -2979,7 +3096,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
                   {/* UN SOLO contenedor con scroll (horizontal y vertical).
                       Encabezado = sticky top, columna de horas = sticky left. */}
-                  <div className="relative h-[560px] overflow-auto overscroll-contain">
+                  <div ref={agendaBoxRef} style={{ height: agendaBoxHeight ?? 560 }} className="relative overflow-auto overscroll-contain">
                     <div style={{ minWidth: `${dayMinWidth}px` }}>
 
                       {/* ENCABEZADO (fijo arriba) */}
@@ -3000,7 +3117,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           {dayColumns.map(b => (
                             <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5 bg-nexus-background">
                               <div className="flex items-center gap-2 min-w-0">
-                                <img src={b?.avatar} alt={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border shrink-0" />
+                              <Avatar src={b?.avatar} name={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-[9px]" />
                                 <h5 className="text-[11px] font-bold text-nexus-text truncate">{b?.name}</h5>
                               </div>
                               <span className="text-[9px] font-mono font-bold text-nexus-text-muted">{barberDayCounts[b?.id] || 0} reservas</span>
@@ -3055,11 +3172,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                     key={res?.id}
                                     onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
                                     style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                    className="absolute left-1 right-1 px-2.5 py-1 rounded border shadow bg-nexus-primary-soft border-nexus-primary/40 text-nexus-primary hover:opacity-80 transition-all cursor-pointer flex flex-col justify-between overflow-hidden"
+                                    className="absolute left-1 right-1 px-2.5 py-0.5 rounded border border-dashed shadow-sm bg-nexus-surface-hover border-nexus-warning/60 text-nexus-warning-text hover:opacity-80 transition-all cursor-pointer flex flex-col justify-between overflow-hidden z-[5]"
                                   >
                                     <div className="min-w-0">
-                                      <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
-                                      <p className="text-[9px] truncate text-nexus-text-secondary">{res?.serviceName}</p>
+                                      <p className="font-black text-[9px] tracking-wider uppercase leading-tight">PENDIENTE · {res?.time}</p>
+                                      <p className="font-bold text-[9px] truncate leading-tight">{res?.clientName} · {res?.serviceName}</p>
+                                      <p className="text-[8px] truncate leading-tight opacity-80">Hay una reserva sin profesional asignado</p>
                                     </div>
                                   </div>
                                 );
@@ -3328,7 +3446,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       {filteredBarbersList.map(b => (
                         <tr key={b?.id} className="hover:bg-nexus-surface-hover transition-colors">
                           <td className="p-4">
-                            <img src={b?.avatar} alt={b?.name} className="w-10 h-10 rounded-xl object-cover border-2 border-nexus-border shadow" />
+                          <Avatar src={b?.avatar} name={b?.name} className="w-10 h-10 rounded-xl object-cover border-2 border-nexus-border shadow" textClassName="text-xs" />
                           </td>
                           <td className="p-4 font-bold text-nexus-text text-xs">{b?.name}</td>
                           <td className="p-4 font-mono text-nexus-text-secondary">@{b?.username}</td>
@@ -3383,7 +3501,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
                 <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Tratamientos y Servicios Disponibles</h4>
                 <button
-                  onClick={() => setActiveModal('add-service')}
+                  onClick={openNewServiceModal}
                   className="px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
                   <Plus className="w-4 h-4" />
@@ -3397,18 +3515,27 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     <div>
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-bold text-nexus-text text-sm">{s?.name}</h5>
-                        <button 
-                          onClick={() => handleDeleteService(s?.id)}
-                          className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEditService(s)}
+                            title="Editar servicio"
+                            className="p-1 hover:bg-nexus-surface-hover text-nexus-text-secondary rounded transition-colors cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteService(s?.id)}
+                            className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-nexus-text-muted text-xs mb-3 font-mono">Duración: {s?.duration} minutos</p>
                     </div>
                     <div className="flex justify-between items-center border-t border-nexus-border pt-3 mt-1">
                       <span className="text-xs font-bold text-nexus-text-secondary font-bold">Precio General</span>
-                      <span className="text-nexus-primary font-mono font-extrabold text-sm">{s?.price} Bs</span>
+                      <span className="text-nexus-primary font-mono font-extrabold text-sm">{formatServicePrice(s)}</span>
                     </div>
                   </div>
                 ))}
@@ -3449,7 +3576,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   </thead>
                   <tbody className="divide-y divide-nexus-border">
                     {filteredClientsList.map(c => (
-                      <tr key={c?.id} className="hover:bg-nexus-surface-hover transition-colors">
+                      <tr key={c?.id} onClick={() => setSelectedClientId(c?.id)} title="Ver ficha del cliente" className="hover:bg-nexus-surface-hover transition-colors cursor-pointer">
                         <td className="p-4 font-bold text-nexus-text text-xs">{c?.name}</td>
                         <td className="p-4 font-mono text-nexus-text-secondary">{c?.phone}</td>
                         <td className="p-4 text-center">
@@ -4211,7 +4338,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     {barberCommissionsList.map(barb => (
                       <tr key={barb?.id} className="hover:bg-nexus-surface-hover transition-colors">
                         <td className="p-4 flex items-center gap-2.5">
-                          <img src={barb?.avatar} alt={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" />
+                        <Avatar src={barb?.avatar} name={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" textClassName="text-[10px]" />
                           <span className="font-bold text-nexus-text">{barb?.name}</span>
                         </td>
                         <td className="p-4 text-right font-mono text-nexus-text-secondary">{barb?.serviciosCount}</td>
@@ -4317,7 +4444,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     {attendanceSummaryList.map(barb => (
                       <tr key={barb?.id} className="hover:bg-nexus-surface-hover transition-colors">
                         <td className="p-4 flex items-center gap-2.5">
-                          <img src={barb?.avatar} alt={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" />
+                        <Avatar src={barb?.avatar} name={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" textClassName="text-[10px]" />
                           <span className="font-bold text-nexus-text">{barb?.name}</span>
                         </td>
                         <td className="p-4 text-center font-mono font-bold text-nexus-text">{barb?.attended} días</td>
@@ -4450,9 +4577,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
       {activeModal === 'edit-reservation' && editingReservation && (
         <AppointmentManageModal
         appointment={editingReservation}
+        clients={clients}
         role="admin"
         services={services}
         professionals={branchBarbers}
+        candidateProfessionals={pendingEditCandidates}
         paymentMethods={businessSettings.paymentMethods}
         onClose={() => setActiveModal(null)}
           onChangeField={(field, value) => {
@@ -4664,10 +4793,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     />
                     <span className="text-[10px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold block mb-1">Fotografía del Staff</span>
                     <div className="relative">
-                      <img 
-                        src={newBarber.avatar} 
-                        alt="Preview Avatar" 
+                    <Avatar
+                        src={newBarber.avatar}
+                        name={newBarber.name}
+                        alt="Preview Avatar"
                         className="w-32 h-32 rounded-xl object-cover border-4 border-nexus-border group-hover:border-nexus-primary transition-all duration-300 shadow-md"
+                        textClassName="text-4xl"
                       />
                       <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <Upload className="w-6 h-6 text-white" />
@@ -5153,7 +5284,36 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           );
                         })}
                       </tbody>
-                    </table>
+                      </table>
+                  </div>
+
+                  <div className="pt-4 border-t border-nexus-border space-y-3">
+                    <div>
+                      <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Permisos del Profesional</h4>
+                      <p className="text-[9px] text-nexus-text-muted">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {STAFF_PERMISSION_OPTIONS.map(opt => {
+                        const enabled = normalizeStaffPermissions(newBarber.permissions)[opt.key];
+                        return (
+                          <label key={opt.key} className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${enabled ? 'bg-nexus-primary-soft border-nexus-primary/30' : 'bg-nexus-surface border-nexus-border'}`}>
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={enabled}
+                              onChange={(e) => setNewBarber(prev => ({
+                                ...prev,
+                                permissions: { ...normalizeStaffPermissions(prev.permissions), [opt.key]: e.target.checked }
+                              }))}
+                            />
+                            <span className="text-[11px] leading-snug">
+                              <strong className="text-nexus-text block">{opt.label}</strong>
+                              <span className="text-nexus-text-muted">{opt.hint}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -5213,7 +5373,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           ========================================== */}
       {activeModal === 'add-branch' && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-lg p-6 relative shadow-xl overflow-hidden">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-lg p-6 relative shadow-xl max-h-full overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <Building2 className="w-5 h-5 text-nexus-primary" />
               {editingBranchId ? 'Editar Sucursal' : 'Crear Nueva Sucursal'}
@@ -5269,6 +5429,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   onChange={(e) => setNewBranch(prev => ({ ...prev, schedule: e.target.value }))}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Enlace de Google Maps (opcional)</label>
+                <input
+                  type="text"
+                  inputMode="url"
+                  placeholder="https://maps.app.goo.gl/..."
+                  value={newBranch.mapsUrl || ''}
+                  onChange={(e) => setNewBranch(prev => ({ ...prev, mapsUrl: e.target.value }))}
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                />
+                <p className="text-[9px] text-nexus-text-muted mt-1">En Google Maps: Compartir → Copiar enlace. Si lo dejas vacío se usa la dirección/ubicación del mapa.</p>
               </div>
 
               <div className="relative">
@@ -5339,7 +5512,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-nexus-border">
+              <div className="sticky bottom-0 bg-nexus-surface flex justify-end gap-2.5 pt-3 pb-1 border-t border-nexus-border">
                 <button 
                   type="button" 
                   onClick={() => {
@@ -5365,12 +5538,23 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
       {/* 7. MODAL: AGREGAR SERVICIOS */}
       {/* 7. MODAL: AGREGAR SERVICIOS */}
+      {selectedClientId && clients.find(c => c.id === selectedClientId) && (
+        <ClientProfileModal
+          negocioId={negocioId}
+          client={clients.find(c => c.id === selectedClientId)}
+          professionals={barbers}
+          services={services}
+          fieldSuggestions={[...new Set(clients.flatMap(c => (c.customFields || []).map(f => f.label)).filter(Boolean))]}
+          onClose={() => setSelectedClientId(null)}
+          onToast={triggerToast}
+        />
+      )}
       {activeModal === 'add-service' && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl max-h-full overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <Scissors className="w-5 h-5 text-nexus-primary" />
-              Crear Nuevo Servicio
+              {editingServiceId ? 'Editar Servicio' : 'Crear Nuevo Servicio'}
             </h3>
             <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal del tratamiento.</p>
             
@@ -5389,7 +5573,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Precio *</label>
+                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">{newService.priceVariable ? 'Precio mínimo *' : 'Precio *'}</label>
                   <div className="relative">
                     <input 
                       type="number" 
@@ -5421,6 +5605,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   </select>
                 </div>
               </div>
+
+              <label className="flex items-start gap-2 p-2.5 bg-nexus-background border border-nexus-border rounded-lg cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={!!newService.priceVariable}
+                  onChange={(e) => setNewService(prev => ({ ...prev, priceVariable: e.target.checked }))}
+                />
+                <span className="text-[11px] text-nexus-text-secondary leading-snug">
+                  <strong className="text-nexus-text">Precio variable.</strong> El precio ingresado es el mínimo y se mostrará como
+                  {' '}<span className="font-mono text-nexus-primary">Desde Bs {newService.price || 'XX'}</span>.
+                </span>
+              </label>
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
@@ -5475,7 +5672,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-nexus-border">
+              <div className="sticky bottom-0 bg-nexus-surface flex justify-end gap-2.5 pt-3 pb-1 border-t border-nexus-border">
                 <button 
                   type="button" 
                   onClick={() => setActiveModal(null)} 
@@ -5487,7 +5684,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   type="submit" 
                   className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
-                  Crear Servicio
+                  {editingServiceId ? 'Guardar Cambios' : 'Crear Servicio'}
                 </button>
               </div>
             </form>

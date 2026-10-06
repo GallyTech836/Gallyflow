@@ -1,7 +1,7 @@
 // Único archivo del frontend que hace fetch() hacia el backend de
 // notificaciones. Nadie más debe llamar a esta URL directamente.
 
-const BASE_URL = 'https://gallyflow-production.up.railway.app/api';
+export const BASE_URL = 'https://gallyflow-production.up.railway.app/api';
 
 export async function registerDevice({ uid, rol, negocioId, oneSignalId }) {
   const res = await fetch(`${BASE_URL}/devices/register`, {
@@ -12,11 +12,11 @@ export async function registerDevice({ uid, rol, negocioId, oneSignalId }) {
   return res.json();
 }
 
-export async function notify(tipo, negocioId, data, actorUid, targetProfessionalId) {
+export async function notify(tipo, negocioId, data, actorUid, targetProfessionalId, targetProfessionalIds) {
   const res = await fetch(`${BASE_URL}/notifications/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tipo, negocioId, data, actorUid, targetProfessionalId }),
+    body: JSON.stringify({ tipo, negocioId, data, actorUid, targetProfessionalId, targetProfessionalIds }),
   });
   return res.json();
 }
