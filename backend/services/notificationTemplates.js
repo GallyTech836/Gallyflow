@@ -11,7 +11,9 @@ export function buildMessage(tipo, data = {}) {
       return { titulo: '🔔¡Nueva reserva!', cuerpo: `Se registró una reserva${hora} con ${cliente}.` };
     case 'RESERVA_CREADA_BARBER':
       return { titulo: '🔔¡Nueva reserva!', cuerpo: `Un profesional registró una reserva${hora} con ${cliente}.` };
-    case 'RESERVA_CANCELADA':
+      case 'CLIENTE_QUIERE_HABLAR':
+        return { titulo: '💬 Un cliente quiere hablar', cuerpo: `${cliente}${data.clientPhone ? ` (${data.clientPhone})` : ''} pidió hablar con alguien por WhatsApp.` };
+      case 'RESERVA_CANCELADA':
       return { titulo: '🔔¡Reserva cancelada!', cuerpo: `Se canceló la reserva de ${cliente}${hora}.` };
     case 'RESERVA_MODIFICADA': {
       // data.changes = lista de cambios ya redactados por el frontend

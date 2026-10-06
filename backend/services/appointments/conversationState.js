@@ -11,7 +11,7 @@ const DEFAULT_STATE = {
   currentFlow: 'welcome',
   selectedService: null,
   selectedServices: null,
-  cancelTarget: null,
+  humanUntil: null,
   selectedStaff: null,
   selectedDate: null,
   selectedTime: null,

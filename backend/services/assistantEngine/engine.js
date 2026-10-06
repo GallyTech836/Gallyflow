@@ -7,7 +7,8 @@
 //
 // Flujos:
 //   Agendar: servicio(s) → profesional (o "cualquiera" = Pendiente) → día → hora → nombre → confirmar
-//   Mis citas: lista de próximas citas → elegir una → confirmar cancelación
+//   Hablar con alguien: avisa a los admins y el bot se calla en ese chat
+//   (HUMAN_HANDOFF_MS) para que una persona responda; "menu" lo reactiva.
 
 import { getBusinessContext } from '../appointments/businessContext.js';
 import { getAvailableSlots } from '../appointments/availability.js';
@@ -15,7 +16,6 @@ import { createAppointment, createPendingAppointment } from '../appointments/cre
 import { getOrCreateConversation, updateConversation, resetConversation } from '../appointments/conversationState.js';
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
 import { upsertClientFromPhone } from '../appointments/clientRecord.js';
-import { listUpcomingClientAppointments, cancelClientAppointment } from '../appointments/clientAppointments.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
@@ -27,6 +27,7 @@ const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes
 const DIAS_A_MOSTRAR = 7;
 const DIAS_A_BUSCAR = 14;
 const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min sin responder => se reinicia
+const HUMAN_HANDOFF_MS = 2 * 60 * 60 * 1000; // 2 h en que el bot no responde tras pedir hablar con alguien
 
 // ───────────────────────── Fecha/hora del negocio ─────────────────────────
 
@@ -206,18 +207,14 @@ async function procesarPendiente(negocioId, cita) {
   }
 }
 
-function avisarCancelacion(negocioId, cita) {
+// Aviso a los admins de que un cliente pidió hablar con alguien.
+function avisarContacto(negocioId, phone, clientName) {
   sendNotification({
-    tipo: 'RESERVA_CANCELADA',
+    tipo: 'CLIENTE_QUIERE_HABLAR',
     negocioId,
-    data: { clientName: cita.clientName, time: cita.time },
-    // Pendiente (sin profesional): solo admins.
-    ...(cita.professionalId === PENDING_ID ? { targetProfessionalIds: [] } : { targetProfessionalId: cita.professionalId }),
-  }).catch((err) => logger.warn('[assistantEngine] Push cancelación falló:', err.message));
-
-  // Se liberó un horario: alguna Pendiente de ese día puede asignarse.
-  reevaluatePending({ negocioId, date: cita.date })
-    .catch((err) => logger.warn('[assistantEngine] reevaluatePending falló:', err.message));
+    data: { clientName, clientPhone: `+${phone}` },
+    targetProfessionalIds: [], // solo admins
+  }).catch((err) => logger.warn('[assistantEngine] Push contacto falló:', err.message));
 }
 
 // ───────────────────────── Motor ─────────────────────────
@@ -238,6 +235,24 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return { replyText: null, conversation };
   }
 
+  const texto = (message || '').trim();
+
+  // Modo "hablar con alguien": el bot no contesta mientras dure, salvo que el
+  // cliente escriba "menu". Al vencer, el chat vuelve al bot normalmente.
+  if (conversation.currentFlow === 'human') {
+    const hasta = Date.parse(conversation.humanUntil || '') || 0;
+    const vuelveAlBot = /^(menu|menú)$/i.test(texto);
+    if (Date.now() < hasta && !vuelveAlBot) {
+      if (messageId) await updateConversation(negocioId, phone, { lastMessageId: messageId });
+      return { replyText: null, conversation };
+    }
+    conversation = await resetConversation(negocioId, phone);
+    if (vuelveAlBot) {
+      if (messageId) await updateConversation(negocioId, phone, { lastMessageId: messageId });
+      return responder(mensajeBienvenida(context), conversation);
+    }
+  }
+
   // Se mide ANTES de guardar lastMessageId (eso actualiza updatedAt).
   const ultimaActividad = Date.parse(conversation.updatedAt || '') || 0;
   const expirada = conversation.currentFlow !== 'welcome' && Date.now() - ultimaActividad > CONVERSATION_TIMEOUT_MS;
@@ -251,8 +266,6 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return responder(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n${mensajeBienvenida(context)}`, conversation);
   }
 
-  const texto = (message || '').trim();
-
   if (/^(cancelar|salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
     conversation = await resetConversation(negocioId, phone);
     return responder(mensajeBienvenida(context), conversation);
@@ -260,8 +273,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
   switch (conversation.currentFlow) {
     case 'welcome': {
-      if (/^2$|mis citas|citas/i.test(texto)) {
-        return mostrarMisCitas();
+      if (/^2$|hablar|persona|humano|asesor|ayuda/i.test(texto)) {
+        return hablarConAlguien();
       }
       if (/^1$|agendar|reservar/i.test(texto)) {
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service' });
@@ -370,44 +383,6 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       return responder(`No entendí. \n\n${mensajeResumen(conversation)}`, conversation);
     }
 
-    // ── Mis citas ──
-
-    case 'my_appointments': {
-      const citas = conversation.myAppointmentsCache || [];
-      const idx = parseInt(texto, 10) - 1;
-      const cita = citas[idx];
-      if (!cita) return responder(`No entendí. \n\n${mensajeMisCitas(citas)}`, conversation);
-
-      conversation = await updateConversation(negocioId, phone, {
-        currentFlow: 'confirming_cancel',
-        cancelTarget: cita,
-      });
-      return responder(
-        `¿Cancelar esta cita?\n${cita.serviceName} · ${fechaLegible(cita.date)} a las ${cita.time}${cita.professionalName ? ` con ${cita.professionalName}` : ''}\n\n1. Sí, cancelar\n2. No, volver`,
-        conversation
-      );
-    }
-
-    case 'confirming_cancel': {
-      const objetivo = conversation.cancelTarget;
-      if (/^1$|^si$|^sí$/i.test(texto) && objetivo?.id) {
-        try {
-          const cita = await cancelClientAppointment({ negocioId, citaId: objetivo.id, phone });
-          avisarCancelacion(negocioId, cita);
-          conversation = await resetConversation(negocioId, phone);
-          return responder(`Listo, tu cita de ${fechaLegible(cita.date)} a las ${cita.time} quedó cancelada.`, conversation);
-        } catch (err) {
-          logger.warn('[assistantEngine] cancelClientAppointment falló:', err.message);
-          conversation = await resetConversation(negocioId, phone);
-          return responder(`No se pudo cancelar: ${err.message}\n\n${mensajeBienvenida(context)}`, conversation);
-        }
-      }
-      if (/^2$|^no$/i.test(texto)) {
-        return mostrarMisCitas();
-      }
-      return responder('Responde 1 para cancelar la cita o 2 para volver.', conversation);
-    }
-
     default: {
       conversation = await resetConversation(negocioId, phone);
       return responder(mensajeBienvenida(context), conversation);
@@ -466,27 +441,19 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return responder(`✅ Cita confirmada para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ¡Gracias!${notaPendiente}`, conversation);
   }
 
-  async function mostrarMisCitas() {
-    const citas = await listUpcomingClientAppointments({ negocioId, phone, hoyIso: isoLocal(ahoraNegocio()) });
-    if (citas.length === 0) {
-      conversation = await resetConversation(negocioId, phone);
-      return responder(`No tienes citas próximas.\n\n${mensajeBienvenida(context)}`, conversation);
-    }
-    const cache = citas.map((c) => ({
-      id: c.id,
-      date: c.date,
-      time: c.time,
-      serviceName: c.serviceName || 'Servicio',
-      professionalName: context.profesionales.find((p) => p.id === c.professionalId)?.name || '',
-    }));
-    conversation = await updateConversation(negocioId, phone, { currentFlow: 'my_appointments', myAppointmentsCache: cache });
-    return responder(mensajeMisCitas(cache), conversation);
+  async function hablarConAlguien() {
+    avisarContacto(negocioId, phone, conversation.clientName);
+    conversation = await updateConversation(negocioId, phone, {
+      currentFlow: 'human',
+      humanUntil: new Date(Date.now() + HUMAN_HANDOFF_MS).toISOString(),
+    });
+    return responder('Listo, le avisé al equipo. Una persona te responderá por aquí en breve. 🙌\n\n(Si quieres volver al asistente, escribe "menu".)', conversation);
   }
 
   // ── Mensajes ──
 
   function mensajeBienvenida(ctx) {
-    return `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Mis citas`;
+    return `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Hablar con alguien`;
   }
   function mensajeServicios(ctx) {
     const servicios = serviciosOfrecidos(ctx);
@@ -508,10 +475,6 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   }
   function mensajeResumen(conv) {
     return `Confirma tu cita:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}\n\n1. Confirmar\n2. Cancelar`;
-  }
-  function mensajeMisCitas(citas) {
-    const lista = listaNumerada(citas, (c) => `${c.serviceName} · ${fechaLegible(c.date)} ${c.time}${c.professionalName ? ` · ${c.professionalName}` : ''}`);
-    return `Tus próximas citas:\n\n${lista}\n\nEscribe el número de la cita que quieres cancelar, o 0 para volver al menú.`;
   }
 }
 
