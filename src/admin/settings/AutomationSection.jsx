@@ -1,6 +1,8 @@
 import { Info, Check, ToggleRight, ToggleLeft } from 'lucide-react';
+import AssistantSection from './AssistantSection';
 
 export default function AutomationSection({
+  negocioId,
   whatsappSettings,
   setWhatsappSettings,
   automationLogs,
@@ -9,6 +11,8 @@ export default function AutomationSection({
 }) {
   return (
     <div className="space-y-6 animate-fadeIn">
+
+    <AssistantSection negocioId={negocioId} />
 
       <div className="p-4 bg-nexus-primary-soft border border-nexus-primary/20 rounded-xl flex items-start gap-3">
         <Info className="w-5 h-5 text-nexus-primary shrink-0 mt-0.5" />

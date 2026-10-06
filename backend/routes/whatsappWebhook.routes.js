@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Router } from 'express';
+import { db } from '../config/firebase.js';
 import { assistantEngine } from '../services/assistantEngine/engine.js';
 import * as whatsappProvider from '../services/providers/whatsappProvider.js';
 import { logger } from '../utils/logger.js';
@@ -40,6 +41,21 @@ function firmaValida(req) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// Para la sección "Asistente WhatsApp" de AdminApp: número visible y último
+// mensaje. Como máximo una escritura cada 10 min por negocio (cada cambio al
+// doc del negocio dispara los listeners abiertos de las apps).
+const ACTIVIDAD_INTERVALO_MS = 10 * 60 * 1000;
+const ultimaActividad = new Map();
+function registrarActividad(negocioId, displayPhone) {
+  const ahora = Date.now();
+  if (ahora - (ultimaActividad.get(negocioId) || 0) < ACTIVIDAD_INTERVALO_MS) return;
+  ultimaActividad.set(negocioId, ahora);
+  db.collection('negocios').doc(negocioId).update({
+    'assistantConfig.displayPhone': displayPhone || null,
+    'assistantConfig.lastMessageAt': new Date(ahora).toISOString(),
+  }).catch((err) => logger.warn('[whatsappWebhook] No se pudo registrar actividad:', err.message));
+}
+
 const MENSAJE_NO_TEXTO = 'Por ahora solo entiendo mensajes de texto 🙂 Responde con el número de la opción.';
 
 async function procesarMensaje(value, mensaje) {
@@ -52,6 +68,7 @@ async function procesarMensaje(value, mensaje) {
     return;
   }
   const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token };
+  registrarActividad(cuenta.negocioId, value?.metadata?.display_phone_number);
 
   if (mensaje.type !== 'text') {
     await whatsappProvider.send(from, MENSAJE_NO_TEXTO, envio);
