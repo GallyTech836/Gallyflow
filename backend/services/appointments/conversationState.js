@@ -10,6 +10,8 @@ const DEFAULT_STATE = {
   status: 'active',
   currentFlow: 'welcome',
   selectedService: null,
+  selectedServices: null,
+  cancelTarget: null,
   selectedStaff: null,
   selectedDate: null,
   selectedTime: null,

@@ -5,6 +5,7 @@
 
 import { db } from '../../config/firebase.js';
 import { getAvailableSlots } from './availability.js';
+import { getPendingCandidates, PENDING_ID } from './pendingModel.js';
 
 export async function createAppointment({
   negocioId,
@@ -82,6 +83,81 @@ export async function createAppointment({
 
     tx.set(nuevaCitaRef, nuevaCita);
 
+    return { id: nuevaCitaRef.id, ...nuevaCita };
+  });
+}
+
+/**
+ * Cita "Pendiente" (sin profesional): mismo esquema que ClienteApp
+ * (professionalId/barberId = 'pending'). Dentro de la transacción se exige que
+ * exista al menos un candidato libre; la asignación la hace después
+ * processPendingCita (pendingService), igual que con el link público.
+ */
+export async function createPendingAppointment({
+  negocioId,
+  date,
+  time,
+  serviceDuration,
+  services,
+  clientName,
+  clientPhone,
+  clientId,
+  paymentMethod,
+  bookedBy = 'client',
+}) {
+  if (!negocioId || !date || !time || !serviceDuration || !services?.length) {
+    throw new Error('Faltan campos requeridos para crear la cita.');
+  }
+
+  const negocioRef = db.collection('negocios').doc(negocioId);
+  const citasRef = negocioRef.collection('citas');
+
+  return db.runTransaction(async (tx) => {
+    const [negocioSnap, prosSnap, citasSnap, bloqSnap] = await Promise.all([
+      tx.get(negocioRef),
+      tx.get(negocioRef.collection('profesionales')),
+      tx.get(citasRef.where('date', '==', date)),
+      tx.get(negocioRef.collection('horariosBloqueados').where('date', '==', date)),
+    ]);
+
+    const candidatos = getPendingCandidates({
+      professionals: prosSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      serviceIds: services.map((s) => s.serviceId),
+      fecha: date,
+      time,
+      duration: serviceDuration,
+      citas: citasSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      bloqueos: bloqSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      businessSchedule: negocioSnap.data()?.businessSettings?.schedule || [],
+    });
+    if (candidatos.length === 0) {
+      throw new Error('El horario ya no está disponible. Elige otro horario.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const nuevaCitaRef = citasRef.doc();
+    const nuevaCita = {
+      ...(clientId ? { clientId } : {}),
+      clientName: clientName?.trim() || '',
+      clientPhone: clientPhone?.trim() || 'No especificado',
+      professionalId: PENDING_ID,
+      barberId: PENDING_ID,
+      services,
+      serviceId: services[0]?.serviceId || '',
+      serviceName: services.map((s) => s.serviceName).join(' + '),
+      duration: serviceDuration,
+      price: services.reduce((acc, s) => acc + Number(s.price || 0), 0),
+      date,
+      time,
+      status: 'confirmed',
+      paymentMethod: paymentMethod || '',
+      bookedBy,
+      notes: '',
+      branch: '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    tx.set(nuevaCitaRef, nuevaCita);
     return { id: nuevaCitaRef.id, ...nuevaCita };
   });
 }
