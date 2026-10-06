@@ -26,12 +26,25 @@ export async function getBusinessContext(negocioId) {
     .filter((p) => p.active !== false);
   const sucursales = sucursalesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
+    // Mismo criterio que useNegocioStatus del front: suspendido o con
+  // subscriptionEnd vencido => bloqueado.
+  let effectiveStatus = negocio.status || 'active';
+  if (effectiveStatus !== 'suspended' && negocio.subscriptionEnd) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    if (new Date(negocio.subscriptionEnd) < hoy) effectiveStatus = 'expired';
+  }
+
   return {
     negocioId,
     businessName: negocio.heroConfig?.businessName || negocio.slug || negocioId,
-    status: negocio.status || 'active',
+    status: effectiveStatus,
+    isBlocked: effectiveStatus === 'suspended' || effectiveStatus === 'expired',
     plan: negocio.plan || null,
     assistantConfig: negocio.assistantConfig || { enabled: false, capabilities: {} },
+        // Tener whatsappPhoneNumberId ya es la activación; esto solo permite
+    // apagarlo explícitamente con assistantConfig.enabled = false.
+    assistantEnabled: negocio.assistantConfig?.enabled !== false,
     businessSettings: negocio.businessSettings || {},
     servicios,
     profesionales,

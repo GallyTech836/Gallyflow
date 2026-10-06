@@ -33,7 +33,10 @@ app.use(cors((req, callback) => {
   return callback(null, { origin: false });
 }));
 
-app.use(express.json());
+// rawBody: lo necesita el webhook de WhatsApp para validar la firma de Meta.
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api', notificationsRoutes);

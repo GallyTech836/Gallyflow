@@ -1,17 +1,48 @@
 // providers/whatsappProvider.js
 //
-// Meta Cloud API. Por ahora usa un solo número (variables de entorno) para
-// probar con un negocio. En Fase 3 esto se extiende para leer el
-// phoneNumberId/token de cada negocio desde Firestore en vez del .env.
+// Meta Cloud API, multi-negocio. Cada negocio tiene su propio número
+// (phoneNumberId). El token puede ser propio del negocio (whatsappAccounts)
+// o el token general del .env (System User de tu Business, que sirve para
+// todos los números que administras).
+//
+// Colección `whatsappAccounts/{phoneNumberId}` = { negocioId, token? }.
+// Solo la lee el backend (Admin SDK); las reglas de Firestore no deben
+// permitir leerla desde el front porque guarda tokens.
+
+import { db } from '../../config/firebase.js';
 
 const GRAPH_URL = 'https://graph.facebook.com/v20.0';
 
-export async function send(destinatario, mensaje) {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const token = process.env.WHATSAPP_TOKEN;
+/**
+ * Devuelve { negocioId, phoneNumberId, token } para un número de WhatsApp.
+ * 1) whatsappAccounts/{phoneNumberId}  2) negocio con whatsappPhoneNumberId (legado).
+ */
+export async function resolveAccount(phoneNumberId) {
+  if (!phoneNumberId) return null;
+
+  const accSnap = await db.collection('whatsappAccounts').doc(String(phoneNumberId)).get();
+  if (accSnap.exists) {
+    const acc = accSnap.data();
+    if (acc?.negocioId) {
+      return { negocioId: acc.negocioId, phoneNumberId: String(phoneNumberId), token: acc.token || null };
+    }
+  }
+
+  const snap = await db.collection('negocios').where('whatsappPhoneNumberId', '==', String(phoneNumberId)).limit(1).get();
+  if (snap.empty) return null;
+  return { negocioId: snap.docs[0].id, phoneNumberId: String(phoneNumberId), token: null };
+}
+
+/**
+ * send(destinatario, mensaje, { phoneNumberId, token }?)
+ * Sin opciones usa las variables del .env (compatible con notificationService).
+ */
+export async function send(destinatario, mensaje, opciones = {}) {
+  const phoneNumberId = opciones.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token = opciones.token || process.env.WHATSAPP_TOKEN;
 
   if (!phoneNumberId || !token) {
-    throw new Error('[whatsappProvider] Faltan WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_TOKEN en .env.');
+    throw new Error('[whatsappProvider] Falta phoneNumberId o token (ni en la cuenta ni en .env).');
   }
 
   const res = await fetch(`${GRAPH_URL}/${phoneNumberId}/messages`, {

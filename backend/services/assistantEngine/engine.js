@@ -22,6 +22,7 @@ const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DIAS_A_MOSTRAR = 7;
 const DIAS_A_BUSCAR = 14;
+const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min sin responder => se reinicia
 
 // Railway corre en UTC: este Date "local" tiene la fecha/hora del negocio,
 // que es lo que esperan getAvailableSlots (getHours/getDate) y proximosDias.
@@ -122,6 +123,12 @@ function listaNumerada(items, getLabel) {
 
 export async function assistantEngine({ negocioId, phone, message, messageId }) {
   const context = await getBusinessContext(negocioId);
+
+  // Negocio suspendido/vencido o asistente apagado: no se toman reservas.
+  if (context.isBlocked || !context.assistantEnabled) {
+    return { replyText: `Por ahora ${context.businessName} no está recibiendo reservas por WhatsApp.`, conversation: null };
+  }
+
   let conversation = await getOrCreateConversation(negocioId, phone);
 
   // Meta puede reentregar el mismo mensaje más de una vez; sin esto se
@@ -129,8 +136,18 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   if (messageId && conversation.lastMessageId === messageId) {
     return { replyText: null, conversation };
   }
+
+  // Se mide ANTES de guardar lastMessageId (eso actualiza updatedAt).
+  const ultimaActividad = Date.parse(conversation.updatedAt || '') || 0;
+  const expirada = conversation.currentFlow !== 'welcome' && Date.now() - ultimaActividad > CONVERSATION_TIMEOUT_MS;
+
   if (messageId) {
     conversation = await updateConversation(negocioId, phone, { lastMessageId: messageId });
+  }
+
+  if (expirada) {
+    conversation = await resetConversation(negocioId, phone);
+    return responder(`Tu reserva anterior quedó sin terminar, empecemos de nuevo.\n\n${mensajeBienvenida(context)}`, conversation);
   }
 
   const texto = (message || '').trim();
