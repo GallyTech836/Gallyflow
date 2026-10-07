@@ -84,12 +84,21 @@ async function procesarMensaje(value, mensaje) {
     return;
   }
 
-  const { replyText, interactive } = await assistantEngine({
+  const { replyText, interactive, preMessages = [] } = await assistantEngine({
     negocioId: cuenta.negocioId,
     phone: from,
     message: texto,
     messageId: mensaje.id,
   });
+
+  // Mensajes previos (tarjetas con foto), en orden. Si uno falla, se sigue.
+  for (const pre of preMessages) {
+    try {
+      await whatsappProvider.sendInteractive(from, pre.interactive, envio);
+    } catch (err) {
+      logger.warn('[whatsappWebhook] Tarjeta rechazada:', err.message);
+    }
+  }
 
   if (interactive) {
     try {

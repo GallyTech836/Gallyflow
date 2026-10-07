@@ -14,6 +14,7 @@ const DEFAULT_STATE = {
   humanUntil: null,
   listPage: 0,
   listPageFlow: null,
+  photoPage: 0,
   selectedStaff: null,
   selectedDate: null,
   selectedTime: null,
