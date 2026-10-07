@@ -19,16 +19,47 @@ function mismoTelefono(a, b) {
   return da.length >= 8 && dbb.length >= 8 && da.slice(-8) === dbb.slice(-8);
 }
 
+// Formatos en que puede estar guardado el teléfono en `clientes`.
+function variantesTelefono(phoneDigits) {
+  const set = new Set([phoneDigits, `+${phoneDigits}`]);
+  if (phoneDigits.length > 8) {
+    const local = phoneDigits.slice(-8);
+    set.add(local);
+    set.add(`+591 ${local}`);
+    set.add(`+591${local}`);
+  }
+  return [...set].filter(Boolean);
+}
+
+/**
+ * Busca un cliente por teléfono sin descargar toda la colección:
+ * 1) doc con id = dígitos (así lo guarda ClienteApp)  2) consulta `phone in [...]`.
+ * Devuelve { id, ...datos } o null. Nunca lanza.
+ */
+export async function findClientByPhone(negocioId, phone) {
+  try {
+    const clientesRef = db.collection('negocios').doc(negocioId).collection('clientes');
+    const phoneDigits = soloDigitos(phone);
+    if (!phoneDigits) return null;
+
+    for (const id of [phoneDigits, phoneDigits.slice(-8)]) {
+      const snap = await clientesRef.doc(id).get();
+      if (snap.exists) return { id: snap.id, ...snap.data() };
+    }
+    const q = await clientesRef.where('phone', 'in', variantesTelefono(phoneDigits)).limit(1).get();
+    return q.empty ? null : { id: q.docs[0].id, ...q.docs[0].data() };
+  } catch (err) {
+    logger.warn('[clientRecord] findClientByPhone falló:', err.message);
+    return null;
+  }
+}
+
 export async function upsertClientFromPhone({ negocioId, phone, name, date, serviceName }) {
   try {
     const clientesRef = db.collection('negocios').doc(negocioId).collection('clientes');
     const phoneDigits = soloDigitos(phone);
 
-    let existing = null;
-    if (phoneDigits) {
-      const directo = await clientesRef.doc(phoneDigits).get();
-      if (directo.exists) existing = { id: directo.id, ...directo.data() };
-    }
+    let existing = phoneDigits ? await findClientByPhone(negocioId, phoneDigits) : null;
     if (!existing && phoneDigits) {
       const snap = await clientesRef.get();
       const doc = snap.docs.find((d) => mismoTelefono(d.data()?.phone, phoneDigits));

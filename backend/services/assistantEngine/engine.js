@@ -15,7 +15,7 @@ import { getAvailableSlots } from '../appointments/availability.js';
 import { createAppointment, createPendingAppointment } from '../appointments/createAppointment.js';
 import { getOrCreateConversation, updateConversation, resetConversation } from '../appointments/conversationState.js';
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
-import { upsertClientFromPhone } from '../appointments/clientRecord.js';
+import { upsertClientFromPhone, findClientByPhone } from '../appointments/clientRecord.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
@@ -26,7 +26,7 @@ const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DIAS_A_MOSTRAR = 7;
 const DIAS_A_BUSCAR = 14;
-const FLUJOS_CON_LISTA = new Set(['choosing_service', 'choosing_staff', 'choosing_date', 'choosing_time']);
+const FLUJOS_CON_LISTA = new Set(['choosing_service', 'choosing_extra_service', 'choosing_staff', 'choosing_date', 'choosing_time']);
 const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min sin responder => se reinicia
 const HUMAN_HANDOFF_MS = 2 * 60 * 60 * 1000; // 2 h en que el bot no responde tras pedir hablar con alguien
 
@@ -55,6 +55,10 @@ function fechaLegible(fechaIso) {
 }
 
 // ───────────────────────── Servicios y profesionales ─────────────────────────
+
+function precioServicio(s) {
+  return `${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`;
+}
 
 function duracionServicio(servicio) {
   return Number(servicio?.duration) || Number(servicio?.durationMin) || SERVICE_DURATION_DEFAULT;
@@ -319,17 +323,35 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       if (!indices) return responder(prefijo(`No entendí. \n\n`, mensajeServicios(context)), conversation);
 
       const elegidos = indices.map((i) => servicios[i]);
-      const pros = profesionalesPara(context, elegidos.map((s) => s.id));
-      if (pros.length === 0) {
+      if (profesionalesPara(context, elegidos.map((s) => s.id)).length === 0) {
         return responder(prefijo(`Ningún profesional realiza todos esos servicios juntos. Elige de nuevo.\n\n`, mensajeServicios(context)), conversation);
       }
+      conversation = await updateConversation(negocioId, phone, { selectedServices: elegidos.map(aServicioCita) });
+      return ofrecerAgregarOContinuar();
+    }
+
+    // ¿Agregar otro servicio o continuar?
+    case 'adding_service': {
+      if (/^agregar$|agregar|otro/i.test(texto)) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_extra_service' });
+        return responder(mensajeServiciosExtra(), conversation);
+      }
+      if (/^continuar$|continuar|^no$|listo/i.test(texto)) {
+        return irAProfesionales();
+      }
+      return responder(prefijo('No entendí.', mensajeAgregarOContinuar()), conversation);
+    }
+
+    case 'choosing_extra_service': {
+      const servicios = serviciosOfrecidos(context);
+      const idx = parseInt(texto, 10) - 1;
+      const extra = serviciosExtraCompatibles().find((s) => s.id === servicios[idx]?.id);
+      if (!extra) return responder(prefijo('No entendí.', mensajeServiciosExtra()), conversation);
 
       conversation = await updateConversation(negocioId, phone, {
-        currentFlow: 'choosing_staff',
-        selectedServices: elegidos.map((s) => ({ serviceId: s.id, serviceName: s.name, price: s.price, duration: duracionServicio(s) })),
-        staffOptionsIds: pros.map((p) => p.id),
+        selectedServices: [...serviciosDe(conversation), aServicioCita(extra)],
       });
-      return responder(mensajeProfesionales(pros), conversation);
+      return ofrecerAgregarOContinuar();
     }
 
     case 'choosing_staff': {
@@ -384,6 +406,17 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       const hora = slots[idx];
       if (!hora) return responder(prefijo(`No entendí. \n\n`, mensajeHoras(slots)), conversation);
 
+      // Cliente ya conocido (reservó antes por WhatsApp o está en Clientes): no se pregunta el nombre.
+      const nombreConocido = await nombreDelCliente();
+      if (nombreConocido) {
+        conversation = await updateConversation(negocioId, phone, {
+          currentFlow: 'confirming',
+          selectedTime: hora,
+          clientName: nombreConocido,
+        });
+        return responder(mensajeResumen(conversation), conversation);
+      }
+
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'awaiting_name',
         selectedTime: hora,
@@ -404,6 +437,10 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     case 'confirming': {
       if (/^1$|confirmar|^si$|^sí$/i.test(texto)) {
         return confirmarReserva();
+      }
+      if (/^nombre$|cambiar nombre/i.test(texto)) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'awaiting_name' });
+        return responder('¿A nombre de quién hago la reserva?', conversation);
       }
       if (/^2$/i.test(texto)) {
         conversation = await resetConversation(negocioId, phone);
@@ -470,6 +507,41 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return responder(`✅ Cita confirmada para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ¡Gracias!${notaPendiente}`, conversation);
   }
 
+  function aServicioCita(s) {
+    return { serviceId: s.id, serviceName: s.name, price: s.price, duration: duracionServicio(s) };
+  }
+
+  // Servicios que todavía se pueden sumar: no elegidos y con al menos un
+  // profesional que haga TODOS (los elegidos + este).
+  function serviciosExtraCompatibles() {
+    const elegidosIds = serviciosDe(conversation).map((s) => s.serviceId);
+    return serviciosOfrecidos(context).filter(
+      (s) => !elegidosIds.includes(s.id) && profesionalesPara(context, [...elegidosIds, s.id]).length > 0
+    );
+  }
+
+  async function ofrecerAgregarOContinuar() {
+    if (serviciosExtraCompatibles().length === 0) return irAProfesionales();
+    conversation = await updateConversation(negocioId, phone, { currentFlow: 'adding_service' });
+    return responder(mensajeAgregarOContinuar(), conversation);
+  }
+
+  async function irAProfesionales() {
+    const pros = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
+    conversation = await updateConversation(negocioId, phone, {
+      currentFlow: 'choosing_staff',
+      staffOptionsIds: pros.map((p) => p.id),
+    });
+    return responder(mensajeProfesionales(pros), conversation);
+  }
+
+  async function nombreDelCliente() {
+    const valido = (n) => n && String(n).trim() && !/^cliente whatsapp$/i.test(String(n).trim());
+    if (valido(conversation.clientName)) return conversation.clientName.trim();
+    const cliente = await findClientByPhone(negocioId, phone);
+    return valido(cliente?.name) ? cliente.name.trim() : null;
+  }
+
   async function hablarConAlguien() {
     avisarContacto(negocioId, phone, conversation.clientName);
     conversation = await updateConversation(negocioId, phone, {
@@ -490,6 +562,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     switch (conversation.currentFlow) {
       case 'choosing_service':
         return mensajeServicios(context);
+      case 'choosing_extra_service':
+        return mensajeServiciosExtra();
       case 'choosing_staff':
         return mensajeProfesionales(
           (conversation.staffOptionsIds || []).map((id) => context.profesionales.find((p) => p.id === id)).filter(Boolean)
@@ -514,15 +588,33 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   function mensajeServicios(ctx) {
     const servicios = serviciosOfrecidos(ctx);
     if (servicios.length === 0) return 'Por ahora no hay servicios disponibles para reservar.';
-    const precio = (s) => `${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`;
-    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precio(s)}`);
-    const ayuda = servicios.length > 1 ? '\n\nPuedes elegir varios separados por coma (ej: 1,3).' : '';
+    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s)}`);
     return menuLista({
-      texto: `¿Qué servicio deseas?\n\n${lista}${ayuda}`,
-      cuerpo: `¿Qué servicio deseas?${servicios.length > 1 ? '\n\nPara elegir varios, escribe sus números separados por coma (ej: 1,3).' : ''}`,
+      texto: `¿Qué servicio deseas?\n\n${lista}`,
+      cuerpo: '¿Qué servicio deseas?',
       boton: 'Ver servicios',
-      items: servicios.map((s) => ({ title: s.name, description: `${precio(s)} · ${duracionServicio(s)} min` })),
+      items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s)} · ${duracionServicio(s)} min` })),
       page: paginaActual(),
+    });
+  }
+  // Solo los que se pueden sumar; el id es la posición en la lista completa de servicios.
+  function mensajeServiciosExtra() {
+    const todos = serviciosOfrecidos(context);
+    const extras = serviciosExtraCompatibles();
+    return menuLista({
+      texto: `¿Qué servicio agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s)}`).join('\n')}`,
+      cuerpo: `Elegiste: ${nombresServicios(conversation)}.\n¿Qué servicio agregas?`,
+      boton: 'Ver servicios',
+      items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s)} · ${duracionServicio(s)} min` })),
+      page: paginaActual(),
+    });
+  }
+  function mensajeAgregarOContinuar() {
+    const cuerpo = `Elegiste: ${nombresServicios(conversation)}.\n¿Quieres agregar otro servicio?`;
+    return menuBotones({
+      texto: `${cuerpo}\n\nEscribe "agregar" o "continuar".`,
+      cuerpo,
+      botones: [{ id: 'agregar', title: 'Agregar otro' }, { id: 'continuar', title: 'Continuar' }],
     });
   }
   function mensajeProfesionales(pros) {
@@ -557,9 +649,9 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   function mensajeResumen(conv) {
     const resumen = `Confirma tu cita:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}`;
     return menuBotones({
-      texto: `${resumen}\n\n1. Confirmar\n2. Cancelar`,
+      texto: `${resumen}\n\n1. Confirmar\n2. Cancelar\n(Escribe "nombre" para cambiar el nombre)`,
       cuerpo: resumen,
-      botones: [{ id: '1', title: 'Confirmar' }, { id: '2', title: 'Cancelar' }],
+      botones: [{ id: '1', title: 'Confirmar' }, { id: 'nombre', title: 'Cambiar nombre' }, { id: '2', title: 'Cancelar' }],
     });
   }
 }
@@ -591,8 +683,8 @@ function menuLista({ texto, cuerpo, boton, items, page = 0 }) {
   const visibles = paginar ? items.slice(desde, desde + POR_PAGINA) : items;
 
   const rows = visibles.map((it, i) => ({
-    id: String(desde + i + 1),
-    title: recortar(`${desde + i + 1}. ${it.title}`, 24),
+    id: it.id ?? String(desde + i + 1),
+    title: recortar(it.title, 24),
     ...(it.description ? { description: recortar(it.description, 72) } : {}),
   }));
   if (paginar) {
