@@ -650,7 +650,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋`;
     if (repetir) {
       const ultima = `${repetir.services.map((x) => x.serviceName).join(' + ')} con ${repetir.staff.name}`;
-      const cuerpo = `${saludo} ¿Repetimos tu última cita?\n${ultima}`;
+      const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?\n\n¿Repetimos tu última cita?\n${ultima}`;
       return menuBotones({
         texto: `${cuerpo}\n\nEscribe "repetir", 1 para agendar otra cita o 2 para hablar con alguien.`,
         cuerpo,
