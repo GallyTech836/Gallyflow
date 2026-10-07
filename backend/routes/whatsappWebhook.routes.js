@@ -56,7 +56,7 @@ function registrarActividad(negocioId, displayPhone) {
   }).catch((err) => logger.warn('[whatsappWebhook] No se pudo registrar actividad:', err.message));
 }
 
-const MENSAJE_NO_TEXTO = 'Por ahora solo entiendo mensajes de texto 🙂 Responde con el número de la opción.';
+const MENSAJE_NO_TEXTO = 'Por ahora solo entiendo mensajes de texto 🙂 Toca una opción o escribe su número.';
 
 async function procesarMensaje(value, mensaje) {
   const phoneNumberId = value?.metadata?.phone_number_id;
@@ -70,17 +70,35 @@ async function procesarMensaje(value, mensaje) {
   const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token };
   registrarActividad(cuenta.negocioId, value?.metadata?.display_phone_number);
 
-  if (mensaje.type !== 'text') {
+  // Texto escrito, o toque en un botón / fila de lista (su id es el mismo
+  // número que se escribiría a mano: "1", "2", ... o "mas").
+  let texto = null;
+  if (mensaje.type === 'text') texto = mensaje.text?.body || '';
+  else if (mensaje.type === 'interactive') {
+    texto = mensaje.interactive?.button_reply?.id ?? mensaje.interactive?.list_reply?.id ?? null;
+  }
+
+  if (texto === null) {
     await whatsappProvider.send(from, MENSAJE_NO_TEXTO, envio);
     return;
   }
 
-  const { replyText } = await assistantEngine({
+  const { replyText, interactive } = await assistantEngine({
     negocioId: cuenta.negocioId,
     phone: from,
-    message: mensaje.text?.body || '',
+    message: texto,
     messageId: mensaje.id,
   });
+
+  if (interactive) {
+    try {
+      await whatsappProvider.sendInteractive(from, interactive, envio);
+      return;
+    } catch (err) {
+      // Si Meta rechaza el interactivo, se manda la versión de texto.
+      logger.warn('[whatsappWebhook] Interactivo rechazado, se envía texto:', err.message);
+    }
+  }
   if (replyText) {
     await whatsappProvider.send(from, replyText, envio);
   }

@@ -12,6 +12,8 @@ const DEFAULT_STATE = {
   selectedService: null,
   selectedServices: null,
   humanUntil: null,
+  listPage: 0,
+  listPageFlow: null,
   selectedStaff: null,
   selectedDate: null,
   selectedTime: null,

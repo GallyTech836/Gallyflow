@@ -26,6 +26,7 @@ const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DIAS_A_MOSTRAR = 7;
 const DIAS_A_BUSCAR = 14;
+const FLUJOS_CON_LISTA = new Set(['choosing_service', 'choosing_staff', 'choosing_date', 'choosing_time']);
 const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min sin responder => se reinicia
 const HUMAN_HANDOFF_MS = 2 * 60 * 60 * 1000; // 2 h en que el bot no responde tras pedir hablar con alguien
 
@@ -281,12 +282,21 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
   if (expirada) {
     conversation = await resetConversation(negocioId, phone);
-    return responder(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n${mensajeBienvenida(context)}`, conversation);
+    return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, mensajeBienvenida(context)), conversation);
   }
 
   if (/^(cancelar|salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
     conversation = await resetConversation(negocioId, phone);
     return responder(mensajeBienvenida(context), conversation);
+  }
+
+  // "Más opciones" en las listas de WhatsApp (máx. 10 filas por lista).
+  if (/^(mas|más)$/i.test(texto) && FLUJOS_CON_LISTA.has(conversation.currentFlow)) {
+    conversation = await updateConversation(negocioId, phone, {
+      listPage: paginaActual(conversation) + 1,
+      listPageFlow: conversation.currentFlow,
+    });
+    return responder(menuDelPaso(), conversation);
   }
 
   switch (conversation.currentFlow) {
@@ -306,12 +316,12 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     case 'choosing_service': {
       const servicios = serviciosOfrecidos(context);
       const indices = parsearIndices(texto, servicios.length);
-      if (!indices) return responder(`No entendí. \n\n${mensajeServicios(context)}`, conversation);
+      if (!indices) return responder(prefijo(`No entendí. \n\n`, mensajeServicios(context)), conversation);
 
       const elegidos = indices.map((i) => servicios[i]);
       const pros = profesionalesPara(context, elegidos.map((s) => s.id));
       if (pros.length === 0) {
-        return responder(`Ningún profesional realiza todos esos servicios juntos. Elige de nuevo.\n\n${mensajeServicios(context)}`, conversation);
+        return responder(prefijo(`Ningún profesional realiza todos esos servicios juntos. Elige de nuevo.\n\n`, mensajeServicios(context)), conversation);
       }
 
       conversation = await updateConversation(negocioId, phone, {
@@ -330,7 +340,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       const opciones = opcionesCualquiera(pros);
       const profesional = pros[idx];
       const cualquiera = opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null);
-      if (!profesional && !cualquiera) return responder(`No entendí. \n\n${mensajeProfesionales(pros)}`, conversation);
+      if (!profesional && !cualquiera) return responder(prefijo(`No entendí. \n\n`, mensajeProfesionales(pros)), conversation);
 
       const selectedStaff = profesional
         ? { id: profesional.id, name: profesional.name, branch: profesional.branch || '' }
@@ -338,7 +348,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
       const dias = diasParaConversacion(context, { ...conversation, selectedStaff });
       if (dias.length === 0) {
-        return responder(`${selectedStaff.name} no tiene días disponibles próximamente. Elige otro:\n\n${mensajeProfesionales(pros)}`, conversation);
+        return responder(prefijo(`${selectedStaff.name} no tiene días disponibles próximamente. Elige otro:\n\n`, mensajeProfesionales(pros)), conversation);
       }
 
       conversation = await updateConversation(negocioId, phone, {
@@ -353,11 +363,11 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       const dias = conversation.dateOptionsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const dia = dias[idx];
-      if (!dia) return responder(`No entendí. \n\n${mensajeFechas(dias)}`, conversation);
+      if (!dia) return responder(prefijo(`No entendí. \n\n`, mensajeFechas(dias)), conversation);
 
       const slots = await slotsParaFecha(context, prosElegidos(context, conversation), dia.id, totalDuracion(conversation));
       if (slots.length === 0) {
-        return responder(`No hay horarios libres ese día.\n\n${mensajeFechas(dias)}`, conversation);
+        return responder(prefijo(`No hay horarios libres ese día.\n\n`, mensajeFechas(dias)), conversation);
       }
 
       conversation = await updateConversation(negocioId, phone, {
@@ -372,7 +382,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       const slots = conversation.availableSlotsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const hora = slots[idx];
-      if (!hora) return responder(`No entendí. \n\n${mensajeHoras(slots)}`, conversation);
+      if (!hora) return responder(prefijo(`No entendí. \n\n`, mensajeHoras(slots)), conversation);
 
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'awaiting_name',
@@ -399,7 +409,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         conversation = await resetConversation(negocioId, phone);
         return responder('Reserva cancelada. Escribe cuando quieras volver a empezar.', conversation);
       }
-      return responder(`No entendí. \n\n${mensajeResumen(conversation)}`, conversation);
+      return responder(prefijo(`No entendí. \n\n`, mensajeResumen(conversation)), conversation);
     }
 
     default: {
@@ -442,7 +452,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       logger.warn('[assistantEngine] crear cita falló:', err.message);
       const dias = diasParaConversacion(context, conv);
       conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias });
-      return responder(`Ese horario ya no está disponible. ${mensajeFechas(dias)}`, conversation);
+      return responder(prefijo(`Ese horario ya no está disponible. `, mensajeFechas(dias)), conversation);
     }
 
     let conQuien = '';
@@ -471,29 +481,86 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
   // ── Mensajes ──
 
+  function paginaActual(conv = conversation) {
+    return conv.listPageFlow === conv.currentFlow ? Number(conv.listPage) || 0 : 0;
+  }
+
+  // Vuelve a armar la lista del paso actual (para "Más opciones").
+  function menuDelPaso() {
+    switch (conversation.currentFlow) {
+      case 'choosing_service':
+        return mensajeServicios(context);
+      case 'choosing_staff':
+        return mensajeProfesionales(
+          (conversation.staffOptionsIds || []).map((id) => context.profesionales.find((p) => p.id === id)).filter(Boolean)
+        );
+      case 'choosing_date':
+        return mensajeFechas(conversation.dateOptionsCache || []);
+      case 'choosing_time':
+        return mensajeHoras(conversation.availableSlotsCache || []);
+      default:
+        return mensajeBienvenida(context);
+    }
+  }
+
   function mensajeBienvenida(ctx) {
-    return `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Hablar con alguien`;
+    const cuerpo = `Hola 👋 Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?`;
+    return menuBotones({
+      texto: `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Hablar con alguien`,
+      cuerpo,
+      botones: [{ id: '1', title: 'Agendar cita' }, { id: '2', title: 'Hablar con alguien' }],
+    });
   }
   function mensajeServicios(ctx) {
     const servicios = serviciosOfrecidos(ctx);
     if (servicios.length === 0) return 'Por ahora no hay servicios disponibles para reservar.';
-    const lista = listaNumerada(servicios, (s) => `${s.name} - ${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`);
+    const precio = (s) => `${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`;
+    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precio(s)}`);
     const ayuda = servicios.length > 1 ? '\n\nPuedes elegir varios separados por coma (ej: 1,3).' : '';
-    return `¿Qué servicio deseas?\n\n${lista}${ayuda}`;
+    return menuLista({
+      texto: `¿Qué servicio deseas?\n\n${lista}${ayuda}`,
+      cuerpo: `¿Qué servicio deseas?${servicios.length > 1 ? '\n\nPara elegir varios, escribe sus números separados por coma (ej: 1,3).' : ''}`,
+      boton: 'Ver servicios',
+      items: servicios.map((s) => ({ title: s.name, description: `${precio(s)} · ${duracionServicio(s)} min` })),
+      page: paginaActual(),
+    });
   }
   function mensajeProfesionales(pros) {
-    const lista = listaNumerada(pros, (p) => p.name);
-    const extra = opcionesCualquiera(pros).map((o, i) => `\n${pros.length + i + 1}. ${o.label}`).join('');
-    return `¿Con quién deseas atenderte?\n\n${lista}${extra}`;
+    const opciones = opcionesCualquiera(pros);
+    const items = [...pros.map((p) => ({ title: p.name })), ...opciones.map((o) => ({ title: o.label, description: 'El primero disponible' }))];
+    return menuLista({
+      texto: `¿Con quién deseas atenderte?\n\n${listaNumerada(items, (i) => i.title)}`,
+      cuerpo: '¿Con quién deseas atenderte?',
+      boton: 'Ver profesionales',
+      items,
+      page: paginaActual(),
+    });
   }
   function mensajeFechas(dias) {
-    return `¿Qué día?\n\n${listaNumerada(dias, (d) => d.label)}`;
+    return menuLista({
+      texto: `¿Qué día?\n\n${listaNumerada(dias, (d) => d.label)}`,
+      cuerpo: '¿Qué día?',
+      boton: 'Ver días',
+      items: dias.map((d) => ({ title: d.label })),
+      page: paginaActual(),
+    });
   }
   function mensajeHoras(slots) {
-    return `¿Qué horario?\n\n${listaNumerada(slots, (h) => h)}`;
+    return menuLista({
+      texto: `¿Qué horario?\n\n${listaNumerada(slots, (h) => h)}`,
+      cuerpo: '¿Qué horario?',
+      boton: 'Ver horarios',
+      items: slots.map((h) => ({ title: h })),
+      page: paginaActual(),
+    });
   }
   function mensajeResumen(conv) {
-    return `Confirma tu cita:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}\n\n1. Confirmar\n2. Cancelar`;
+    const resumen = `Confirma tu cita:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}`;
+    return menuBotones({
+      texto: `${resumen}\n\n1. Confirmar\n2. Cancelar`,
+      cuerpo: resumen,
+      botones: [{ id: '1', title: 'Confirmar' }, { id: '2', title: 'Cancelar' }],
+    });
   }
 }
 
@@ -501,6 +568,75 @@ function listaNumerada(items, getLabel) {
   return items.map((it, i) => `${i + 1}. ${getLabel(it)}`).join('\n');
 }
 
-function responder(replyText, conversation) {
-  return { replyText, conversation };
+// ───────────────────────── Mensajes interactivos ─────────────────────────
+// Cada mensaje tiene `text` (respaldo / ruta de prueba) y, si aplica,
+// `interactive` (botones o lista de WhatsApp). Los IDs de las opciones son
+// los mismos números que se escribirían a mano ("1", "2", ...), así el motor
+// entiende igual un toque en la lista que un número escrito.
+
+const MAX_FILAS = 10; // límite de Meta por lista
+const POR_PAGINA = 9; // + 1 fila "Más opciones" cuando no entran todas
+
+const recortar = (str, max) => {
+  const t = String(str ?? '');
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
+
+function menuLista({ texto, cuerpo, boton, items, page = 0 }) {
+  if (!items.length) return { text: texto };
+  const paginar = items.length > MAX_FILAS;
+  const paginas = paginar ? Math.ceil(items.length / POR_PAGINA) : 1;
+  const p = ((page % paginas) + paginas) % paginas;
+  const desde = paginar ? p * POR_PAGINA : 0;
+  const visibles = paginar ? items.slice(desde, desde + POR_PAGINA) : items;
+
+  const rows = visibles.map((it, i) => ({
+    id: String(desde + i + 1),
+    title: recortar(`${desde + i + 1}. ${it.title}`, 24),
+    ...(it.description ? { description: recortar(it.description, 72) } : {}),
+  }));
+  if (paginar) {
+    rows.push({ id: 'mas', title: 'Más opciones →', description: `Página ${p + 1} de ${paginas}` });
+  }
+
+  return {
+    text: texto,
+    interactive: {
+      type: 'list',
+      body: { text: recortar(cuerpo, 1024) },
+      action: { button: recortar(boton, 20), sections: [{ title: 'Opciones', rows }] },
+    },
+  };
+}
+
+function menuBotones({ texto, cuerpo, botones }) {
+  return {
+    text: texto,
+    interactive: {
+      type: 'button',
+      body: { text: recortar(cuerpo, 1024) },
+      action: {
+        buttons: botones.slice(0, 3).map((b) => ({ type: 'reply', reply: { id: b.id, title: recortar(b.title, 20) } })),
+      },
+    },
+  };
+}
+
+// Antepone un aviso ("No entendí.", etc.) tanto al texto como al cuerpo interactivo.
+function prefijo(aviso, mensaje) {
+  const m = typeof mensaje === 'string' ? { text: mensaje } : mensaje;
+  const a = aviso.trim();
+  return {
+    text: `${a}\n\n${m.text}`,
+    ...(m.interactive
+      ? { interactive: { ...m.interactive, body: { text: recortar(`${a}\n\n${m.interactive.body.text}`, 1024) } } }
+      : {}),
+  };
+}
+
+function responder(mensaje, conversation) {
+  if (mensaje && typeof mensaje === 'object') {
+    return { replyText: mensaje.text, interactive: mensaje.interactive || null, conversation };
+  }
+  return { replyText: mensaje, interactive: null, conversation };
 }

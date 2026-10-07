@@ -38,6 +38,18 @@ export async function resolveAccount(phoneNumberId) {
  * Sin opciones usa las variables del .env (compatible con notificationService).
  */
 export async function send(destinatario, mensaje, opciones = {}) {
+  return enviar(destinatario, { type: 'text', text: { body: mensaje } }, opciones);
+}
+
+/**
+ * Botones o lista de WhatsApp. `interactive` es el objeto que arma el
+ * Assistant Engine ({ type: 'button' | 'list', body, action }).
+ */
+export async function sendInteractive(destinatario, interactive, opciones = {}) {
+  return enviar(destinatario, { type: 'interactive', interactive }, opciones);
+}
+
+async function enviar(destinatario, contenido, opciones) {
   const phoneNumberId = opciones.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
   const token = opciones.token || process.env.WHATSAPP_TOKEN;
 
@@ -54,8 +66,7 @@ export async function send(destinatario, mensaje, opciones = {}) {
     body: JSON.stringify({
       messaging_product: 'whatsapp',
       to: destinatario,
-      type: 'text',
-      text: { body: mensaje },
+      ...contenido,
     }),
   });
 
