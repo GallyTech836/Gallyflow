@@ -20,7 +20,7 @@ function mismoTelefono(a, b) {
 }
 
 // Formatos en que puede estar guardado el teléfono en `clientes`.
-function variantesTelefono(phoneDigits) {
+export function variantesTelefono(phoneDigits) {
   const set = new Set([phoneDigits, `+${phoneDigits}`]);
   if (phoneDigits.length > 8) {
     const local = phoneDigits.slice(-8);

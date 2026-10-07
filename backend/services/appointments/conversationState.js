@@ -43,7 +43,9 @@ export async function getOrCreateConversation(negocioId, phone) {
 
 export async function updateConversation(negocioId, phone, cambios) {
   const ref = conversationsRef(negocioId).doc(phone);
-  const datos = { ...cambios, updatedAt: new Date().toISOString() };
+  // Al cambiar de paso (o re-entrar a uno), la lista vuelve a la página 1.
+  const reiniciaPagina = 'currentFlow' in cambios && !('listPage' in cambios) ? { listPage: 0, listPageFlow: null } : {};
+  const datos = { ...cambios, ...reiniciaPagina, updatedAt: new Date().toISOString() };
   await ref.set(datos, { merge: true });
   const snap = await ref.get();
   return { id: snap.id, ...snap.data() };

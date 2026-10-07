@@ -69,6 +69,7 @@ async function procesarMensaje(value, mensaje) {
   }
   const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token };
   registrarActividad(cuenta.negocioId, value?.metadata?.display_phone_number);
+  whatsappProvider.markAsRead(mensaje.id, envio); // sin await: no retrasa la respuesta
 
   // Texto escrito, o toque en un botón / fila de lista (su id es el mismo
   // número que se escribiría a mano: "1", "2", ... o "mas").

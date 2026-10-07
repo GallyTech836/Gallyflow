@@ -15,7 +15,7 @@ import { getAvailableSlots } from '../appointments/availability.js';
 import { createAppointment, createPendingAppointment } from '../appointments/createAppointment.js';
 import { getOrCreateConversation, updateConversation, resetConversation } from '../appointments/conversationState.js';
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
-import { upsertClientFromPhone, findClientByPhone } from '../appointments/clientRecord.js';
+import { upsertClientFromPhone, findClientByPhone, variantesTelefono } from '../appointments/clientRecord.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
@@ -272,7 +272,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     conversation = await resetConversation(negocioId, phone);
     if (vuelveAlBot) {
       if (messageId) await updateConversation(negocioId, phone, { lastMessageId: messageId });
-      return responder(mensajeBienvenida(context), conversation);
+      return responder(await bienvenida(), conversation);
     }
   }
 
@@ -286,12 +286,12 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
   if (expirada) {
     conversation = await resetConversation(negocioId, phone);
-    return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, mensajeBienvenida(context)), conversation);
+    return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, await bienvenida()), conversation);
   }
 
   if (/^(cancelar|salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
     conversation = await resetConversation(negocioId, phone);
-    return responder(mensajeBienvenida(context), conversation);
+    return responder(await bienvenida(), conversation);
   }
 
   // "Más opciones" en las listas de WhatsApp (máx. 10 filas por lista).
@@ -308,11 +308,14 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       if (/^2$|hablar|persona|humano|asesor|ayuda/i.test(texto)) {
         return hablarConAlguien();
       }
+      if (/repetir/i.test(texto) && conversation.repeatOption) {
+        return repetirUltimaCita();
+      }
       if (/^1$|agendar|reservar/i.test(texto)) {
-        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service' });
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null });
         return responder(mensajeServicios(context), conversation);
       }
-      return responder(mensajeBienvenida(context), conversation);
+      return responder(await bienvenida(), conversation);
     }
 
     // ── Agendar ──
@@ -327,19 +330,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         return responder(prefijo(`Ningún profesional realiza todos esos servicios juntos. Elige de nuevo.\n\n`, mensajeServicios(context)), conversation);
       }
       conversation = await updateConversation(negocioId, phone, { selectedServices: elegidos.map(aServicioCita) });
-      return ofrecerAgregarOContinuar();
-    }
-
-    // ¿Agregar otro servicio o continuar?
-    case 'adding_service': {
-      if (/^agregar$|agregar|otro/i.test(texto)) {
-        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_extra_service' });
-        return responder(mensajeServiciosExtra(), conversation);
-      }
-      if (/^continuar$|continuar|^no$|listo/i.test(texto)) {
-        return irAProfesionales();
-      }
-      return responder(prefijo('No entendí.', mensajeAgregarOContinuar()), conversation);
+      return irAProfesionales();
     }
 
     case 'choosing_extra_service': {
@@ -351,13 +342,17 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       conversation = await updateConversation(negocioId, phone, {
         selectedServices: [...serviciosDe(conversation), aServicioCita(extra)],
       });
-      return ofrecerAgregarOContinuar();
+      return irAProfesionales();
     }
 
     case 'choosing_staff': {
       const pros = (conversation.staffOptionsIds || [])
         .map((id) => context.profesionales.find((p) => p.id === id))
         .filter(Boolean);
+      if (/^agregar$/i.test(texto) && serviciosExtraCompatibles().length > 0) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_extra_service' });
+        return responder(mensajeServiciosExtra(), conversation);
+      }
       const idx = parseInt(texto, 10) - 1;
       const opciones = opcionesCualquiera(pros);
       const profesional = pros[idx];
@@ -368,17 +363,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         ? { id: profesional.id, name: profesional.name, branch: profesional.branch || '' }
         : { id: PENDING_ID, name: cualquiera.label, branch: cualquiera.branch, candidateIds: cualquiera.candidateIds };
 
-      const dias = diasParaConversacion(context, { ...conversation, selectedStaff });
-      if (dias.length === 0) {
-        return responder(prefijo(`${selectedStaff.name} no tiene días disponibles próximamente. Elige otro:\n\n`, mensajeProfesionales(pros)), conversation);
-      }
-
-      conversation = await updateConversation(negocioId, phone, {
-        currentFlow: 'choosing_date',
-        selectedStaff,
-        dateOptionsCache: dias,
-      });
-      return responder(mensajeFechas(dias), conversation);
+      conversation = await updateConversation(negocioId, phone, { selectedStaff });
+      return ofrecerHorarios();
     }
 
     case 'choosing_date': {
@@ -397,14 +383,19 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         selectedDate: dia.id,
         availableSlotsCache: slots,
       });
-      return responder(mensajeHoras(slots), conversation);
+      return responder(mensajeHoras(slots, dia.id), conversation);
     }
 
     case 'choosing_time': {
+      if (/^otrodia$|otro d[ií]a/i.test(texto)) {
+        const dias = diasParaConversacion(context, conversation);
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias });
+        return responder(mensajeFechas(dias), conversation);
+      }
       const slots = conversation.availableSlotsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const hora = slots[idx];
-      if (!hora) return responder(prefijo(`No entendí. \n\n`, mensajeHoras(slots)), conversation);
+      if (!hora) return responder(prefijo(`No entendí. \n\n`, mensajeHoras(slots, conversation.selectedDate)), conversation);
 
       // Cliente ya conocido (reservó antes por WhatsApp o está en Clientes): no se pregunta el nombre.
       const nombreConocido = await nombreDelCliente();
@@ -451,7 +442,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
     default: {
       conversation = await resetConversation(negocioId, phone);
-      return responder(mensajeBienvenida(context), conversation);
+      return responder(await bienvenida(), conversation);
     }
   }
 
@@ -487,9 +478,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         : await createAppointment({ ...datos, professionalId: conv.selectedStaff.id, branch: conv.selectedStaff.branch || '' });
     } catch (err) {
       logger.warn('[assistantEngine] crear cita falló:', err.message);
-      const dias = diasParaConversacion(context, conv);
-      conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias });
-      return responder(prefijo(`Ese horario ya no está disponible. `, mensajeFechas(dias)), conversation);
+      return ofrecerHorarios('Ese horario ya no está disponible.');
     }
 
     let conQuien = '';
@@ -520,19 +509,99 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     );
   }
 
-  async function ofrecerAgregarOContinuar() {
-    if (serviciosExtraCompatibles().length === 0) return irAProfesionales();
-    conversation = await updateConversation(negocioId, phone, { currentFlow: 'adding_service' });
-    return responder(mensajeAgregarOContinuar(), conversation);
-  }
-
   async function irAProfesionales() {
     const pros = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
+
+    // Un solo profesional posible y nada más que agregar: se elige solo.
+    if (pros.length === 1 && serviciosExtraCompatibles().length === 0) {
+      const p = pros[0];
+      conversation = await updateConversation(negocioId, phone, {
+        selectedStaff: { id: p.id, name: p.name, branch: p.branch || '' },
+      });
+      return ofrecerHorarios(`Te atenderá ${p.name}.`);
+    }
+
     conversation = await updateConversation(negocioId, phone, {
       currentFlow: 'choosing_staff',
       staffOptionsIds: pros.map((p) => p.id),
     });
     return responder(mensajeProfesionales(pros), conversation);
+  }
+
+  // Horarios del primer día con lugar (hoy, o el siguiente si hoy ya no hay),
+  // con la opción "Otro día" al final.
+  async function ofrecerHorarios(aviso = '') {
+    const pros = prosElegidos(context, conversation);
+    const duracion = totalDuracion(conversation);
+    for (const dia of diasParaConversacion(context, conversation)) {
+      const slots = await slotsParaFecha(context, pros, dia.id, duracion);
+      if (slots.length === 0) continue;
+      conversation = await updateConversation(negocioId, phone, {
+        currentFlow: 'choosing_time',
+        selectedDate: dia.id,
+        availableSlotsCache: slots,
+      });
+      const msg = mensajeHoras(slots, dia.id);
+      return responder(aviso ? prefijo(aviso, msg) : msg, conversation);
+    }
+    // Sin lugar en los próximos días: volver a elegir profesional.
+    const opciones = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
+    const quien = conversation.selectedStaff?.name || 'Ese profesional';
+    conversation = await updateConversation(negocioId, phone, {
+      currentFlow: 'choosing_staff',
+      staffOptionsIds: opciones.map((p) => p.id),
+    });
+    return responder(
+      prefijo(`${aviso ? `${aviso} ` : ''}${quien} no tiene horarios libres en los próximos días.`, mensajeProfesionales(opciones)),
+      conversation
+    );
+  }
+
+  // Última cita del cliente (cualquier canal) que todavía se puede repetir:
+  // servicios ofrecidos y profesional activo que los hace.
+  async function buscarCitaParaRepetir() {
+    try {
+      const snap = await db.collection('negocios').doc(negocioId).collection('citas')
+        .where('clientPhone', 'in', variantesTelefono(String(phone).replace(/\D/g, '')))
+        .get();
+      const ultima = snap.docs
+        .map((d) => d.data())
+        .filter((c) => c.status !== 'cancelled' && c.professionalId && c.professionalId !== PENDING_ID)
+        .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))[0];
+      if (!ultima) return null;
+
+      const ids = (Array.isArray(ultima.services) && ultima.services.length
+        ? ultima.services.map((x) => x?.serviceId)
+        : [ultima.serviceId]).filter(Boolean);
+      const ofrecidos = serviciosOfrecidos(context);
+      const servicios = ids.map((id) => ofrecidos.find((x) => x.id === id));
+      const pro = context.profesionales.find((p) => p.id === ultima.professionalId);
+      if (!servicios.length || servicios.some((x) => !x) || !pro || !professionalCanDo(pro, ids)) return null;
+
+      return {
+        services: servicios.map(aServicioCita),
+        staff: { id: pro.id, name: pro.name, branch: pro.branch || '' },
+      };
+    } catch (err) {
+      logger.warn('[assistantEngine] buscarCitaParaRepetir falló:', err.message);
+      return null;
+    }
+  }
+
+  async function repetirUltimaCita() {
+    const r = conversation.repeatOption;
+    conversation = await updateConversation(negocioId, phone, {
+      selectedServices: r.services,
+      selectedStaff: r.staff,
+    });
+    return ofrecerHorarios();
+  }
+
+  // Saludo: con nombre y "Repetir cita" si el cliente ya reservó antes.
+  async function bienvenida() {
+    const [nombre, repetir] = await Promise.all([nombreDelCliente(), buscarCitaParaRepetir()]);
+    conversation = await updateConversation(negocioId, phone, { repeatOption: repetir || null });
+    return mensajeBienvenida(context, nombre, repetir);
   }
 
   async function nombreDelCliente() {
@@ -571,16 +640,26 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       case 'choosing_date':
         return mensajeFechas(conversation.dateOptionsCache || []);
       case 'choosing_time':
-        return mensajeHoras(conversation.availableSlotsCache || []);
+        return mensajeHoras(conversation.availableSlotsCache || [], conversation.selectedDate);
       default:
         return mensajeBienvenida(context);
     }
   }
 
-  function mensajeBienvenida(ctx) {
-    const cuerpo = `Hola 👋 Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?`;
+  function mensajeBienvenida(ctx, nombre = null, repetir = null) {
+    const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋`;
+    if (repetir) {
+      const ultima = `${repetir.services.map((x) => x.serviceName).join(' + ')} con ${repetir.staff.name}`;
+      const cuerpo = `${saludo} ¿Repetimos tu última cita?\n${ultima}`;
+      return menuBotones({
+        texto: `${cuerpo}\n\nEscribe "repetir", 1 para agendar otra cita o 2 para hablar con alguien.`,
+        cuerpo,
+        botones: [{ id: 'repetir', title: 'Repetir cita' }, { id: '1', title: 'Agendar cita' }, { id: '2', title: 'Hablar con alguien' }],
+      });
+    }
+    const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?`;
     return menuBotones({
-      texto: `Hola 👋 Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Hablar con alguien`,
+      texto: `${saludo} Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Hablar con alguien`,
       cuerpo,
       botones: [{ id: '1', title: 'Agendar cita' }, { id: '2', title: 'Hablar con alguien' }],
     });
@@ -609,22 +688,18 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       page: paginaActual(),
     });
   }
-  function mensajeAgregarOContinuar() {
-    const cuerpo = `Elegiste: ${nombresServicios(conversation)}.\n¿Quieres agregar otro servicio?`;
-    return menuBotones({
-      texto: `${cuerpo}\n\nEscribe "agregar" o "continuar".`,
-      cuerpo,
-      botones: [{ id: 'agregar', title: 'Agregar otro' }, { id: 'continuar', title: 'Continuar' }],
-    });
-  }
   function mensajeProfesionales(pros) {
     const opciones = opcionesCualquiera(pros);
     const items = [...pros.map((p) => ({ title: p.name })), ...opciones.map((o) => ({ title: o.label, description: 'El primero disponible' }))];
+    const puedeAgregar = serviciosExtraCompatibles().length > 0;
+    const elegido = nombresServicios(conversation);
+    const titulo = `${elegido ? `Elegiste: ${elegido}.\n` : ''}¿Con quién deseas atenderte?`;
     return menuLista({
-      texto: `¿Con quién deseas atenderte?\n\n${listaNumerada(items, (i) => i.title)}`,
-      cuerpo: '¿Con quién deseas atenderte?',
+      texto: `${titulo}\n\n${listaNumerada(items, (i) => i.title)}${puedeAgregar ? '\n\n(Escribe "agregar" para sumar otro servicio)' : ''}`,
+      cuerpo: titulo,
       boton: 'Ver profesionales',
       items,
+      fijas: puedeAgregar ? [{ id: 'agregar', title: '➕ Agregar servicio', description: 'Sumar otro servicio a esta cita' }] : [],
       page: paginaActual(),
     });
   }
@@ -637,12 +712,18 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       page: paginaActual(),
     });
   }
-  function mensajeHoras(slots) {
+  function mensajeHoras(slots, fecha) {
+    const dia = fecha ? fechaLegible(fecha) : '';
+    const staff = conversation.selectedStaff;
+    const conQuien = staff?.id && staff.id !== PENDING_ID ? ` con ${staff.name}` : '';
+    const titulo = `Horarios para ${dia}${conQuien}:`;
     return menuLista({
-      texto: `¿Qué horario?\n\n${listaNumerada(slots, (h) => h)}`,
-      cuerpo: '¿Qué horario?',
+      texto: `${titulo}\n\n${listaNumerada(slots, (h) => h)}\n\n(Escribe "otro dia" para elegir otra fecha)`,
+      cuerpo: titulo,
       boton: 'Ver horarios',
       items: slots.map((h) => ({ title: h })),
+      fijas: [{ id: 'otrodia', title: '📅 Otro día' }],
+      etiquetaMas: 'Más horarios →',
       page: paginaActual(),
     });
   }
@@ -667,20 +748,22 @@ function listaNumerada(items, getLabel) {
 // entiende igual un toque en la lista que un número escrito.
 
 const MAX_FILAS = 10; // límite de Meta por lista
-const POR_PAGINA = 9; // + 1 fila "Más opciones" cuando no entran todas
 
 const recortar = (str, max) => {
   const t = String(str ?? '');
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 };
 
-function menuLista({ texto, cuerpo, boton, items, page = 0 }) {
+// `fijas`: filas que van siempre al final de cada página (ej. "Otro día").
+function menuLista({ texto, cuerpo, boton, items, fijas = [], etiquetaMas = 'Más opciones →', page = 0 }) {
   if (!items.length) return { text: texto };
-  const paginar = items.length > MAX_FILAS;
-  const paginas = paginar ? Math.ceil(items.length / POR_PAGINA) : 1;
+  const capacidad = MAX_FILAS - fijas.length;
+  const paginar = items.length > capacidad;
+  const porPagina = paginar ? capacidad - 1 : capacidad;
+  const paginas = paginar ? Math.ceil(items.length / porPagina) : 1;
   const p = ((page % paginas) + paginas) % paginas;
-  const desde = paginar ? p * POR_PAGINA : 0;
-  const visibles = paginar ? items.slice(desde, desde + POR_PAGINA) : items;
+  const desde = paginar ? p * porPagina : 0;
+  const visibles = paginar ? items.slice(desde, desde + porPagina) : items;
 
   const rows = visibles.map((it, i) => ({
     id: it.id ?? String(desde + i + 1),
@@ -688,8 +771,9 @@ function menuLista({ texto, cuerpo, boton, items, page = 0 }) {
     ...(it.description ? { description: recortar(it.description, 72) } : {}),
   }));
   if (paginar) {
-    rows.push({ id: 'mas', title: 'Más opciones →', description: `Página ${p + 1} de ${paginas}` });
+    rows.push({ id: 'mas', title: recortar(etiquetaMas, 24), description: `Página ${p + 1} de ${paginas}` });
   }
+  fijas.forEach((f) => rows.push({ id: f.id, title: recortar(f.title, 24), ...(f.description ? { description: recortar(f.description, 72) } : {}) }));
 
   return {
     text: texto,

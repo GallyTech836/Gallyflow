@@ -5,7 +5,22 @@
 
 import { db } from '../../config/firebase.js';
 
+// Caché en memoria: el asistente lee el negocio en cada mensaje; con esto se
+// lee como máximo una vez por minuto por negocio (más rápido y menos lecturas).
+// Un cambio en Admin (servicios, profesionales, encender/apagar) tarda hasta
+// CACHE_MS en notarse en el bot.
+const CACHE_MS = 60 * 1000;
+const cache = new Map();
+
 export async function getBusinessContext(negocioId) {
+  const enCache = cache.get(negocioId);
+  if (enCache && Date.now() - enCache.at < CACHE_MS) return enCache.data;
+  const data = await leerContexto(negocioId);
+  cache.set(negocioId, { at: Date.now(), data });
+  return data;
+}
+
+async function leerContexto(negocioId) {
   const negocioRef = db.collection('negocios').doc(negocioId);
   const negocioSnap = await negocioRef.get();
 
@@ -26,7 +41,7 @@ export async function getBusinessContext(negocioId) {
     .filter((p) => p.active !== false);
   const sucursales = sucursalesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    // Mismo criterio que useNegocioStatus del front: suspendido o con
+  // Mismo criterio que useNegocioStatus del front: suspendido o con
   // subscriptionEnd vencido => bloqueado.
   let effectiveStatus = negocio.status || 'active';
   if (effectiveStatus !== 'suspended' && negocio.subscriptionEnd) {
@@ -42,7 +57,7 @@ export async function getBusinessContext(negocioId) {
     isBlocked: effectiveStatus === 'suspended' || effectiveStatus === 'expired',
     plan: negocio.plan || null,
     assistantConfig: negocio.assistantConfig || { enabled: false, capabilities: {} },
-        // Tener whatsappPhoneNumberId ya es la activación; esto solo permite
+    // Tener whatsappPhoneNumberId ya es la activación; esto solo permite
     // apagarlo explícitamente con assistantConfig.enabled = false.
     assistantEnabled: negocio.assistantConfig?.enabled !== false,
     businessSettings: negocio.businessSettings || {},

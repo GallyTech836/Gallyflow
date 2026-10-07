@@ -49,7 +49,26 @@ export async function sendInteractive(destinatario, interactive, opciones = {}) 
   return enviar(destinatario, { type: 'interactive', interactive }, opciones);
 }
 
+/**
+ * Marca el mensaje como leído (doble check azul) y muestra "escribiendo…"
+ * mientras el bot arma la respuesta. Si Meta no acepta el indicador de
+ * escritura, al menos marca como leído. Nunca lanza.
+ */
+export async function markAsRead(messageId, opciones = {}) {
+  if (!messageId) return;
+  const base = { messaging_product: 'whatsapp', status: 'read', message_id: messageId };
+  try {
+    await post({ ...base, typing_indicator: { type: 'text' } }, opciones);
+  } catch {
+    try { await post(base, opciones); } catch { /* sin importancia */ }
+  }
+}
+
 async function enviar(destinatario, contenido, opciones) {
+  return post({ messaging_product: 'whatsapp', to: destinatario, ...contenido }, opciones);
+}
+
+async function post(payload, opciones) {
   const phoneNumberId = opciones.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
   const token = opciones.token || process.env.WHATSAPP_TOKEN;
 
@@ -63,11 +82,7 @@ async function enviar(destinatario, contenido, opciones) {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: destinatario,
-      ...contenido,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json();
