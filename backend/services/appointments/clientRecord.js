@@ -19,6 +19,13 @@ function mismoTelefono(a, b) {
   return da.length >= 8 && dbb.length >= 8 && da.slice(-8) === dbb.slice(-8);
 }
 
+// Nombre de cliente aceptable: con letras, no un saludo ni una respuesta suelta.
+const NO_ES_NOMBRE = /^(hola+|holi|ola|buenas?( (noches|tardes|d[ií]as))?|buen d[ií]a|buenos d[ií]as|hi|hello|hey|que tal|qué tal|s[ií]|no|ok|okay|vale|gracias|listo|menu|men[uú]|cancelar|confirmar|agendar|reservar|cliente whatsapp)[.!¡¿?\s]*$/i;
+export function nombreValido(n) {
+  const t = String(n || '').trim();
+  return t.length >= 2 && /\p{L}/u.test(t) && !NO_ES_NOMBRE.test(t);
+}
+
 // Formatos en que puede estar guardado el teléfono en `clientes`.
 export function variantesTelefono(phoneDigits) {
   const set = new Set([phoneDigits, `+${phoneDigits}`]);
@@ -68,7 +75,8 @@ export async function upsertClientFromPhone({ negocioId, phone, name, date, serv
 
     const clientDocId = existing?.id || phoneDigits || `cliente-${Date.now()}`;
     const data = {
-      name: existing?.name || name?.trim() || 'Cliente WhatsApp',
+      // Si el nombre guardado no es válido (ej. "Hola"), se reemplaza por el nuevo.
+      name: (nombreValido(existing?.name) && existing.name) || name?.trim() || existing?.name || 'Cliente WhatsApp',
       lastVisit: date,
       favoriteService: existing?.favoriteService || serviceName || 'N/A',
       visits: FieldValue.increment(1),
