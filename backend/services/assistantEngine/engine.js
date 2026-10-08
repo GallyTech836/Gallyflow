@@ -15,11 +15,12 @@ import { getAvailableSlots } from '../appointments/availability.js';
 import { createAppointment, createPendingAppointment } from '../appointments/createAppointment.js';
 import { getOrCreateConversation, updateConversation, resetConversation } from '../appointments/conversationState.js';
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
-import { upsertClientFromPhone, findClientByPhone, variantesTelefono, nombreValido } from '../appointments/clientRecord.js';
+import { upsertClientFromPhone, findClientByPhone, variantesTelefono } from '../appointments/clientRecord.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
+import { canUse } from '../capabilities/capabilityModel.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -55,20 +56,6 @@ function fechaLegible(fechaIso) {
 }
 
 // ───────────────────────── Servicios y profesionales ─────────────────────────
-
-const FOTOS_POR_TANDA = 5;
-const FOTO_PLACEHOLDERS = ['photo-1573496359142-b8d87734a5a2']; // mismo criterio que hasRealAvatar del front
-
-// URL de la foto del profesional lista para WhatsApp (jpg cuadrado y liviano),
-// o null si no tiene foto real.
-function fotoProfesional(p) {
-  const url = String(p?.avatar || '').trim();
-  if (!/^https:\/\//.test(url) || FOTO_PLACEHOLDERS.some((id) => url.includes(id))) return null;
-  if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
-    return url.replace('/upload/', '/upload/c_fill,g_face,w_600,h_600,q_auto,f_jpg/');
-  }
-  return url;
-}
 
 function precioServicio(s) {
   return `${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`;
@@ -259,6 +246,13 @@ function avisarContacto(negocioId, phone, clientName) {
 export async function assistantEngine({ negocioId, phone, message, messageId }) {
   const context = await getBusinessContext(negocioId);
 
+  // Sin la capacidad `asistenteWhatsapp` el bot no responde nada (tampoco
+  // gasta mensajes). El webhook ya lo valida; esto cubre cualquier otra
+  // entrada al engine (ej. /assistant/test).
+  if (!canUse(context.capabilities, 'asistenteWhatsapp')) {
+    return { replyText: null, conversation: null, blockedReason: 'capacidad_no_incluida' };
+  }
+
   // Negocio suspendido/vencido o asistente apagado: no se toman reservas.
   if (context.isBlocked || !context.assistantEnabled) {
     return { replyText: `Por ahora ${context.businessName} no está recibiendo reservas por WhatsApp.`, conversation: null };
@@ -367,15 +361,6 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_extra_service' });
         return responder(mensajeServiciosExtra(), conversation);
       }
-      // "No sé quién es": tarjetas con foto, de a FOTOS_POR_TANDA.
-      if (/^fotos$|no s[eé] qui[eé]n/i.test(texto) || /^masfotos$/i.test(texto)) {
-        const pagina = /^masfotos$/i.test(texto) ? (Number(conversation.photoPage) || 0) + 1 : 0;
-        conversation = await updateConversation(negocioId, phone, { photoPage: pagina });
-        return mostrarFotos(pros, pagina);
-      }
-      if (/^lista$/i.test(texto)) {
-        return responder(mensajeProfesionales(pros), conversation);
-      }
       const idx = parseInt(texto, 10) - 1;
       const opciones = opcionesCualquiera(pros);
       const profesional = pros[idx];
@@ -439,9 +424,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     }
 
     case 'awaiting_name': {
-      if (!nombreValido(texto)) {
-        return responder('Escribe tu nombre para la reserva (ej: Juan Pérez).', conversation);
-      }
+      if (!texto) return responder('¿A nombre de quién hago la reserva?', conversation);
 
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'confirming',
@@ -629,44 +612,11 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     return mensajeBienvenida(context, nombre, repetir);
   }
 
-  // Primero el nombre de Clientes (el admin lo puede corregir), después el
-  // último que dio por WhatsApp. Nombres inválidos ("Hola", etc.) se ignoran.
   async function nombreDelCliente() {
+    const valido = (n) => n && String(n).trim() && !/^cliente whatsapp$/i.test(String(n).trim());
+    if (valido(conversation.clientName)) return conversation.clientName.trim();
     const cliente = await findClientByPhone(negocioId, phone);
-    if (nombreValido(cliente?.name)) return cliente.name.trim();
-    if (nombreValido(conversation.clientName)) return conversation.clientName.trim();
-    return null;
-  }
-
-  function mostrarFotos(pros, pagina) {
-    const conFoto = pros
-      .map((p, i) => ({ p, id: String(i + 1), foto: fotoProfesional(p) }))
-      .filter((x) => x.foto);
-    if (conFoto.length === 0) {
-      return responder(prefijo('Todavía no hay fotos de los profesionales.', mensajeProfesionales(pros)), conversation);
-    }
-    const desde = pagina * FOTOS_POR_TANDA;
-    const tanda = conFoto.slice(desde, desde + FOTOS_POR_TANDA);
-    if (tanda.length === 0) return mostrarFotos(pros, 0);
-
-    const tarjetas = tanda.map(({ p, id, foto }) => ({
-      interactive: {
-        type: 'button',
-        header: { type: 'image', image: { link: foto } },
-        body: { text: recortar(p.name, 1024) },
-        action: { buttons: [{ type: 'reply', reply: { id, title: recortar(`Elegir a ${p.name.split(' ')[0]}`, 20) } }] },
-      },
-    }));
-    const quedan = conFoto.length > desde + FOTOS_POR_TANDA;
-    const cierre = menuBotones({
-      texto: `Toca «Elegir» en la foto del profesional que prefieras.${quedan ? '\nEscribe "masfotos" para ver más.' : ''}\nEscribe "lista" para volver a la lista.`,
-      cuerpo: 'Toca «Elegir» en la foto del profesional que prefieras.',
-      botones: [
-        ...(quedan ? [{ id: 'masfotos', title: 'Ver más fotos' }] : []),
-        { id: 'lista', title: 'Volver a la lista' },
-      ],
-    });
-    return responder(cierre, conversation, tarjetas);
+    return valido(cliente?.name) ? cliente.name.trim() : null;
   }
 
   async function hablarConAlguien() {
@@ -757,10 +707,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       cuerpo: titulo,
       boton: 'Ver profesionales',
       items,
-      fijas: [
-        ...(pros.some((p) => fotoProfesional(p)) ? [{ id: 'fotos', title: '📷 No sé quién es', description: 'Ver fotos de los profesionales' }] : []),
-        ...(puedeAgregar ? [{ id: 'agregar', title: '➕ Agregar servicio', description: 'Sumar otro servicio a esta cita' }] : []),
-      ],
+      fijas: puedeAgregar ? [{ id: 'agregar', title: '➕ Agregar servicio', description: 'Sumar otro servicio a esta cita' }] : [],
       page: paginaActual(),
     });
   }
@@ -871,10 +818,9 @@ function prefijo(aviso, mensaje) {
   };
 }
 
-// `previos`: mensajes que se mandan antes del principal (ej. tarjetas con foto).
-function responder(mensaje, conversation, previos = []) {
+function responder(mensaje, conversation) {
   if (mensaje && typeof mensaje === 'object') {
-    return { replyText: mensaje.text, interactive: mensaje.interactive || null, preMessages: previos, conversation };
+    return { replyText: mensaje.text, interactive: mensaje.interactive || null, conversation };
   }
-  return { replyText: mensaje, interactive: null, preMessages: previos, conversation };
+  return { replyText: mensaje, interactive: null, conversation };
 }

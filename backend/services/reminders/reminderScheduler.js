@@ -14,6 +14,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
 import { sendNotification } from '../notificationService.js';
+import { checkCapability } from '../capabilities/capabilityService.js';
 
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 // "30" = un recordatorio 30 min antes. "60,30" = doble recordatorio.
@@ -72,6 +73,15 @@ function subscribe() {
 
 async function claimAndSend(ref, minutes, mark) {
   const negocioId = ref.parent.parent.id;
+
+  // Capacidad `recordatoriosPush` (caché de 60 s, no agrega lecturas por tick).
+  try {
+    const permiso = await checkCapability(negocioId, 'recordatoriosPush', { checkLimit: false });
+    if (!permiso.allowed) return;
+  } catch (err) {
+    logger.warn('[reminders] No se pudo validar recordatoriosPush:', err.message);
+    return;
+  }
 
   const fresh = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

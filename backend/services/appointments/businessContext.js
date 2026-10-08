@@ -4,6 +4,8 @@
 // saber de un negocio, sin queries sueltas repetidas en cada acción.
 
 import { db } from '../../config/firebase.js';
+import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabilityModel.js';
+import { getNegocioAccess } from '../capabilities/capabilityService.js';
 
 // Caché en memoria: el asistente lee el negocio en cada mensaje; con esto se
 // lee como máximo una vez por minuto por negocio (más rápido y menos lecturas).
@@ -41,21 +43,18 @@ async function leerContexto(negocioId) {
     .filter((p) => p.active !== false);
   const sucursales = sucursalesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  // Mismo criterio que useNegocioStatus del front: suspendido o con
-  // subscriptionEnd vencido => bloqueado.
-  let effectiveStatus = negocio.status || 'active';
-  if (effectiveStatus !== 'suspended' && negocio.subscriptionEnd) {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    if (new Date(negocio.subscriptionEnd) < hoy) effectiveStatus = 'expired';
-  }
+  // Mismo criterio que useNegocioStatus del front (capabilityModel):
+  // suspendido, prueba vencida o subscriptionEnd vencido => bloqueado.
+  const effectiveStatus = computeEffectiveStatus(negocio.status, negocio.subscriptionEnd || null, negocio.trialEnd || null);
+  const access = await getNegocioAccess(negocioId);
 
   return {
     negocioId,
     businessName: negocio.heroConfig?.businessName || negocio.slug || negocioId,
     status: effectiveStatus,
-    isBlocked: effectiveStatus === 'suspended' || effectiveStatus === 'expired',
+    isBlocked: isBlockedStatus(effectiveStatus),
     plan: negocio.plan || null,
+    capabilities: access.capabilities,
     assistantConfig: negocio.assistantConfig || { enabled: false, capabilities: {} },
     // Tener whatsappPhoneNumberId ya es la activación; esto solo permite
     // apagarlo explícitamente con assistantConfig.enabled = false.

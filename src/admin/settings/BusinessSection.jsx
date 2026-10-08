@@ -4,6 +4,7 @@ import { useBusinessSettings } from '../../shared/businessSettings/useBusinessSe
 import { saveBusinessSettings } from '../../shared/businessSettings/businessSettingsService';
 import { useNegocioPlan } from '../../shared/negocioPlan/useNegocioPlan';
 import { useNegocioStatus } from '../../shared/negocioStatus/useNegocioStatus';
+import { CAPABILITIES } from '../../shared/capabilities/capabilityModel';
 
 function Card({ children, className = '' }) {
   return (
@@ -15,13 +16,14 @@ function Card({ children, className = '' }) {
 
 const STATUS_BADGE = {
   active: { label: 'Activa', className: 'bg-nexus-success-bg text-nexus-success-text', Icon: ShieldCheck },
+  trial: { label: 'Prueba', className: 'bg-nexus-warning-bg text-nexus-warning-text', Icon: ShieldCheck },
   suspended: { label: 'Suspendida', className: 'bg-nexus-error-bg text-nexus-error-text', Icon: ShieldX },
   expired: { label: 'Vencida', className: 'bg-nexus-error-bg text-nexus-error-text', Icon: ShieldAlert },
 };
 
 export default function BusinessSection({ negocioId, businessName, user, onLogout }) {
   const { businessSettings, loading: settingsLoading } = useBusinessSettings(negocioId);
-  const { planName, features, loading: planLoading } = useNegocioPlan(negocioId);
+  const { planName, capabilities, loading: planLoading } = useNegocioPlan(negocioId);
   const { status } = useNegocioStatus(negocioId);
 
   const [form, setForm] = useState(businessSettings);
@@ -70,7 +72,11 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
   };
 
   const statusInfo = STATUS_BADGE[status] || STATUS_BADGE.active;
-  const featureEntries = Object.entries(features || {});
+  // Lo que el negocio tiene EFECTIVAMENTE (plan + excepciones), con nombres
+  // legibles del catálogo. Las "Próximamente" no se listan.
+  const featureEntries = CAPABILITIES
+    .filter((cap) => cap.status !== 'soon' && !cap.core)
+    .map((cap) => [cap, capabilities?.[cap.key]]);
 
   return (
     <div className="space-y-4">
@@ -131,14 +137,15 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
             </div>
             {featureEntries.length > 0 ? (
               <ul className="space-y-1.5">
-                {featureEntries.map(([key, val]) => {
-                  const enabled = val && typeof val === 'object' ? !!val.enabled : !!val;
-                  const limit = val && typeof val === 'object' ? val.limit : null;
+                {featureEntries.map(([cap, val]) => {
+                  const enabled = !!val?.enabled;
+                  const limit = typeof val?.limit === 'number' ? val.limit : null;
+                  const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}`) : 'Incluido';
                   return (
-                    <li key={key} className="flex items-center justify-between text-[11px] border-b border-nexus-border/60 pb-1.5 last:border-0">
-                      <span className="text-nexus-text-secondary">{key}</span>
+                    <li key={cap.key} className="flex items-center justify-between text-[11px] border-b border-nexus-border/60 pb-1.5 last:border-0">
+                      <span className="text-nexus-text-secondary">{cap.label}</span>
                       <span className={`font-mono font-bold ${enabled ? 'text-nexus-success-text' : 'text-nexus-text-muted'}`}>
-                        {enabled ? (typeof limit === 'number' ? `Hasta ${limit}` : 'Incluido') : 'No incluido'}
+                        {enabled ? limitText : 'No incluido'}
                       </span>
                     </li>
                   );

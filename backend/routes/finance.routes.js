@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { hashPin, verifyPin } from '../services/finance/pin.js';
 import { createSessionToken, verifySessionToken } from '../services/finance/financeSession.js';
+import { requireCapability } from '../services/capabilities/capabilityService.js';
 import { getFinanceSummary, getFinanceOverview, getComisionesPorProfesional, getDetalleComisionesBarbero, registrarPagoComision } from '../services/finance/financeData.js';
 
 const router = Router();
@@ -36,7 +37,13 @@ async function requireFinanceSession(req, res, next) {
 
 router.use(identifyRequester);
 
-router.post('/finance/set-pin', requireAuth, async (req, res) => {
+// Capacidades (validadas en servidor): la sección Analítica usa también
+// el detalle/pago de comisiones, por eso esas rutas aceptan cualquiera de
+// las dos capacidades.
+const requireAnaliticas = requireCapability('analiticas');
+const requireComisiones = requireCapability('comisiones', 'analiticas');
+
+router.post('/finance/set-pin', requireAuth, requireAnaliticas, async (req, res) => {
   const { pin } = req.body || {};
   if (!pin || String(pin).length < 4) {
     return res.status(400).json({ error: 'El PIN debe tener al menos 4 dígitos.' });
@@ -46,7 +53,7 @@ router.post('/finance/set-pin', requireAuth, async (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
-router.post('/finance/verify-pin', requireAuth, async (req, res) => {
+router.post('/finance/verify-pin', requireAuth, requireAnaliticas, async (req, res) => {
   const { pin } = req.body || {};
   const negocioSnap = await db.collection('negocios').doc(req.negocioId).get();
   const financePinHash = negocioSnap.data()?.financePinHash;
@@ -57,7 +64,7 @@ router.post('/finance/verify-pin', requireAuth, async (req, res) => {
   return res.status(200).json({ sessionToken, expiresInMinutes: 15 });
 });
 
-router.get('/finance/summary', requireAuth, requireFinanceSession, async (req, res) => {
+router.get('/finance/summary', requireAuth, requireAnaliticas, requireFinanceSession, async (req, res) => {
   try {
     const { startDate, endDate, branch } = req.query;
     const data = await getFinanceSummary(req.negocioId, { startDate, endDate, branch });
@@ -67,7 +74,7 @@ router.get('/finance/summary', requireAuth, requireFinanceSession, async (req, r
   }
 });
 
-router.get('/finance/overview', requireAuth, requireFinanceSession, async (req, res) => {
+router.get('/finance/overview', requireAuth, requireAnaliticas, requireFinanceSession, async (req, res) => {
   try {
     const { startDate, endDate, branch } = req.query;
     const data = await getFinanceOverview(req.negocioId, { startDate, endDate, branch });
@@ -77,7 +84,7 @@ router.get('/finance/overview', requireAuth, requireFinanceSession, async (req, 
   }
 });
 
-router.get('/finance/commissions', requireAuth, requireFinanceSession, async (req, res) => {
+router.get('/finance/commissions', requireAuth, requireComisiones, requireFinanceSession, async (req, res) => {
   try {
     const { startDate, endDate, branch } = req.query;
     const data = await getComisionesPorProfesional(req.negocioId, { startDate, endDate, branch });
@@ -87,7 +94,7 @@ router.get('/finance/commissions', requireAuth, requireFinanceSession, async (re
   }
 });
 
-router.get('/finance/commissions/:barberId', requireAuth, requireFinanceSession, async (req, res) => {
+router.get('/finance/commissions/:barberId', requireAuth, requireComisiones, requireFinanceSession, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const data = await getDetalleComisionesBarbero(req.negocioId, req.params.barberId, { startDate, endDate });
@@ -97,7 +104,7 @@ router.get('/finance/commissions/:barberId', requireAuth, requireFinanceSession,
   }
 });
 
-router.post('/finance/commissions/:barberId/pay', requireAuth, requireFinanceSession, async (req, res) => {
+router.post('/finance/commissions/:barberId/pay', requireAuth, requireComisiones, requireFinanceSession, async (req, res) => {
   try {
     const { startDate, endDate } = req.body || {};
     const data = await registrarPagoComision(req.negocioId, req.params.barberId, { startDate, endDate });

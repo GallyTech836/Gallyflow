@@ -333,10 +333,19 @@ const [saleForm, setSaleForm] = useState({
   const [reservations, setReservations] = useState([]);
   const [blockouts, setBlockouts] = useState([]);
 
-// Antes eran flags fijos (apagados a mano para todos). Ahora se leen
-// del plan real asignado al negocio — cada uno ve solo lo que su plan
-// incluye, sin tocar código cada vez que cambie.
-const { features: planFeatures } = useNegocioPlan(negocioId);
+// Capacidades efectivas del negocio (override del Super Admin > plan >
+// default del catálogo). `planFeatures` es el mapa RESUELTO, así que
+// hasFeature/getFeatureLimit siguen funcionando igual que antes.
+const { capabilities: planFeatures, can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
+// Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
+// capacidad mientras la pestaña está abierta, se vuelve a la agenda.
+const TAB_CAPABILITY = { dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas' };
+useEffect(() => {
+  if (planLoading) return;
+  const cap = TAB_CAPABILITY[activeTab];
+  if (cap && !canUseCapability(cap)) setActiveTab('agenda');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab, planFeatures, planLoading]);
 const { businessSettings } = useBusinessSettings(negocioId);
   const [whatsappSettings, setWhatsappSettings] = useState({
     isConnected: true,
@@ -2584,6 +2593,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <div className="border-t border-nexus-navy-border my-2 mx-2" />
           )}
           
+          {hasFeature(planFeatures, 'dashboard') && (
           <button 
             onClick={() => {
               setActiveTab('dashboard');
@@ -2600,6 +2610,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'dashboard' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Dashboard</span>}
           </button>
+          )}
 
           <button 
             onClick={() => {
@@ -2667,6 +2678,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             {!isSidebarCollapsed && <span className="truncate">Servicios</span>}
           </button>
 
+          {hasFeature(planFeatures, 'clientes') && (
           <button 
             onClick={() => {
               setActiveTab('clients');
@@ -2683,6 +2695,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <UserCheck className={`w-4 h-4 shrink-0 ${activeTab === 'clients' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Clientes</span>}
           </button>
+          )}
 
           <button 
             onClick={() => {
@@ -2821,7 +2834,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
           {!isSidebarCollapsed && isSettingsMenuOpen && (
             <div className="ml-3 pl-2.5 border-l border-nexus-navy-border space-y-0.5 py-1">
-              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'automatizaciones')).map(({ id, label, icon: Icon }) => (
+              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp')).map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   onClick={() => {
@@ -3412,7 +3425,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </div>
                 <button
                   onClick={() => {
-                    const staffLimit = getFeatureLimit(planFeatures, 'staff');
+                    const staffLimit = getFeatureLimit(planFeatures, 'profesionales');
                     if (staffLimit !== null && barbers.length >= staffLimit) {
                       triggerToast(`Tu plan permite hasta ${staffLimit} profesionales. Cambia de plan para agregar más.`, 'error');
                       return;
@@ -4495,7 +4508,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             isEditingBusinessName={isEditingBusinessName}
             setIsEditingBusinessName={setIsEditingBusinessName}
             onLogout={logout}
-            activeSection={settingsSection}
+            activeSection={settingsSection === 'automation' && !hasFeature(planFeatures, 'asistenteWhatsapp') ? 'business' : settingsSection}
             whatsappSettings={whatsappSettings}
             setWhatsappSettings={setWhatsappSettings}
             automationLogs={automationLogs}
@@ -5285,6 +5298,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       </table>
                   </div>
 
+                  {hasFeature(planFeatures, 'permisosProfesional') && (
                   <div className="pt-4 border-t border-nexus-border space-y-3">
                     <div>
                       <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Permisos del Profesional</h4>
@@ -5313,6 +5327,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       })}
                     </div>
                   </div>
+                  )}
                 </div>
               )}
 
@@ -5545,6 +5560,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           fieldSuggestions={[...new Set(clients.flatMap(c => (c.customFields || []).map(f => f.label)).filter(Boolean))]}
           onClose={() => setSelectedClientId(null)}
           onToast={triggerToast}
+          capabilities={planFeatures}
         />
       )}
       {activeModal === 'add-service' && (

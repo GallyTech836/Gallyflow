@@ -1,63 +1,89 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { resolveCapabilities, canUse, getLimit } from '../capabilities/capabilityModel';
 
-const EMPTY_FEATURES = {};
+const EMPTY = {};
 
 /**
- * Dado un negocioId, resuelve en tiempo real qué plan tiene asignado
- * y qué funciones/límites incluye ese plan (leído de la colección
- * `planes`, la misma que administra el Super Admin). Dos pasos
- * encadenados: primero se escucha el negocio para saber su `plan`
- * (el ID del plan), después se escucha ese plan en sí — si cambias
- * algo desde el Super Admin, se refleja solo, sin refrescar.
+ * Capacidades efectivas del negocio, en tiempo real.
  *
- * Si el negocio no tiene plan asignado, o el plan fue borrado,
- * `features` queda vacío — usa hasFeature()/getFeatureLimit() de abajo,
- * que ya tratan eso como "sin acceso" en vez de tronar.
+ * Escucha `negocios/{id}` (plan + capabilityOverrides) y `planes/{planId}`,
+ * y resuelve con el modelo compartido (override > plan > default).
+ * Si el Super Admin cambia el plan o una excepción, se refleja solo.
+ *
+ * Devuelve:
+ *   capabilities  -> mapa resuelto { key: { enabled, limit, source, ... } }
+ *   can(key)      -> boolean
+ *   limitOf(key)  -> número o null (ilimitado)
+ *   features      -> `features` crudo del plan (compatibilidad)
+ *
+ * IMPORTANTE: esto solo decide qué se MUESTRA. Lo importante se valida
+ * también en el backend (capabilityService) y en las reglas de Firestore.
  */
 export function useNegocioPlan(negocioId) {
   const [planId, setPlanId] = useState(null);
+  const [overrides, setOverrides] = useState(null);
   const [planData, setPlanData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [negocioLoaded, setNegocioLoaded] = useState(false);
+  const [planLoaded, setPlanLoaded] = useState(false);
 
   useEffect(() => {
-    if (!negocioId) { setLoading(false); return; }
+    if (!negocioId) { setNegocioLoaded(true); return undefined; }
     const ref = doc(db, 'negocios', negocioId);
     const unsub = onSnapshot(ref, (snap) => {
-      setPlanId(snap.exists() ? (snap.data().plan || null) : null);
-    });
+      const data = snap.exists() ? snap.data() : {};
+      setPlanId(data.plan || null);
+      setOverrides(data.capabilityOverrides || null);
+      setNegocioLoaded(true);
+    }, () => setNegocioLoaded(true));
     return () => unsub();
   }, [negocioId]);
 
   useEffect(() => {
     if (!planId) {
       setPlanData(null);
-      setLoading(false);
-      return;
+      setPlanLoaded(true);
+      return undefined;
     }
-    setLoading(true);
+    setPlanLoaded(false);
     const ref = doc(db, 'planes', planId);
     const unsub = onSnapshot(ref, (snap) => {
       setPlanData(snap.exists() ? snap.data() : null);
-      setLoading(false);
-    });
+      setPlanLoaded(true);
+    }, () => setPlanLoaded(true));
     return () => unsub();
   }, [planId]);
 
-  const features = planData?.features || EMPTY_FEATURES;
+  const features = planData?.features || EMPTY;
+  const capabilities = useMemo(
+    () => resolveCapabilities({ planFeatures: planData?.features || null, overrides }),
+    [planData, overrides],
+  );
+  const can = useCallback((key) => canUse(capabilities, key), [capabilities]);
+  const limitOf = useCallback((key) => getLimit(capabilities, key), [capabilities]);
 
-  return { planId, planName: planData?.name || null, features, loading };
+  return {
+    planId,
+    planName: planData?.name || null,
+    features,
+    capabilities,
+    can,
+    limitOf,
+    loading: !negocioLoaded || !planLoaded,
+  };
 }
 
-/** true si el plan incluye esa función (booleana simple, o limitable activada). */
+/**
+ * Compatibilidad con el código anterior. Acepta tanto el mapa resuelto
+ * (`capabilities`) como un `features` crudo de plan.
+ */
 export function hasFeature(features, key) {
   const val = features?.[key];
   if (val && typeof val === 'object') return !!val.enabled;
   return !!val;
 }
 
-/** número de límite de una función limitable (staff/sucursales), o null si no aplica. */
 export function getFeatureLimit(features, key) {
   const val = features?.[key];
   if (val && typeof val === 'object' && typeof val.limit === 'number') return val.limit;

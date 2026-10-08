@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabilityModel';
 
 /**
  * Escucha en tiempo real el campo `status` del negocio. Si el Super
@@ -10,21 +11,11 @@ import { db } from '../../firebase/config';
  * Negocios sin `status` todavía (creados antes de esta función, o por
  * auto-registro orgánico) se tratan como 'active' — nunca bloqueamos
  * por default, solo cuando el campo dice explícitamente lo contrario.
+ *
+ * El criterio (suspendido / prueba vencida / suscripción vencida) vive en
+ * capabilityModel.computeEffectiveStatus, el mismo que usan Super Admin y
+ * el backend.
  */
-// Idéntico criterio al del panel Super Admin (src/data/useBusinesses.js):
-// si ya pasó subscriptionEnd, se trata como vencido automáticamente sin
-// depender de ningún cron — se recalcula cada vez que se lee el negocio.
-function computeEffectiveStatus(status, subscriptionEnd) {
-  if (status === 'suspended') return 'suspended';
-  if (subscriptionEnd) {
-    const end = new Date(subscriptionEnd);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (end < today) return 'expired';
-  }
-  return status;
-}
-
 export function useNegocioStatus(negocioId) {
   const [status, setStatus] = useState('active');
   const [loading, setLoading] = useState(true);
@@ -41,14 +32,14 @@ export function useNegocioStatus(negocioId) {
         setStatus('active');
       } else {
         const data = snap.data();
-        setStatus(computeEffectiveStatus(data.status || 'active', data.subscriptionEnd || null));
+        setStatus(computeEffectiveStatus(data.status || 'active', data.subscriptionEnd || null, data.trialEnd || null));
       }
       setLoading(false);
     });
     return () => unsub();
   }, [negocioId]);
 
-  const isBlocked = status === 'suspended' || status === 'expired';
+  const isBlocked = isBlockedStatus(status);
 
   return { status, isBlocked, loading };
 }

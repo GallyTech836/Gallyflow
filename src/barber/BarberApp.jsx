@@ -17,9 +17,10 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import AppointmentStatusBadge from '../shared/appointments/AppointmentStatusBadge';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { getEffectiveFieldPermissions } from '../shared/appointments/permissions';
-import { normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
+import { normalizeStaffPermissions, DEFAULT_STAFF_PERMISSIONS } from '../shared/staffPermissions/staffPermissionsModel';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import PersonalBookingLink from '../shared/booking/PersonalBookingLink';
+import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import Avatar from '../shared/avatar/Avatar';
 import { buildPersonalBookingUrl } from '../shared/booking/personalLink';
 import { STATUS } from '../shared/appointments/statusModel';
@@ -241,6 +242,7 @@ export default function App() {
   const negocioId = barberUser?.negocioId;
   const { businessSettings } = useBusinessSettings(negocioId);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
+  const { can: canUseCapability } = useNegocioPlan(negocioId);
   useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const { servicios: services } = useServicios(negocioId);
@@ -319,7 +321,12 @@ useEffect(() => {
   return () => unsub();
 }, [negocioId, barberUser]);
 
-const staffPerms = useMemo(() => normalizeStaffPermissions(activeBarber?.permissions), [activeBarber]);
+// Sin la capacidad `permisosProfesional` todos usan los permisos por defecto.
+const permisosPersonalizados = canUseCapability('permisosProfesional');
+const staffPerms = useMemo(
+  () => (permisosPersonalizados ? normalizeStaffPermissions(activeBarber?.permissions) : { ...DEFAULT_STAFF_PERMISSIONS }),
+  [activeBarber, permisosPersonalizados],
+);
 const isVisibleAppt = (appt) => staffPerms.viewOthersAppointments || matchesBarber(appt, activeBarber?.id);
 useEffect(() => {
   if (activeTab === "comisiones" && !staffPerms.viewCommissions) setActiveTab("agenda");
@@ -1853,7 +1860,9 @@ const fetchByDate = async (subcollection, date) => {
                   <p className="text-[11px] text-nexus-text-muted mt-1">Nexus Staff</p>
                 </div>
 
-                <PersonalBookingLink url={buildPersonalBookingUrl(negocioId, activeBarber.id)} onToast={triggerToast} />
+                {canUseCapability('linkPersonalProfesional') && (
+                  <PersonalBookingLink url={buildPersonalBookingUrl(negocioId, activeBarber.id)} onToast={triggerToast} />
+                )}
 
                 <div className="space-y-3 pt-4">
                   <button 

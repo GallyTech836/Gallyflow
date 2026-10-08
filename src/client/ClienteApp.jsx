@@ -17,6 +17,7 @@ import { compareServicios } from '../firebase/useServicios';
 import { confirmBookingToClient } from './useClientBookingConfirmation';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
+import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
@@ -76,6 +77,10 @@ export default function App({ negocioSlug } = {}) {
   const [negocioResolving, setNegocioResolving] = useState(true);
   const [negocioNotFound, setNegocioNotFound] = useState(false);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
+  // Capacidades: `reservaPublica` habilita este flujo y
+  // `linkPersonalProfesional` el link ?pro=ID. (También se valida en reglas
+  // de Firestore / backend; esto solo decide qué se muestra.)
+  const { can: canUseCapability, loading: capabilitiesLoading } = useNegocioPlan(negocioId);
   const { businessSettings } = useBusinessSettings(negocioId);
 
   useEffect(() => {
@@ -205,7 +210,9 @@ export default function App({ negocioSlug } = {}) {
 
   // === LINK PERSONAL DE UN PROFESIONAL: /reservar?negocio=slug&pro=ID ===
   const personalProId = useMemo(() => new URLSearchParams(window.location.search).get('pro'), []);
-  const personalBarber = personalProId ? barbers.find(b => b.id === personalProId && !b.isPending) : null;
+  const personalBarber = personalProId && canUseCapability('linkPersonalProfesional')
+    ? barbers.find(b => b.id === personalProId && !b.isPending)
+    : null;
   const isPersonalLink = !!personalBarber;
   const stepOffset = isPersonalLink ? 2 : 0;
   useEffect(() => {
@@ -749,6 +756,10 @@ export default function App({ negocioSlug } = {}) {
 
   if (isBlocked) {
     return <SuspendedScreen status={negocioStatus} />;
+  }
+
+  if (negocioId && !capabilitiesLoading && !canUseCapability('reservaPublica')) {
+    return <SuspendedScreen status="suspended" />;
   }
 
   return (

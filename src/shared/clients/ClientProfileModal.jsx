@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { X, Plus, Trash2, Pencil } from 'lucide-react';
 import { db } from '../../firebase/config';
+import { canUse } from '../capabilities/capabilityModel';
 import AppointmentStatusBadge from '../appointments/AppointmentStatusBadge';
 import { useClientCitas } from './useClientCitas';
 import {
@@ -18,13 +19,14 @@ import {
  * los campos existentes (name, phone, visits, totalSpent...) no se tocan.
  */
 
+// `capability`: capacidad del plan que habilita la pestaña (ver capabilityModel).
 const TABS = [
   { id: 'perfil', label: 'Perfil' },
-  { id: 'actividad', label: 'Actividad' },
-  { id: 'citas', label: 'Citas' },
-  { id: 'servicios', label: 'Servicios' },
-  { id: 'pagos', label: 'Pagos' },
-  { id: 'notas', label: 'Notas' },
+  { id: 'actividad', label: 'Actividad', capability: 'historialCliente' },
+  { id: 'citas', label: 'Citas', capability: 'historialCliente' },
+  { id: 'servicios', label: 'Servicios', capability: 'historialCliente' },
+  { id: 'pagos', label: 'Pagos', capability: 'historialCliente' },
+  { id: 'notas', label: 'Notas', capability: 'fichaCliente' },
 ];
 
 const GENERIC_FIELD_SUGGESTIONS = ['Alergias', 'Empresa', 'Cómo nos conoció', 'Observaciones'];
@@ -67,7 +69,10 @@ export default function ClientProfileModal({
   fieldSuggestions = [],
   onClose,
   onToast = () => {},
+  capabilities = null, // null = todo habilitado (compatibilidad)
 }) {
+  const allow = (key) => !capabilities || canUse(capabilities, key);
+  const visibleTabs = TABS.filter((t) => !t.capability || allow(t.capability));
   const [tab, setTab] = useState('perfil');
   const { citas, loading, error, reload } = useClientCitas(negocioId, client);
   const history = useMemo(() => buildClientHistory(client, citas, { professionals }), [client, citas, professionals]);
@@ -200,7 +205,7 @@ export default function ClientProfileModal({
 
         {/* Pestañas */}
         <div className="flex gap-1 px-4 pt-3 overflow-x-auto no-scrollbar">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -237,6 +242,7 @@ export default function ClientProfileModal({
                 </div>
               </div>
 
+              {allow('preferenciasCliente') && (
               <div>
                 <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono mb-2">Preferencias</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -259,7 +265,9 @@ export default function ClientProfileModal({
                   </div>
                 </div>
               </div>
+              )}
 
+              {allow('camposPersonalizados') && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono">Campos personalizados</h4>
@@ -281,8 +289,7 @@ export default function ClientProfileModal({
                   ))}
                 </div>
               </div>
-
-              
+              )}
 
               </fieldset>
 

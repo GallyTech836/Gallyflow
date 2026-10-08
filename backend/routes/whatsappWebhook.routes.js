@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { assistantEngine } from '../services/assistantEngine/engine.js';
 import * as whatsappProvider from '../services/providers/whatsappProvider.js';
 import { logger } from '../utils/logger.js';
+import { checkCapability, incrementUsage, incrementRejected } from '../services/capabilities/capabilityService.js';
 
 const router = Router();
 
@@ -69,6 +70,19 @@ async function procesarMensaje(value, mensaje) {
   }
   const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token };
   registrarActividad(cuenta.negocioId, value?.metadata?.display_phone_number);
+
+  // Capacidad `asistenteWhatsapp` + límite mensual de mensajes. Si no está
+  // permitido, el bot no responde (no gasta mensajes). Se valida aquí, en el
+  // servidor, sin importar lo que muestre AdminApp.
+  const permiso = await checkCapability(cuenta.negocioId, 'asistenteWhatsapp');
+  if (!permiso.allowed) {
+    logger.warn(`[whatsappWebhook] Asistente no permitido para ${cuenta.negocioId}: ${permiso.reason}`);
+    if (permiso.reason === 'limite_alcanzado') incrementRejected(cuenta.negocioId, permiso.usageKey);
+    return;
+  }
+  // Cada mensaje que el bot envía cuenta para el consumo del mes.
+  const contarEnvio = () => incrementUsage(cuenta.negocioId, 'whatsappMensajes', 1);
+
   whatsappProvider.markAsRead(mensaje.id, envio); // sin await: no retrasa la respuesta
 
   // Texto escrito, o toque en un botón / fila de lista (su id es el mismo
@@ -81,28 +95,21 @@ async function procesarMensaje(value, mensaje) {
 
   if (texto === null) {
     await whatsappProvider.send(from, MENSAJE_NO_TEXTO, envio);
+    await contarEnvio();
     return;
   }
 
-  const { replyText, interactive, preMessages = [] } = await assistantEngine({
+  const { replyText, interactive } = await assistantEngine({
     negocioId: cuenta.negocioId,
     phone: from,
     message: texto,
     messageId: mensaje.id,
   });
 
-  // Mensajes previos (tarjetas con foto), en orden. Si uno falla, se sigue.
-  for (const pre of preMessages) {
-    try {
-      await whatsappProvider.sendInteractive(from, pre.interactive, envio);
-    } catch (err) {
-      logger.warn('[whatsappWebhook] Tarjeta rechazada:', err.message);
-    }
-  }
-
   if (interactive) {
     try {
       await whatsappProvider.sendInteractive(from, interactive, envio);
+      await contarEnvio();
       return;
     } catch (err) {
       // Si Meta rechaza el interactivo, se manda la versión de texto.
@@ -111,6 +118,7 @@ async function procesarMensaje(value, mensaje) {
   }
   if (replyText) {
     await whatsappProvider.send(from, replyText, envio);
+    await contarEnvio();
   }
 }
 
