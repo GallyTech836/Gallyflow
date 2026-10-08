@@ -5,6 +5,8 @@ import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { logger } from '../utils/logger.js';
 import { getNegocioAccess, getUsage, currentPeriod } from '../services/capabilities/capabilityService.js';
 import { getCapability, usageStatus } from '../services/capabilities/capabilityModel.js';
+import { hashPin } from '../services/finance/pin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const router = Router();
 
@@ -31,6 +33,15 @@ function generateTempPassword() {
   return Math.random().toString(36).slice(-10) + 'A1!';
 }
 
+// Contraseña elegida por el Super Admin, o una generada si viene vacía.
+// Firebase Auth exige mínimo 6 caracteres.
+function resolvePassword(raw) {
+  const p = typeof raw === 'string' ? raw.trim() : '';
+  if (!p) return { password: generateTempPassword() };
+  if (p.length < 6) return { error: 'La contraseña debe tener al menos 6 caracteres.' };
+  return { password: p };
+}
+
 const DEFAULT_HERO_CONFIG = {
   businessName: 'GALLYFLOW',
   slogan: 'Agenda citas de forma rápida y segura desde cualquier dispositivo en nuestra plataforma premium.',
@@ -49,7 +60,7 @@ const DEFAULT_HERO_CONFIG = {
 // businessHeroService.js) y los campos de gestión propios del panel
 // (plan, status, etc.) que no existen en el flujo orgánico.
 router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) => {
-  const { name, ownerName, ownerEmail, phone, country, city, plan, status, trialDays } = req.body;
+  const { name, ownerName, ownerEmail, phone, country, city, plan, status, trialDays, password } = req.body;
 
   if (!ownerEmail) {
     return res.status(400).json({ error: 'Falta el correo del propietario.' });
@@ -60,7 +71,9 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
     return res.status(400).json({ error: 'Correo inválido.' });
   }
 
-  const tempPassword = generateTempPassword();
+  const pw = resolvePassword(password);
+  if (pw.error) return res.status(400).json({ error: pw.error });
+  const tempPassword = pw.password;
   let createdUid = null;
 
   // `plan` es el ID de un documento de `planes` (ya no 'trial'/'basic'/'pro').
@@ -131,18 +144,62 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
   }
 });
 // POST /api/superadmin/negocios/:negocioId/analytics-pin
-// Activa/desactiva la protección por PIN de la sección Analítica de un negocio.
+// Bloqueo por PIN de la sección Analítica de un negocio.
+// Body: { enabled?: boolean, pin?: string (4-8 dígitos), clearPin?: boolean }
+//  - enabled: activa/desactiva el bloqueo.
+//  - pin: fija un PIN nuevo (se guarda solo el hash; nadie puede leerlo).
+//  - clearPin: borra el PIN (el dueño tendrá que crear uno al entrar).
 router.post('/negocios/:negocioId/analytics-pin', identifyRequester, requireSuperAdmin, async (req, res) => {
   const { negocioId } = req.params;
-  const { enabled } = req.body;
-  if (typeof enabled !== 'boolean') {
-    return res.status(400).json({ error: 'Falta "enabled" (true/false).' });
+  const { enabled, pin, clearPin } = req.body || {};
+  const patch = {};
+  if (typeof enabled === 'boolean') patch.analyticsPinEnabled = enabled;
+  if (pin !== undefined && pin !== null && pin !== '') {
+    if (!/^\d{4,8}$/.test(String(pin))) {
+      return res.status(400).json({ error: 'El PIN debe tener entre 4 y 8 dígitos.' });
+    }
+    patch.financePinHash = await hashPin(String(pin));
+  } else if (clearPin === true) {
+    patch.financePinHash = FieldValue.delete();
+  }
+  if (!Object.keys(patch).length) {
+    return res.status(400).json({ error: 'Nada que cambiar (enabled, pin o clearPin).' });
   }
   try {
-    await db.collection('negocios').doc(negocioId).update({ analyticsPinEnabled: enabled });
-    return res.status(200).json({ ok: true, negocioId, analyticsPinEnabled: enabled });
+    await db.collection('negocios').doc(negocioId).update(patch);
+    return res.status(200).json({
+      ok: true,
+      negocioId,
+      ...(typeof enabled === 'boolean' ? { analyticsPinEnabled: enabled } : {}),
+      pinChanged: !!patch.financePinHash,
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/superadmin/negocios/:negocioId/password
+// Cambia la contraseña del administrador del negocio.
+// Body: { password?: string } — vacía = se genera una nueva.
+// Devuelve la contraseña UNA vez; no se guarda en ningún lado (Firebase
+// Auth solo guarda el hash, por eso no se puede "ver" la anterior).
+router.post('/negocios/:negocioId/password', identifyRequester, requireSuperAdmin, async (req, res) => {
+  const { negocioId } = req.params;
+  const pw = resolvePassword(req.body?.password);
+  if (pw.error) return res.status(400).json({ error: pw.error });
+  try {
+    const snap = await db.collection('negocios').doc(negocioId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Negocio no encontrado.' });
+    const { adminUid, email } = snap.data();
+    let uid = adminUid;
+    if (!uid && email) uid = (await getAuth().getUserByEmail(email)).uid;
+    if (!uid) return res.status(400).json({ error: 'El negocio no tiene una cuenta de administrador.' });
+    await getAuth().updateUser(uid, { password: pw.password });
+    logger.info(`[superadmin] Contraseña cambiada para negocio ${negocioId}`);
+    return res.status(200).json({ ok: true, email, password: pw.password });
+  } catch (err) {
+    logger.error('[superadmin] Error cambiando contraseña:', err.message);
+    return res.status(500).json({ error: 'No se pudo cambiar la contraseña.' });
   }
 });
 
