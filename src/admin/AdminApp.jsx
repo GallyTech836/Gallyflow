@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, Scissors, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, CreditCard as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, CreditCard as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -19,6 +19,7 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
+import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
@@ -66,6 +67,7 @@ const { logout } = useAuth();
   // Tipo de negocio -> terminología y módulos (businessProfileModel).
   const businessProfile = useBusinessProfile(negocioId);
   const { t, tl, g, hasModule } = businessProfile;
+  const ServiceIcon = getServiceIcon(businessProfile.type);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 console.log('[ADMIN] negocioId:', negocioId);
@@ -2682,7 +2684,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
             }`}
           >
-            <Scissors className={`w-4 h-4 shrink-0 ${activeTab === 'services' ? 'text-white' : 'text-nexus-primary'}`} />
+            <ServiceIcon className={`w-4 h-4 shrink-0 ${activeTab === 'services' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">{t('services')}</span>}
           </button>
           )}
@@ -5093,7 +5095,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       })}
                       {newBarber.services.length === 0 && (
                         <div className="text-center text-nexus-text-muted py-16">
-                          <Scissors className="w-8 h-8 mx-auto mb-2 opacity-35" />
+                          <ServiceIcon className="w-8 h-8 mx-auto mb-2 opacity-35" />
                           <p className="text-[10px] font-bold">No hay {tl('services')} {g('service', 'seleccionados', 'seleccionadas')}</p>
                           <p className="text-[9px] text-nexus-text-muted">Agrégar de la lista de disponibles a la derecha.</p>
                         </div>
@@ -5578,7 +5580,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl max-h-full overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
-              <Scissors className="w-5 h-5 text-nexus-primary" />
+            <ServiceIcon className="w-5 h-5 text-nexus-primary" />
               {editingServiceId ? `Editar ${t('service')}` : `Crear ${g('service', 'Nuevo', 'Nueva')} ${t('service')}`}
             </h3>
             <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal del tratamiento.</p>
