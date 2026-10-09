@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useId } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 import { formatServicePrice } from '../servicePricing/servicePricing';
 import { calculateTotals } from './serviceSelection';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
+import { Modal, Button, Field, Input, Select, Textarea } from '../ui';
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -166,8 +167,14 @@ export default function AppointmentCreateModal({
     }));
   };
 
-  const handleSubmit = (e) => {
+  // Evita reservas duplicadas por doble toque: mientras se guarda, el
+  // formulario ignora nuevos envíos (la lógica de onSubmit no cambia).
+  const [submitting, setSubmitting] = useState(false);
+  const formId = useId();
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (draft.serviceIds.length === 0) return;
     if (!String(draft.clientName || '').trim()) return;
   
@@ -184,306 +191,294 @@ export default function AppointmentCreateModal({
       });
     const { totalPrice, totalDuration } = calculateTotals(servicesForCita);
   
-    onSubmit({
-      ...draft,
-      services: servicesForCita,
-      serviceId: servicesForCita[0]?.serviceId || '',
-      serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
-      price: totalPrice,
-      duration: totalDuration,
-      overtime: !!draft.overtime,
-    });
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        ...draft,
+        services: servicesForCita,
+        serviceId: servicesForCita[0]?.serviceId || '',
+        serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
+        price: totalPrice,
+        duration: totalDuration,
+        overtime: !!draft.overtime,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  const noClient = !String(draft.clientName || '').trim();
+  const secondaryBtn = 'inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-nexus-primary/20 bg-nexus-primary-soft px-3 text-sm font-semibold text-nexus-primary whitespace-nowrap cursor-pointer hover:brightness-95';
+
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-5 relative shadow-xl">
-        <h3 className="text-base font-bold text-nexus-text mb-1">Agendar {terms.g('appointment', 'Nuevo', 'Nueva')} {terms.t('appointment')}</h3>
+    <Modal
+      onClose={onClose}
+      title={`Agendar ${terms.g('appointment', 'nuevo', 'nueva')} ${terms.tl('appointment')}`}
+      size="md"
+      footer={(
+        <>
+          <Button variant="secondary" onClick={onClose} fullWidth className="sm:w-auto">Cancelar</Button>
+          <Button type="submit" form={formId} loading={submitting} disabled={noClient} fullWidth className="sm:w-auto">
+            Confirmar reserva
+          </Button>
+        </>
+      )}
+    >
+      <form id={formId} onSubmit={handleSubmit} className="space-y-4">
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-
-          {/* ── Cliente ─────────────────────────────────────────── */}
-          <div className="relative">
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('client')} *</label>
-            {selectedClient && (
-              <div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowClientPhone(v => !v)}
-                    className="flex-1 min-w-0 flex items-center justify-between gap-2 bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text text-left cursor-pointer"
-                  >
-                    <span className="truncate font-bold">{selectedClient.name}</span>
-                    <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-nexus-text-secondary transition-transform ${showClientPhone ? 'rotate-180' : ''}`} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      change('clientId', null);
-                      change('clientName', '');
-                      change('phone', '');
-                      setClientSearch('');
-                      setShowClientPhone(false);
-                      setShowClientList(true);
-                    }}
-                    className="px-2.5 py-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
-                  >
-                    Cambiar
-                  </button>
-                </div>
-                {showClientPhone && (
-                  <p className="mt-1.5 px-2.5 py-1.5 bg-nexus-background border border-nexus-border rounded-lg text-xs text-nexus-text font-mono">
-                    {selectedClient.phone && selectedClient.phone !== 'N/A' ? selectedClient.phone : 'Teléfono no registrado'}
-                  </p>
-                )}
+        {/* ── Cliente ─────────────────────────────────────────── */}
+        <Field label={terms.t('client')} required>
+          {selectedClient && (
+            <div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowClientPhone(v => !v)}
+                  aria-expanded={showClientPhone}
+                  className="flex h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-nexus-border bg-nexus-background px-3 text-left text-sm text-nexus-text cursor-pointer"
+                >
+                  <span className="truncate font-semibold">{selectedClient.name}</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-nexus-text-secondary transition-transform ${showClientPhone ? 'rotate-180' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    change('clientId', null);
+                    change('clientName', '');
+                    change('phone', '');
+                    setClientSearch('');
+                    setShowClientPhone(false);
+                    setShowClientList(true);
+                  }}
+                  className={secondaryBtn}
+                >
+                  Cambiar
+                </button>
               </div>
-            )}
-            <div className={`flex gap-2 ${selectedClient ? 'hidden' : ''}`}>
-              <div className="relative flex-1">
-                <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                  <Search className="w-3.5 h-3.5 text-nexus-text-muted" />
-                </span>
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre o número..."
-                  value={clientSearch}
-                  onChange={(e) => { setClientSearch(e.target.value); setShowClientList(true); }}
-                  onFocus={() => setShowClientList(true)}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-8 pr-2.5 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => { setIsNewClient(v => !v); change('clientName', ''); change('phone', ''); change('clientId', null); setClientSearch(''); }}
-                className="px-2.5 py-2 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
-              >
-                {isNewClient ? 'Elegir Existente' : `+ ${terms.g('client', 'Nuevo', 'Nueva')} ${terms.t('client')}`}
-              </button>
-            </div>
-
-            {/* Dropdown de búsqueda */}
-            {!isNewClient && showClientList && clients.length > 0 && (
-              <div className="absolute left-0 right-0 mt-1.5 bg-nexus-surface border border-nexus-border rounded-xl shadow-xl max-h-40 overflow-y-auto z-50 divide-y divide-nexus-border">
-                {filteredClients.map(c => (
-                  <div
-                    key={c?.id}
-                    onClick={() => {
-                      change('clientName', c?.name);
-                      change('phone', c?.phone || '');
-                      change('clientId', c?.id);
-                      setClientSearch(c?.name);
-                      setShowClientList(false);
-                    }}
-                    className="p-2.5 hover:bg-nexus-surface-hover cursor-pointer flex justify-between items-center text-xs"
-                  >
-                    <div>
-                      <p className="font-bold text-nexus-text">{c?.name}</p>
-                      <p className="text-[10px] text-nexus-text-muted">{c?.phone}</p>
-                    </div>
-                    <span className="text-[9px] bg-nexus-primary-soft text-nexus-primary px-1.5 py-0.5 rounded font-bold font-mono">
-                      {c?.visits ?? 0} Visitas
-                    </span>
-                  </div>
-                ))}
-                {filteredClients.length === 0 && (
-                  <p className="p-3 text-[10px] text-nexus-text-muted text-center">No se encontraron {terms.tl('clients')}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Datos de nuevo cliente ───────────────────────── */}
-          {isNewClient && (
-            <div className="p-3 bg-nexus-background border border-nexus-primary/10 rounded-xl space-y-3">
-              <div>
-                <label className="text-[9px] text-nexus-primary font-bold block mb-1">Nombre Completo *</label>
-                <input
-                  type="text"
-                  required={isNewClient}
-                  value={draft.clientName}
-                  onChange={(e) => change('clientName', e.target.value)}
-                  placeholder="Ej. Sebastián Mendoza"
-                  className="w-full bg-nexus-surface border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-                />
-              </div>
-              <div>
-                <label className="text-[9px] text-nexus-primary font-bold block mb-1">Número de Teléfono</label>
-                <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-2.5 gap-2">
-                  {detectedCountry && (
-                    <div className="flex items-center gap-1 shrink-0 text-xs">
-                      <span>{detectedCountry.flag}</span>
-                      <span className="text-[9px] font-mono text-nexus-text-secondary font-bold">{detectedCountry.code}</span>
-                    </div>
-                  )}
-                  <input
-                    type="tel"
-                    value={draft.phone}
-                    onChange={(e) => change('phone', e.target.value.replace(/[^0-9+]/g, ''))}
-                    placeholder="70231122"
-                    className="w-full bg-transparent border-0 py-2.5 text-xs text-nexus-text outline-none"
-                  />
-                </div>
-                {detectedCountry?.isInternational && (
-                  <span className="text-[8px] text-nexus-primary font-bold mt-1 block">
-                    {terms.t('client')} internacional detectado ({detectedCountry.country})
-                  </span>
-                )}
-              </div>
+              {showClientPhone && (
+                <p className="nx-num mt-1.5 rounded-lg border border-nexus-border bg-nexus-background px-3 py-2 text-sm text-nexus-text">
+                  {selectedClient.phone && selectedClient.phone !== 'N/A' ? selectedClient.phone : 'Teléfono no registrado'}
+                </p>
+              )}
             </div>
           )}
+          <div className={`flex flex-col gap-2 sm:flex-row ${selectedClient ? 'hidden' : ''}`}>
+            <div className="relative flex-1">
+              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <Search className="h-4 w-4 text-nexus-text-muted" />
+              </span>
+              <Input
+                type="text"
+                placeholder="Buscar por nombre o número..."
+                value={clientSearch}
+                onChange={(e) => { setClientSearch(e.target.value); setShowClientList(true); }}
+                onFocus={() => setShowClientList(true)}
+                className="pl-9"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => { setIsNewClient(v => !v); change('clientName', ''); change('phone', ''); change('clientId', null); setClientSearch(''); }}
+              className={secondaryBtn}
+            >
+              {isNewClient ? 'Elegir existente' : `+ ${terms.g('client', 'Nuevo', 'Nueva')} ${terms.tl('client')}`}
+            </button>
+          </div>
 
-          {/* ── Servicio y Profesional ───────────────────────── */}
-          <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('services')} *</label>
+          {/* Resultados de búsqueda (en el flujo, para que no se corten dentro de la ventana) */}
+          {!isNewClient && showClientList && clients.length > 0 && !selectedClient && (
+            <div className="max-h-52 divide-y divide-nexus-border overflow-y-auto rounded-lg border border-nexus-border bg-nexus-surface">
+              {filteredClients.map(c => (
+                <button
+                  type="button"
+                  key={c?.id}
+                  onClick={() => {
+                    change('clientName', c?.name);
+                    change('phone', c?.phone || '');
+                    change('clientId', c?.id);
+                    setClientSearch(c?.name);
+                    setShowClientList(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-nexus-surface-hover cursor-pointer"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-nexus-text">{c?.name}</span>
+                    <span className="nx-num block text-xs text-nexus-text-muted">{c?.phone}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-nexus-primary-soft px-2 py-0.5 text-xs font-medium text-nexus-primary">
+                    {c?.visits ?? 0} visitas
+                  </span>
+                </button>
+              ))}
+              {filteredClients.length === 0 && (
+                <p className="p-3 text-center text-sm text-nexus-text-muted">No se encontraron {terms.tl('clients')}</p>
+              )}
+            </div>
+          )}
+        </Field>
+
+        {/* ── Datos de nuevo cliente ───────────────────────── */}
+        {isNewClient && (
+          <div className="space-y-3 rounded-xl border border-nexus-border bg-nexus-background p-3">
+            <Field label="Nombre completo" required>
+              <Input
+                type="text"
+                required={isNewClient}
+                value={draft.clientName}
+                onChange={(e) => change('clientName', e.target.value)}
+                placeholder="Ej. Sebastián Mendoza"
+              />
+            </Field>
+            <Field
+              label="Número de teléfono"
+              hint={detectedCountry?.isInternational ? `${terms.t('client')} internacional detectado (${detectedCountry.country})` : null}
+            >
+              <div className="flex h-10 items-center gap-2 rounded-lg border border-nexus-border bg-nexus-surface px-3 focus-within:border-nexus-primary">
+                {detectedCountry && (
+                  <span className="flex shrink-0 items-center gap-1 text-sm">
+                    <span>{detectedCountry.flag}</span>
+                    <span className="nx-num text-xs font-medium text-nexus-text-secondary">{detectedCountry.code}</span>
+                  </span>
+                )}
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={draft.phone}
+                  onChange={(e) => change('phone', e.target.value.replace(/[^0-9+]/g, ''))}
+                  placeholder="70231122"
+                  className="nx-num w-full border-0 bg-transparent text-base text-nexus-text outline-none sm:text-sm"
+                />
+              </div>
+            </Field>
+          </div>
+        )}
+
+        {/* ── Servicio y Profesional ───────────────────────── */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label={terms.t('services')} required>
             <button
               type="button"
               onClick={() => setShowServicesList(prev => !prev)}
-              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-left text-nexus-text flex items-center justify-between"
+              aria-expanded={showServicesList}
+              className="flex h-10 w-full items-center justify-between rounded-lg border border-nexus-border bg-nexus-surface px-3 text-left text-base text-nexus-text sm:text-sm cursor-pointer"
             >
               <span className="truncate">
                 {draft.serviceIds.length > 0
                   ? servicesForDate.filter(s => draft.serviceIds.includes(s.id)).map(s => s.name).join(', ')
                   : `Selecciona ${terms.tl('services')}...`}
               </span>
-              <span className="text-nexus-text-secondary ml-2">{showServicesList ? '▲' : '▼'}</span>
+              <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-nexus-text-secondary transition-transform ${showServicesList ? 'rotate-180' : ''}`} />
             </button>
             {showServicesList && (
-              <div className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
+              <div className="max-h-48 space-y-0.5 overflow-y-auto rounded-lg border border-nexus-border bg-nexus-background p-1">
                 {servicesForDate.length === 0 && (
-                  <p className="text-[10px] text-nexus-text-muted p-1">No hay {terms.tl('services')} disponibles para el día seleccionado.</p>
+                  <p className="p-2 text-sm text-nexus-text-muted">No hay {terms.tl('services')} disponibles para el día seleccionado.</p>
                 )}
                 {servicesForDate.map(s => (
-                  <label key={s?.id} className="flex items-center gap-2 text-xs text-nexus-text cursor-pointer">
+                  <label key={s?.id} className="flex min-h-10 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm text-nexus-text hover:bg-nexus-surface">
                     <input
                       type="checkbox"
                       checked={draft.serviceIds.includes(s?.id)}
                       onChange={() => toggleService(s?.id)}
+                      className="h-4 w-4 shrink-0 accent-nexus-primary"
                     />
-                    {s?.name} ({formatServicePrice(s)})
+                    <span className="min-w-0 flex-1">{s?.name}</span>
+                    <span className="nx-num shrink-0 text-nexus-text-secondary">{formatServicePrice(s)}</span>
                   </label>
                 ))}
               </div>
             )}
-          </div>
+          </Field>
 
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('professional')} *</label>
-              {fixedProfessional ? (
-                <input
-                  type="text"
-                  value={fixedProfessional.name}
-                  disabled
-                  className="w-full bg-nexus-background/40 border border-nexus-border/40 rounded-lg p-2 text-xs text-nexus-text-muted outline-none disabled:cursor-not-allowed"
+          <Field label={terms.t('professional')} required>
+            {fixedProfessional ? (
+              <Input type="text" value={fixedProfessional.name} disabled />
+            ) : (
+              <Select
+                required
+                value={draft.professionalId}
+                onChange={(e) => change('professionalId', e.target.value)}
+              >
+                <option value="pending">Sin {terms.tl('professional')} (pendiente)</option>
+                {professionals.filter(b => b?.active).map(b => (
+                  <option key={b?.id} value={b?.id}>{b?.name}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
+
+        {/* ── Sobre Horario ─────────────────────────────────── */}
+        <label htmlFor="overtime-toggle" className="flex min-h-10 cursor-pointer select-none items-center gap-3 rounded-lg border border-nexus-border bg-nexus-background px-3 py-2">
+          <input
+            type="checkbox"
+            id="overtime-toggle"
+            checked={draft.overtime}
+            onChange={(e) => change('overtime', e.target.checked)}
+            className="h-4 w-4 shrink-0 accent-nexus-warning"
+          />
+          <span className="text-sm text-nexus-text">
+            Ajustar la duración de {terms.g('service', 'los', 'las')} {terms.tl('services')}
+          </span>
+        </label>
+
+        {draft.overtime && draft.serviceIds.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-nexus-warning/30 bg-nexus-warning-bg p-3">
+            <p className="text-xs font-medium text-nexus-warning-text">Duración por {terms.tl('service')} (minutos)</p>
+            {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
+              <div key={s?.id} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 flex-1 truncate text-sm text-nexus-text">{s?.name}</span>
+                <Input
+                  type="number"
+                  min="5"
+                  step="5"
+                  inputMode="numeric"
+                  aria-label={`Duración de ${s?.name} en minutos`}
+                  value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
+                  onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
+                  className="nx-num w-20 text-center"
                 />
-              ) : (
-                <select
-                  required
-                  value={draft.professionalId}
-                  onChange={(e) => change('professionalId', e.target.value)}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-                >
-                  <option value="pending">Sin {terms.t('professional')} (PENDIENTE)</option>
-                  {professionals.filter(b => b?.active).map(b => (
-                    <option key={b?.id} value={b?.id}>{b?.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
+        )}
 
-          {/* ── Sobre Horario ─────────────────────────────────── */}
-          <div className="flex items-center gap-2 bg-nexus-background border border-nexus-border rounded-lg p-2.5">
-            <input
-              type="checkbox"
-              id="overtime-toggle"
-              checked={draft.overtime}
-              onChange={(e) => change('overtime', e.target.checked)}
-              className="w-3.5 h-3.5 accent-nexus-warning cursor-pointer"
+        {/* ── Fecha y Hora ─────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Fecha" required>
+            <Input
+              type="date"
+              required
+              value={draft.date}
+              onChange={(e) => change('date', e.target.value)}
+              className="nx-num"
             />
-            <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-nexus-warning-text cursor-pointer select-none">
-              Ajuste de la duración de {terms.g('service', 'los', 'las')} {terms.tl('services')}.
-            </label>
-          </div>
-
-          {draft.overtime && draft.serviceIds.length > 0 && (
-            <div className="p-3 bg-nexus-background border border-nexus-warning/20 rounded-lg space-y-2">
-              <label className="text-[9px] text-nexus-warning-text font-bold block">Duración por {terms.tl('service')} (minutos)</label>
-              {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
-                <div key={s?.id} className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-nexus-text-secondary truncate flex-1">{s?.name}</span>
-                  <input
-                    type="number"
-                    min="5"
-                    step="5"
-                    value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
-                    onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
-                    className="w-16 bg-nexus-surface border border-nexus-border rounded-lg p-1.5 text-xs text-nexus-text outline-none text-center font-mono"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Fecha y Hora ─────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Fecha *</label>
-              <input
-                type="date"
-                required
-                value={draft.date}
-                onChange={(e) => change('date', e.target.value)}
-                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono font-bold"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora *</label>
-              <input
-                type="time"
-                required
-                value={draft.time}
-                onChange={(e) => change('time', e.target.value)}
-                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none"
-              />
-            </div>
-          </div>
-
-          {/* ── Notas ────────────────────────────────────────── */}
-          <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Notas Internas (Opcional)</label>
-            <input
-              type="text"
-              placeholder="Ej: requiere camilla, alérgico a ciertos aceites..."
-              value={draft.notes}
-              onChange={(e) => change('notes', e.target.value)}
-              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+          </Field>
+          <Field label="Hora" required>
+            <Input
+              type="time"
+              required
+              value={draft.time}
+              onChange={(e) => change('time', e.target.value)}
+              className="nx-num"
             />
-          </div>
+          </Field>
+        </div>
 
-          {!String(draft.clientName || '').trim() && (
-            <p className="text-[10px] text-nexus-error-text">Selecciona {terms.g('client', 'un', 'una')} {terms.tl('client')} (o crea {terms.g('client', 'uno nuevo', 'una nueva')}) para poder reservar.</p>
-          )}
+        {/* ── Notas ────────────────────────────────────────── */}
+        <Field label="Notas internas (opcional)">
+          <Textarea
+            rows={2}
+            placeholder="Ej: requiere camilla, alérgico a ciertos aceites..."
+            value={draft.notes}
+            onChange={(e) => change('notes', e.target.value)}
+          />
+        </Field>
 
-          {/* ── Botones ──────────────────────────────────────── */}
-          <div className="flex items-center justify-end gap-2.5 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={!String(draft.clientName || '').trim()}
-              className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Confirmar Reserva
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {noClient && (
+          <p className="text-sm text-nexus-error-text">Selecciona {terms.g('client', 'un', 'una')} {terms.tl('client')} (o crea {terms.g('client', 'uno nuevo', 'una nueva')}) para poder reservar.</p>
+        )}
+      </form>
+    </Modal>
   );
 }

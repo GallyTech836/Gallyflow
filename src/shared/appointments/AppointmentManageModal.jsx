@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Trash2, ChevronDown } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
 import { getLabel } from './statusModel';
 import { formatServicePrice } from '../servicePricing/servicePricing';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
+import { Modal, Button, Field, Input, Select, Textarea, useConfirm } from '../ui';
 
 /**
  * Modal único de gestión de cita — mismo HTML/clases que el modal
@@ -36,6 +37,9 @@ export default function AppointmentManageModal({
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [clientQuery, setClientQuery] = useState('');
   const [finalPriceDraft, setFinalPriceDraft] = useState({ id: null, text: '' });
+  const [saving, setSaving] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
+  const formId = useId();
 
   if (!appointment) return null;
 
@@ -127,294 +131,287 @@ export default function AppointmentManageModal({
     setClientQuery('');
   };
 
+  // Guardar: evita doble envío mientras el padre procesa (misma lógica de onSubmit).
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    try { await onSubmit(e); } finally { setSaving(false); }
+  };
+
+  // Eliminar: confirmación antes de borrar (la eliminación es la misma de siempre).
+  const handleDelete = async () => {
+    const ok = await confirm({
+      title: `¿Eliminar ${terms.g('appointment', 'este', 'esta')} ${terms.tl('appointment')}?`,
+      subject: [appointment.clientName, appointment.date, appointment.time].filter(Boolean).join(' · '),
+      message: currentServices.map(s => s.serviceName).filter(Boolean).join(' + ') || null,
+    });
+    if (!ok) return;
+    onDelete(appointment.id);
+    onClose();
+  };
+
+  const saveDisabled = !anyEditable || paymentMethodMissing || finalPriceMissing || clientMissing;
+  const actionBtn = 'inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-nexus-primary/20 bg-nexus-primary-soft px-3 text-sm font-semibold text-nexus-primary whitespace-nowrap cursor-pointer hover:brightness-95';
+
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-5 relative shadow-xl">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-base font-bold text-nexus-text">Editar o Gestionar {terms.t('appointment')}</h3>
-          {allowDelete && (
+    <>
+    <Modal
+      onClose={onClose}
+      title={`Gestionar ${terms.tl('appointment')}`}
+      description={[appointment.date, appointment.time].filter(Boolean).join(' · ') || null}
+      size="lg"
+      footer={(
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col-reverse gap-2 sm:mr-auto sm:flex-row">
+            {allowDelete && (
+              <Button variant="danger-soft" icon={Trash2} onClick={handleDelete} fullWidth className="sm:w-auto">
+                Eliminar
+              </Button>
+            )}
+            {appointment.status === 'confirmed' && canGoTo('in-process') && (
+              <button
+                type="button"
+                onClick={() => {
+                  onTransition('in-process');
+                  onClose();
+                }}
+                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-nexus-warning/40 bg-nexus-warning-bg px-3 text-sm font-semibold text-nexus-warning-text cursor-pointer hover:brightness-95"
+              >
+                Iniciar atención
+              </button>
+            )}
+            {appointment.status === 'in-process' && canGoTo('completed') && (
+              <button
+                type="button"
+                onClick={() => { onChangeField('status', 'completed'); startFinalPrice(); }}
+                className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-lg border border-nexus-success/30 bg-nexus-success-bg px-3 text-sm font-semibold text-nexus-success-text cursor-pointer hover:brightness-95"
+              >
+                Marcar finalizado
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button variant="secondary" onClick={onClose} fullWidth className="sm:w-auto">Salir</Button>
+            <Button type="submit" form={formId} loading={saving} disabled={saveDisabled} fullWidth className="sm:w-auto">
+              Guardar cambios
+            </Button>
+          </div>
+        </div>
+      )}
+    >
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-4">
+        <Field
+          label={terms.t('client')}
+          required
+          error={clientMissing ? `Selecciona ${terms.g('client', 'un', 'una')} ${terms.tl('client')} para poder guardar ${terms.g('appointment', 'el', 'la')} ${terms.tl('appointment')}.` : null}
+        >
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                onDelete(appointment.id);
-                onClose();
-              }}
-              className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+              onClick={() => setShowClientPhone(v => !v)}
+              aria-expanded={showClientPhone}
+              className="flex h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-nexus-border bg-nexus-background px-3 text-left text-sm text-nexus-text cursor-pointer"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              Eliminar {terms.t('appointment')}
+              <span className="truncate font-semibold">{appointment.clientName || `Sin ${terms.tl('client')}`}</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 text-nexus-text-secondary transition-transform ${showClientPhone ? 'rotate-180' : ''}`} />
             </button>
-          )}
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-3.5">
-        <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('client')} *</label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowClientPhone(v => !v)}
-                className="flex-1 min-w-0 flex items-center justify-between gap-2 bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text text-left cursor-pointer"
-              >
-                <span className="truncate font-bold">{appointment.clientName || `Sin ${terms.tl('client')}`}</span>
-                <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-nexus-text-secondary transition-transform ${showClientPhone ? 'rotate-180' : ''}`} />
+            {canEdit('clientName') && (
+              <button type="button" onClick={() => setShowClientPicker(v => !v)} className={actionBtn}>
+                Cambiar
               </button>
-              {canEdit('clientName') && (
-                <button
-                  type="button"
-                  onClick={() => setShowClientPicker(v => !v)}
-                  className="px-2.5 py-2 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
-                >
-                  Cambiar
-                </button>
-              )}
-            </div>
-            {showClientPhone && (
-              <p className="mt-1.5 px-2.5 py-1.5 bg-nexus-background border border-nexus-border rounded-lg text-xs text-nexus-text font-mono">
-                {phoneLabel || 'Teléfono no registrado'}
-              </p>
             )}
-            {showClientPicker && canEdit('clientName') && (
-              <div className="mt-1.5 bg-nexus-background border border-nexus-border rounded-lg p-2 space-y-1.5">
-                <input
-                  type="text"
-                  placeholder={`Buscar ${terms.tl('client')} por nombre o número...`}
-                  value={clientQuery}
-                  onChange={(e) => setClientQuery(e.target.value)}
-                  className="w-full bg-nexus-surface border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-                />
-                <div className="max-h-36 overflow-y-auto divide-y divide-nexus-border">
-                  {pickerClients.map(c => (
-                    <button
-                      type="button"
-                      key={c?.id}
-                      onClick={() => pickClient(c)}
-                      className="w-full text-left py-1.5 px-1 hover:bg-nexus-surface-hover cursor-pointer"
-                    >
-                      <p className="text-xs font-bold text-nexus-text">{c?.name}</p>
-                      <p className="text-[10px] text-nexus-text-muted">{isRealPhone(c?.phone) ? c.phone : 'Sin teléfono'}</p>
-                    </button>
-                  ))}
-                  {pickerClients.length === 0 && (
-                    <p className="p-2 text-[10px] text-nexus-text-muted text-center">No se encontraron {terms.tl('clients')}</p>
-                  )}
-                </div>
+          </div>
+          {showClientPhone && (
+            <p className="nx-num rounded-lg border border-nexus-border bg-nexus-background px-3 py-2 text-sm text-nexus-text">
+              {phoneLabel || 'Teléfono no registrado'}
+            </p>
+          )}
+          {showClientPicker && canEdit('clientName') && (
+            <div className="space-y-2 rounded-lg border border-nexus-border bg-nexus-background p-2">
+              <Input
+                type="text"
+                placeholder={`Buscar ${terms.tl('client')} por nombre o número...`}
+                value={clientQuery}
+                onChange={(e) => setClientQuery(e.target.value)}
+              />
+              <div className="max-h-48 divide-y divide-nexus-border overflow-y-auto">
+                {pickerClients.map(c => (
+                  <button
+                    type="button"
+                    key={c?.id}
+                    onClick={() => pickClient(c)}
+                    className="w-full rounded-md px-2 py-2 text-left hover:bg-nexus-surface cursor-pointer"
+                  >
+                    <span className="block text-sm font-semibold text-nexus-text">{c?.name}</span>
+                    <span className="nx-num block text-xs text-nexus-text-muted">{isRealPhone(c?.phone) ? c.phone : 'Sin teléfono'}</span>
+                  </button>
+                ))}
+                {pickerClients.length === 0 && (
+                  <p className="p-2 text-center text-sm text-nexus-text-muted">No se encontraron {terms.tl('clients')}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </Field>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            label={`${terms.t('professional')} ${terms.g('professional', 'asignado', 'asignada')}`}
+            required
+            hint={Array.isArray(candidateProfessionals)
+              ? (candidateProfessionals.length > 0
+                ? `Solo ${terms.tl('professionals')} disponibles que realizan ${terms.g('service', 'el', 'la')} ${terms.tl('service')}.`
+                : `${terms.g('professional', 'Ningún', 'Ninguna')} ${terms.tl('professional')} disponible realiza ${terms.g('service', 'este', 'esta')} ${terms.tl('service')} a esta hora.`)
+              : null}
+          >
+            <Select
+              required
+              disabled={!canEdit('professionalId')}
+              value={appointment.professionalId || appointment.barberId || 'pending'}
+              onChange={(e) => onChangeField('professionalId', e.target.value)}
+            >
+              <option value="pending">Sin {terms.tl('professional')} (pendiente)</option>
+              {(Array.isArray(candidateProfessionals) ? candidateProfessionals : (professionals || []).filter(b => b?.active)).map(b => (
+                <option key={b?.id} value={b?.id}>{b?.name}</option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label={terms.t('services')} required>
+            <button
+              type="button"
+              onClick={() => setShowServicesList(prev => !prev)}
+              aria-expanded={showServicesList}
+              className="flex h-10 w-full items-center justify-between rounded-lg border border-nexus-border bg-nexus-surface px-3 text-left text-base text-nexus-text sm:text-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canEdit('serviceId')}
+            >
+              <span className="truncate">
+                {currentServices.length > 0
+                  ? currentServices.map(s => s.serviceName).join(', ')
+                  : `Selecciona ${terms.tl('services')}...`}
+              </span>
+              <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-nexus-text-secondary transition-transform ${showServicesList ? 'rotate-180' : ''}`} />
+            </button>
+            {showServicesList && (
+              <div className="max-h-48 space-y-0.5 overflow-y-auto rounded-lg border border-nexus-border bg-nexus-background p-1">
+                {(services || []).map(s => (
+                  <label key={s?.id} className="flex min-h-10 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm text-nexus-text hover:bg-nexus-surface">
+                    <input
+                      type="checkbox"
+                      disabled={!canEdit('serviceId')}
+                      checked={currentServices.some(cs => cs.serviceId === s?.id)}
+                      onChange={() => toggleService(s)}
+                      className="h-4 w-4 shrink-0 accent-nexus-primary"
+                    />
+                    <span className="min-w-0 flex-1">{s?.name}</span>
+                    {showPrices && <span className="nx-num shrink-0 text-nexus-text-secondary">{formatServicePrice(s)}</span>}
+                  </label>
+                ))}
               </div>
             )}
-            {clientMissing && (
-              <p className="text-[10px] text-nexus-error-text mt-1">Selecciona {terms.g('client', 'un', 'una')} {terms.tl('client')} para poder guardar {terms.g('appointment', 'el', 'la')} {terms.tl('appointment')}.</p>
-            )}
-          </div>
+          </Field>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('professional')} {terms.g('professional', 'Asignado', 'Asignada')} *</label>
-              <select
-                required
-                disabled={!canEdit('professionalId')}
-                value={appointment.professionalId || appointment.barberId || 'pending'}
-                onChange={(e) => onChangeField('professionalId', e.target.value)}
-                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <option value="pending">Sin {terms.t('professional')} (PENDIENTE)</option>
-                {(Array.isArray(candidateProfessionals) ? candidateProfessionals : (professionals || []).filter(b => b?.active)).map(b => (
-                  <option key={b?.id} value={b?.id}>{b?.name}</option>
-                ))}
-              </select>
-              {Array.isArray(candidateProfessionals) && (
-                <p className="text-[9px] text-nexus-text-muted mt-1">
-                  {candidateProfessionals.length > 0
-                    ? `Solo ${terms.tl('professionals')} disponibles que realizan ${terms.g('service', 'el', 'la')} ${terms.tl('service')}.`
-                    : `${terms.g('professional', 'Ningún', 'Ninguna')} ${terms.tl('professional')} disponible realiza ${terms.g('service', 'este', 'esta')} ${terms.tl('service')} a esta hora.`}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('services')} *</label>
-              <button
-                type="button"
-                onClick={() => setShowServicesList(prev => !prev)}
-                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-left text-nexus-text flex items-center justify-between disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={!canEdit('serviceId')}
-              >
-                <span className="truncate">
-                  {currentServices.length > 0
-                    ? currentServices.map(s => s.serviceName).join(', ')
-                    : `Selecciona ${terms.tl('services')}...`}
-                </span>
-                <span className="text-nexus-text-secondary ml-2">{showServicesList ? '▲' : '▼'}</span>
-              </button>
-              {showServicesList && (
-                <div className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
-                  {(services || []).map(s => (
-                    <label key={s?.id} className="flex items-center gap-2 text-xs text-nexus-text cursor-pointer">
-                      <input
-                        type="checkbox"
-                        disabled={!canEdit('serviceId')}
-                        checked={currentServices.some(cs => cs.serviceId === s?.id)}
-                        onChange={() => toggleService(s)}
-                      />
-                      {s?.name}{showPrices ? ` (${formatServicePrice(s)})` : ''}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora de Inicio *</label>
-              <input
-                type="time"
-                required
-                disabled={!canEdit('time')}
-                value={appointment.time}
-                onChange={(e) => onChangeField('time', e.target.value)}
-                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Estatus Actual</label>
-              <select
-                disabled={!canEdit('status')}
-                value={appointment.status}
-                onChange={(e) => {
-                  const newStatus = e.target.value;
-                
-                  onChangeField('status', newStatus);
-                
-                  if (newStatus === 'completed') {
-                    onChangeField('paymentMethod', '');
-                    startFinalPrice();
-                  } else if (isCompleting) {
-                    restoreMinPrice();
-                  }
-                }}
-                className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-bold disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <option value="pending">{getLabel('pending', terms)}</option>
-                <option value="confirmed">{getLabel('confirmed', terms)}</option>
-                <option value="in-process">{getLabel('in-process', terms)}</option>
-                <option value="completed">{getLabel('completed', terms)} (Pagado)</option>
-                <option value="cancelled">{getLabel('cancelled', terms)} ({terms.g('appointment', 'Inactivo', 'Inactiva')})</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Solo aparece mientras el estatus elegido es "Completada". Es obligatorio
-              elegir un método real (no "Pendiente") para poder guardar. */}
-          {isCompleting && (
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">¿Cómo pagó {terms.g('client', 'el', 'la')} {terms.tl('client')}? *</label>
-              <select
-                required
-                disabled={!canEdit('paymentMethod')}
-                value={appointment.paymentMethod || ''}
-                onChange={(e) => onChangeField('paymentMethod', e.target.value)}
-                className={`w-full bg-nexus-background border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed ${
-                  paymentMethodMissing ? 'border-nexus-error/60' : 'border-nexus-border'
-                }`}
-              >
-                <option value="" disabled>Selecciona un método...</option>
-                {paymentMethods.map((method) => (
-                  <option key={method} value={method}>{method}</option>
-                ))}
-              </select>
-              {paymentMethodMissing && (
-                <p className="text-[10px] text-nexus-error-text mt-1">
-                  Elige el método de pago para poder guardar {terms.g('appointment', 'el', 'la')} {terms.tl('appointment')} como {terms.g('appointment', 'completado', 'completada')}.
-                </p>
-              )}
-            </div>
-          )}
-
-{isCompleting && hasVariable && (
-            <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Precio final cobrado (Bs) *</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="any"
-                required
-                disabled={!canEdit('price')}
-                value={finalPriceText}
-                placeholder={`Desde Bs ${minTotal}`}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setFinalPriceDraft({ id: appointment.id, text: raw });
-                  applyFinalPrice(raw === '' ? '' : Number(raw));
-                }}
-                className={`w-full bg-nexus-background border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono disabled:opacity-60 disabled:cursor-not-allowed ${
-                  finalPriceMissing ? 'border-nexus-error/60' : 'border-nexus-border'
-                }`}
-              />
-              {finalPriceMissing && (
-                <p className="text-[10px] text-nexus-error-text mt-1">
-                  {terms.g('service', 'Este', 'Esta')} {terms.tl('service')} tiene precio variable: ingresa el precio final para poder guardar {terms.g('appointment', 'el', 'la')} {terms.tl('appointment')} como {terms.g('appointment', 'completado', 'completada')}.
-                </p>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Notas de la Reserva</label>
-            <input
-              type="text"
-              disabled={!canEdit('notes')}
-              value={appointment.notes || ''}
-              onChange={(e) => onChangeField('notes', e.target.value)}
-              className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Hora de inicio" required>
+            <Input
+              type="time"
+              required
+              disabled={!canEdit('time')}
+              value={appointment.time}
+              onChange={(e) => onChangeField('time', e.target.value)}
+              className="nx-num"
             />
-          </div>
+          </Field>
 
-          <div className="flex items-center justify-between gap-2.5 pt-3">
-            <div className="flex gap-1">
-              {appointment.status === 'confirmed' && canGoTo('in-process') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onTransition('in-process');
-                    onClose();
-                  }}
-                  className="px-2 py-1 bg-nexus-warning hover:opacity-90 text-black font-extrabold rounded text-[9px] cursor-pointer"
-                >
-                  Iniciar Atención
-                </button>
-              )}
-              {appointment.status === 'in-process' && canGoTo('completed') && (
-                <button
-                  type="button"
-                  onClick={() => { onChangeField('status', 'completed'); startFinalPrice(); }}
-                  className="px-2 py-1 bg-nexus-success hover:opacity-90 text-black font-extrabold rounded text-[9px] cursor-pointer"
-                >
-                  Marcar Finalizado
-                </button>
-              )}
-            </div>
+          <Field label="Estado">
+            <Select
+              disabled={!canEdit('status')}
+              value={appointment.status}
+              onChange={(e) => {
+                const newStatus = e.target.value;
 
-            <div className="flex gap-1.5 ml-auto">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
-              >
-                Salir
-              </button>
-              <button
-                type="submit"
-                disabled={!anyEditable || paymentMethodMissing || finalPriceMissing || clientMissing}
-                className="px-3.5 py-1.5 bg-nexus-primary text-white text-xs font-bold rounded-lg hover:bg-nexus-primary-hover cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Guardar Cambios
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
+                onChangeField('status', newStatus);
+
+                if (newStatus === 'completed') {
+                  onChangeField('paymentMethod', '');
+                  startFinalPrice();
+                } else if (isCompleting) {
+                  restoreMinPrice();
+                }
+              }}
+              className="font-medium"
+            >
+              <option value="pending">{getLabel('pending', terms)}</option>
+              <option value="confirmed">{getLabel('confirmed', terms)}</option>
+              <option value="in-process">{getLabel('in-process', terms)}</option>
+              <option value="completed">{getLabel('completed', terms)} (Pagado)</option>
+              <option value="cancelled">{getLabel('cancelled', terms)} ({terms.g('appointment', 'Inactivo', 'Inactiva')})</option>
+            </Select>
+          </Field>
+        </div>
+
+        {/* Solo aparece mientras el estatus elegido es "Completada". Es obligatorio
+            elegir un método real (no "Pendiente") para poder guardar. */}
+        {isCompleting && (
+          <Field
+            label={`¿Cómo pagó ${terms.g('client', 'el', 'la')} ${terms.tl('client')}?`}
+            required
+            error={paymentMethodMissing ? `Elige el método de pago para poder guardar ${terms.g('appointment', 'el', 'la')} ${terms.tl('appointment')} como ${terms.g('appointment', 'completado', 'completada')}.` : null}
+          >
+            <Select
+              required
+              disabled={!canEdit('paymentMethod')}
+              value={appointment.paymentMethod || ''}
+              onChange={(e) => onChangeField('paymentMethod', e.target.value)}
+              error={paymentMethodMissing}
+            >
+              <option value="" disabled>Selecciona un método...</option>
+              {paymentMethods.map((method) => (
+                <option key={method} value={method}>{method}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
+
+        {isCompleting && hasVariable && (
+          <Field
+            label="Precio final cobrado (Bs)"
+            required
+            error={finalPriceMissing ? `${terms.g('service', 'Este', 'Esta')} ${terms.tl('service')} tiene precio variable: ingresa el precio final para poder guardar ${terms.g('appointment', 'el', 'la')} ${terms.tl('appointment')} como ${terms.g('appointment', 'completado', 'completada')}.` : null}
+          >
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              required
+              disabled={!canEdit('price')}
+              value={finalPriceText}
+              placeholder={`Desde Bs ${minTotal}`}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setFinalPriceDraft({ id: appointment.id, text: raw });
+                applyFinalPrice(raw === '' ? '' : Number(raw));
+              }}
+              error={finalPriceMissing}
+              className="nx-num"
+            />
+          </Field>
+        )}
+
+        <Field label={`Notas ${terms.g('appointment', 'del', 'de la')} ${terms.tl('appointment')}`}>
+          <Textarea
+            rows={2}
+            disabled={!canEdit('notes')}
+            value={appointment.notes || ''}
+            onChange={(e) => onChangeField('notes', e.target.value)}
+          />
+        </Field>
+      </form>
+    </Modal>
+    {confirmDialog}
+    </>
   );
 }

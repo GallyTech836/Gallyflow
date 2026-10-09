@@ -19,6 +19,7 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
+import { useConfirm } from '../shared/ui';
 import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
@@ -67,6 +68,8 @@ const { logout } = useAuth();
   // Tipo de negocio -> terminología y módulos (businessProfileModel).
   const businessProfile = useBusinessProfile(negocioId);
   const { t, tl, g, hasModule } = businessProfile;
+  // Confirmación antes de acciones destructivas (Fase 4). No cambia la lógica de borrado.
+  const [confirmAction, confirmDialog] = useConfirm();
   const ServiceIcon = getServiceIcon(businessProfile.type);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
@@ -1942,6 +1945,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
   };
 
   const handleDeleteBlockout = async (id) => {
+    const bl = (blockouts || []).find(b => b?.id === id);
+    const ok = await confirmAction({
+      title: '¿Eliminar este bloqueo de horario?',
+      subject: bl ? [bl.date, bl.startTime && bl.endTime ? `${bl.startTime} - ${bl.endTime}` : null].filter(Boolean).join(' · ') : null,
+      message: bl?.reason || null,
+    });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'horariosBloqueados', id));
       triggerToast('¡Bloqueo eliminado!');
@@ -2059,6 +2069,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
   };
 
   const handleDeleteBranch = async (id) => {
+    const branch = (branches || []).find(b => b?.id === id);
+    const ok = await confirmAction({ title: '¿Eliminar esta sucursal?', subject: branch?.name || null, message: branch?.address || null });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'sucursales', id));
       triggerToast('Sucursal eliminada.');
@@ -2131,6 +2144,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
   };
 
   const handleDeleteService = async (id) => {
+    const svc = (services || []).find(s => s?.id === id);
+    const ok = await confirmAction({ title: `¿Eliminar ${g('service', 'este', 'esta')} ${tl('service')}?`, subject: svc?.name || null });
+    if (!ok) return;
     await eliminarServicio(id);
     triggerToast(`${t('service')} ${g('service', 'eliminado', 'eliminada')}.`);
   };
@@ -2342,6 +2358,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
   };
 
   const handleDeleteBarber = async (id) => {
+    const pro = (barbers || []).find(b => b?.id === id);
+    const ok = await confirmAction({
+      title: `¿Eliminar ${g('professional', 'este', 'esta')} ${tl('professional')}?`,
+      subject: pro?.name || null,
+      message: `Se eliminará su perfil y su acceso al panel ${g('professional', 'del', 'de la')} ${tl('professional')}.`,
+    });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'profesionales', id));
       await deleteDoc(doc(db, 'usuarios', id));
@@ -2544,6 +2567,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
+    {confirmDialog}
     <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
       
       {isMobileSidebarOpen && (
@@ -4594,8 +4618,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
             });
             // handleCreateReservation lee de newReservation, pero setState es
             // asíncrono. Lo llamamos con el draft directamente para evitar un
-            // ciclo de render extra:
-            handleCreateReservationFromDraft(draft);
+            // ciclo de render extra. Se devuelve la promesa para que el modal
+            // bloquee el botón mientras se guarda (evita reservas duplicadas).
+            return handleCreateReservationFromDraft(draft);
           }}
         />
       )}

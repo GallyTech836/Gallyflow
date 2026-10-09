@@ -55,6 +55,15 @@
   --nx-radius-lg: 16px;
   --nx-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --nx-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --nx-shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.16); /* solo modales */
+
+  /* Tipografía: Inter si cargó desde Google Fonts; si no, la del sistema.
+     La app nunca depende de la fuente externa para verse bien. */
+  --nx-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --nx-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Foco visible (teclado) */
+  --nx-focus-ring: 0 0 0 3px rgba(15, 111, 255, 0.35);
 }
 
 /* ---- 2. Dark mode: PREPARADO, no activado todavía ----
@@ -151,7 +160,36 @@
   --color-nexus-info-bg: var(--nx-info-bg);
   --color-nexus-info-text: var(--nx-info-text);
 
+  --font-sans: var(--nx-font-sans);
+  --font-mono: var(--nx-font-mono);
+
   --radius-nexus-sm: var(--nx-radius-sm);
   --radius-nexus: var(--nx-radius);
   --radius-nexus-lg: var(--nx-radius-lg);
+}
+
+/* ---- 4. Base de accesibilidad y legibilidad (Fase 4) ---- */
+@layer base {
+  html {
+    font-family: var(--nx-font-sans);
+    -webkit-text-size-adjust: 100%;
+  }
+  /* Números alineados en tablas y montos sin recurrir a monoespaciada. */
+  .nx-num { font-variant-numeric: tabular-nums; }
+
+  /* Foco visible solo al navegar con teclado (no al tocar o hacer clic). */
+  :where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid var(--nx-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* Respeta "reducir movimiento" del sistema operativo. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
