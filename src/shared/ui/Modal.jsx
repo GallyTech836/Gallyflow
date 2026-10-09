@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -27,7 +27,12 @@ export default function Modal({
   flush = false, // cuerpo sin relleno (el contenido maneja sus márgenes)
   children,
 }) {
-  const panelRef = useRef(null);
+    const panelRef = useRef(null);
+  // onClose suele ser una función nueva en cada render del padre: se guarda en
+  // una ref para que el efecto de apertura corra UNA sola vez. Si dependiera de
+  // onClose, cada tecla escrita en un campo movería el foco fuera del campo.
+  const onCloseRef = useRef(onClose);
+  useLayoutEffect(() => { onCloseRef.current = onClose; });
 
   useEffect(() => {
     if (!open) return undefined;
@@ -35,14 +40,16 @@ export default function Modal({
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     panelRef.current?.focus();
-    const onKey = (e) => { if (e.key === 'Escape' && onClose) { e.stopPropagation(); onClose(); } };
+    const onKey = (e) => {
+      if (e.key === 'Escape' && onCloseRef.current) { e.stopPropagation(); onCloseRef.current(); }
+    };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
       if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

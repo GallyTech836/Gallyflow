@@ -426,19 +426,22 @@ export default function AppointmentCreateModal({
           <div className="space-y-2 rounded-lg border border-nexus-warning/30 bg-nexus-warning-bg p-3">
             <p className="text-xs font-medium text-nexus-warning-text">Duración por {terms.tl('service')} (minutos)</p>
             {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
-              <div key={s?.id} className="flex items-center justify-between gap-3">
-                <span className="min-w-0 flex-1 truncate text-sm text-nexus-text">{s?.name}</span>
-                <Input
-                  type="number"
-                  min="5"
-                  step="5"
-                  inputMode="numeric"
-                  aria-label={`Duración de ${s?.name} en minutos`}
-                  value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
-                  onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
-                  className="nx-num w-20 text-center"
-                />
-              </div>
+                            <div key={s?.id} className="flex items-center justify-between gap-3">
+                            <span className="min-w-0 flex-1 truncate text-sm text-nexus-text">{s?.name}</span>
+                            <div className="flex w-28 shrink-0 items-center gap-2">
+                              <Input
+                                type="number"
+                                min="5"
+                                step="5"
+                                inputMode="numeric"
+                                aria-label={`Duración de ${s?.name} en minutos`}
+                                value={draft.serviceDurations[s?.id] ?? s?.duration ?? 30}
+                                onChange={(e) => changeServiceDuration(s?.id, e.target.value)}
+                                className="nx-num text-center"
+                              />
+                              <span className="text-xs text-nexus-text-secondary">min</span>
+                            </div>
+                          </div>
             ))}
           </div>
         )}
