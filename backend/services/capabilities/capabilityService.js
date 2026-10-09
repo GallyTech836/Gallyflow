@@ -25,6 +25,7 @@ import {
   computeEffectiveStatus,
   isBlockedStatus,
 } from './capabilityModel.js';
+import { getBusinessProfile } from '../businessProfiles/businessProfileModel.js';
 
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 const CACHE_MS = 60 * 1000;
@@ -64,6 +65,7 @@ async function readAccess(negocioId) {
     capabilities: resolveCapabilities({
       planFeatures: plan?.features || null,
       overrides: negocio.capabilityOverrides || null,
+      profileDefaults: getBusinessProfile(negocio.businessType).capabilityDefaults || null,
     }),
   };
 }

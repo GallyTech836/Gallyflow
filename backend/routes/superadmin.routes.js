@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js';
 import { getNegocioAccess, getUsage, currentPeriod } from '../services/capabilities/capabilityService.js';
 import { getCapability, usageStatus } from '../services/capabilities/capabilityModel.js';
 import { hashPin } from '../services/finance/pin.js';
+import { isValidBusinessType, DEFAULT_BUSINESS_TYPE } from '../services/businessProfiles/businessProfileModel.js';
 import { FieldValue } from 'firebase-admin/firestore';
 
 const router = Router();
@@ -60,7 +61,7 @@ const DEFAULT_HERO_CONFIG = {
 // businessHeroService.js) y los campos de gestión propios del panel
 // (plan, status, etc.) que no existen en el flujo orgánico.
 router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) => {
-  const { name, ownerName, ownerEmail, phone, country, city, plan, status, trialDays, password } = req.body;
+  const { name, businessType, ownerName, ownerEmail, phone, country, city, plan, status, trialDays, password } = req.body;
 
   if (!ownerEmail) {
     return res.status(400).json({ error: 'Falta el correo del propietario.' });
@@ -70,6 +71,12 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
   if (!slug) {
     return res.status(400).json({ error: 'Correo inválido.' });
   }
+
+  // Tipo de negocio (businessProfileModel). Vacío = 'otro' (terminología genérica).
+  if (businessType && !isValidBusinessType(businessType)) {
+    return res.status(400).json({ error: 'Tipo de negocio inválido.' });
+  }
+  const finalBusinessType = businessType || DEFAULT_BUSINESS_TYPE;
 
   const pw = resolvePassword(password);
   if (pw.error) return res.status(400).json({ error: pw.error });
@@ -116,6 +123,8 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
       createdAt: new Date().toISOString(),
       // --- nombre del negocio, en el mismo lugar donde ya lo lee la app ---
       heroConfig: { ...DEFAULT_HERO_CONFIG, businessName: name || DEFAULT_HERO_CONFIG.businessName },
+      // --- tipo de negocio: terminología/módulos de Nexus (businessProfileModel) ---
+      businessType: finalBusinessType,
       // --- campos de gestión, exclusivos del panel Super Admin ---
       ownerName: ownerName || '',
       phone: phone || '',

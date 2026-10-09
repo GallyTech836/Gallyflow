@@ -27,6 +27,7 @@ import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
+import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
 
 // Colores del gráfico "Servicios más Solicitados" (gráfico de torta + su leyenda).
 const PIE_COLORS = ['#0F6FFF', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'];
@@ -243,6 +244,9 @@ export default function App() {
   const { businessSettings } = useBusinessSettings(negocioId);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   const { can: canUseCapability } = useNegocioPlan(negocioId);
+  // Tipo de negocio -> terminología (businessProfileModel).
+  const businessProfile = useBusinessProfile(negocioId);
+  const { t, tl, g } = businessProfile;
   useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const { servicios: services } = useServicios(negocioId);
@@ -514,7 +518,7 @@ const fetchByDate = async (subcollection, date) => {
 
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
-      triggerToast("Cita agendada correctamente");
+      triggerToast(`${t('appointment')} ${g('appointment', 'agendado', 'agendada')} correctamente`);
       notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
       reevaluatePending(negocioId, newAppt.date);
     } catch (err) {
@@ -573,7 +577,7 @@ const fetchByDate = async (subcollection, date) => {
 
     // Cerrar modal secundario
     setIsNewClientModalOpen(false);
-    triggerToast(`Cliente ${newClientObj.name} guardado y seleccionado`);
+    triggerToast(`${t('client')} ${newClientObj.name} ${g('client', 'guardado y seleccionado', 'guardada y seleccionada')}`);
   };
 
   // --- BLOQUEAR HORARIO ADMINISTRATIVO ---
@@ -652,7 +656,7 @@ const fetchByDate = async (subcollection, date) => {
       const payload = { status: nextStatus, updatedAt: new Date().toISOString() };
       if (paymentMethod) payload.paymentMethod = paymentMethod;
       await updateDoc(docRef, payload);
-      triggerToast(`Cita marcada como ${normalizeStatus(nextStatus)}`);
+      triggerToast(`${t('appointment')} ${g('appointment', 'marcado', 'marcada')} como ${normalizeStatus(nextStatus)}`);
     } catch (err) {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
     }
@@ -687,7 +691,7 @@ const fetchByDate = async (subcollection, date) => {
     const changes = describeAppointmentChanges(before, { ...before, ...payload });
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, updatedAt: new Date().toISOString() });
-      triggerToast('Cita actualizada');
+      triggerToast(`${t('appointment')} ${g('appointment', 'actualizado', 'actualizada')}`);
       notify(
         payload.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
@@ -783,7 +787,7 @@ const fetchByDate = async (subcollection, date) => {
     };
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
-      triggerToast('Cita agendada correctamente');
+      triggerToast(`${t('appointment')} ${g('appointment', 'agendado', 'agendada')} correctamente`);
       notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
       reevaluatePending(negocioId, newAppt.date);
     } catch (err) {
@@ -835,7 +839,7 @@ const fetchByDate = async (subcollection, date) => {
           setDoc(doc(db, 'negocios', negocioId, 'clientes', clientDoc.id), { visits: newVisits }, { merge: true }).catch(() => {});
         }
       }
-      triggerToast("Cita eliminada", "info");
+      triggerToast(`${t('appointment')} ${g('appointment', 'eliminado', 'eliminada')}`, "info");
       notify(NotificationType.RESERVA_CANCELADA, negocioId, { citaId: apptId, clientName: targetAppt?.clientName, time: targetAppt?.time }, barberUser?.id, barberUser?.id);
     } catch (err) {
       triggerToast('Error al eliminar la cita: ' + err.message, 'error');
@@ -1205,6 +1209,7 @@ const fetchByDate = async (subcollection, date) => {
   }
 
   return (
+    <BusinessProfileContext.Provider value={businessProfile}>
     <div className="min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none pb-24 md:pb-0">
       
       {/* HEADER SUPERIOR */}
@@ -1544,9 +1549,9 @@ const fetchByDate = async (subcollection, date) => {
                     {filteredAppointments.length === 0 ? (
                       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-12 text-center flex flex-col items-center justify-center">
                         <Icons.Calendar className="w-10 h-10 text-nexus-text-muted mb-3" />
-                        <h3 className="text-sm font-bold text-nexus-text">No hay citas registradas</h3>
+                        <h3 className="text-sm font-bold text-nexus-text">No hay {tl('appointments')} {g('appointment', 'registrados', 'registradas')}</h3>
                         <p className="text-xs text-nexus-text-muted mt-1 max-w-xs">
-                          {selectedRange === "Día" && "No hay citas programadas para hoy."}
+                          {selectedRange === "Día" && `No hay ${tl('appointments')} ${g('appointment', 'programados', 'programadas')} para hoy.`}
                         </p>
                       </div>
                     ) : (
@@ -1619,7 +1624,7 @@ const fetchByDate = async (subcollection, date) => {
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-nexus-text-muted font-black uppercase tracking-widest">Servicios</span>
+                    <span className="block text-[9px] text-nexus-text-muted font-black uppercase tracking-widest">{t('services')}</span>
                     <span className="block text-2.5xl font-black text-nexus-text mt-1">{commissionSummary.totalServicios}</span>
                   </div>
 
@@ -1784,8 +1789,8 @@ const fetchByDate = async (subcollection, date) => {
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
-                      <h4 className="text-sm font-bold text-nexus-text">Servicios más Solicitados</h4>
-                      <p className="text-[11px] text-nexus-text-muted">Distribución de servicios realizados.</p>
+                      <h4 className="text-sm font-bold text-nexus-text">{t('services')} más {g('service', 'Solicitados', 'Solicitadas')}</h4>
+                      <p className="text-[11px] text-nexus-text-muted">Distribución de {tl('services')} {g('service', 'realizados', 'realizadas')}.</p>
                     </div>
                     <div className="h-64 flex items-center justify-center relative">
                       {performanceData.totalServicios === 0 ? (
@@ -1902,7 +1907,7 @@ const fetchByDate = async (subcollection, date) => {
             setIsCreateModalOpen(true); 
           }}
           className="fixed bottom-24 right-5 md:bottom-8 md:right-8 w-14 h-14 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all z-40 border border-white/10"
-          title="Agendar Nueva Cita"
+          title={`Agendar ${g('appointment', 'Nuevo', 'Nueva')} ${t('appointment')}`}
         >
           <Icons.Plus className="w-7 h-7" />
         </button>
@@ -2087,7 +2092,7 @@ const fetchByDate = async (subcollection, date) => {
           <div className="bg-nexus-surface border border-nexus-border rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-xl relative animate-fade-in">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-base font-bold text-nexus-text">Nuevo Cliente</h3>
+                <h3 className="text-base font-bold text-nexus-text">{g('client', 'Nuevo', 'Nueva')} {t('client')}</h3>
                 <p className="text-[11px] text-nexus-text-muted">Registrar un nuevo perfil en el sistema</p>
               </div>
               <button 
@@ -2152,7 +2157,7 @@ const fetchByDate = async (subcollection, date) => {
                   type="submit"
                   className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-md"
                 >
-                  Guardar Cliente
+                  Guardar {t('client')}
                 </button>
               </div>
             </form>
@@ -2199,5 +2204,6 @@ const fetchByDate = async (subcollection, date) => {
       </nav>
 
     </div>
+    </BusinessProfileContext.Provider>
   );
 }

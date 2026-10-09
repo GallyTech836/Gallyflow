@@ -3,6 +3,7 @@ import { Trash2, ChevronDown } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
 import { formatServicePrice } from '../servicePricing/servicePricing';
+import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 
 /**
  * Modal único de gestión de cita — mismo HTML/clases que el modal
@@ -28,6 +29,7 @@ export default function AppointmentManageModal({
   onDelete,        // () => void  — equivalente a handleDeleteReservation (solo admin)
   onTransition,    // (nextStatus) => void  — equivalente a handleUpdateStatus
 }) {
+  const terms = useBusinessTerms();
   const [showServicesList, setShowServicesList] = useState(false);
   const [showClientPhone, setShowClientPhone] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
@@ -128,7 +130,7 @@ export default function AppointmentManageModal({
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-5 relative shadow-xl">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-base font-bold text-nexus-text">Editar o Gestionar Cita</h3>
+          <h3 className="text-base font-bold text-nexus-text">Editar o Gestionar {terms.t('appointment')}</h3>
           {allowDelete && (
             <button
               type="button"
@@ -139,14 +141,14 @@ export default function AppointmentManageModal({
               className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded flex items-center gap-1 text-[10px] font-bold cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Eliminar Cita
+              Eliminar {terms.t('appointment')}
             </button>
           )}
         </div>
 
         <form onSubmit={onSubmit} className="space-y-3.5">
         <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Cliente *</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('client')} *</label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -205,7 +207,7 @@ export default function AppointmentManageModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Profesional Asignado *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('professional')} {terms.g('professional', 'Asignado', 'Asignada')} *</label>
               <select
                 required
                 disabled={!canEdit('professionalId')}
@@ -213,7 +215,7 @@ export default function AppointmentManageModal({
                 onChange={(e) => onChangeField('professionalId', e.target.value)}
                 className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <option value="pending">Sin Profesional (PENDIENTE)</option>
+                <option value="pending">Sin {terms.t('professional')} (PENDIENTE)</option>
                 {(Array.isArray(candidateProfessionals) ? candidateProfessionals : (professionals || []).filter(b => b?.active)).map(b => (
                   <option key={b?.id} value={b?.id}>{b?.name}</option>
                 ))}
@@ -228,7 +230,7 @@ export default function AppointmentManageModal({
             </div>
 
             <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Servicios *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('services')} *</label>
               <button
                 type="button"
                 onClick={() => setShowServicesList(prev => !prev)}

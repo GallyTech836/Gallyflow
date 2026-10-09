@@ -18,6 +18,7 @@ import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPl
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
+import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
@@ -55,13 +56,16 @@ export default function App({ user }) {
     return (
       <div className="bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 shadow-lg text-[10px] space-y-0.5">
         <p className="font-bold text-nexus-text">{displayLabel}</p>
-        <p className="text-nexus-text-secondary">Citas: {bucket.citas || 0}</p>
+        <p className="text-nexus-text-secondary">{t('appointments')}: {bucket.citas || 0}</p>
       <p className="text-nexus-text-secondary">Ventas: {Number(bucket.ventas || 0).toLocaleString('es-BO')} Bs</p>
       </div>
     );
   }
 const { logout } = useAuth();
   const { negocioId } = useNegocio(user);
+  // Tipo de negocio -> terminología y módulos (businessProfileModel).
+  const businessProfile = useBusinessProfile(negocioId);
+  const { t, tl, g, hasModule } = businessProfile;
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 console.log('[ADMIN] negocioId:', negocioId);
@@ -343,9 +347,9 @@ const TAB_CAPABILITY = { dashboard: 'dashboard', clients: 'clientes', inventory:
 useEffect(() => {
   if (planLoading) return;
   const cap = TAB_CAPABILITY[activeTab];
-  if (cap && !canUseCapability(cap)) setActiveTab('agenda');
+  if ((cap && !canUseCapability(cap)) || !hasModule(activeTab)) setActiveTab('agenda');
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeTab, planFeatures, planLoading]);
+}, [activeTab, planFeatures, planLoading, businessProfile]);
 const { businessSettings } = useBusinessSettings(negocioId);
   const [whatsappSettings, setWhatsappSettings] = useState({
     isConnected: true,
@@ -1638,7 +1642,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       const docRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
       bumpCitasTick();
       savedReservationId = docRef.id;
-      triggerToast('¡Cita agendada con éxito!');
+      triggerToast(`¡${t('appointment')} ${g('appointment', 'agendado', 'agendada')} con éxito!`);
       notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) {
       triggerToast('Error al guardar la cita: ' + err.message, 'error');
@@ -1878,7 +1882,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       setAutomationLogs(prev => [newLog, ...prev]);
     }
 
-    triggerToast('¡Cita modificada con éxito!');
+    triggerToast(`¡${t('appointment')} ${g('appointment', 'modificado', 'modificada')} con éxito!`);
     setActiveModal(null);
     setEditingReservation(null);
   };
@@ -2081,7 +2085,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         duration: durationMin,
         availableDays: newService.availableDays || []
       });
-      triggerToast('Servicio actualizado.');
+      triggerToast(`${t('service')} ${g('service', 'actualizado', 'actualizada')}.`);
     } else {
       await agregarServicio({
         name: newService.name,
@@ -2092,7 +2096,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         category: 'Tratamiento',
         availableDays: newService.availableDays || []
       });
-      triggerToast('Servicio creado con éxito.');
+      triggerToast(`${t('service')} ${g('service', 'creado', 'creada')} con éxito.`);
     }
     setActiveModal(null);
     setEditingServiceId(null);
@@ -2123,7 +2127,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
   const handleDeleteService = async (id) => {
     await eliminarServicio(id);
-    triggerToast('Servicio eliminado.');
+    triggerToast(`${t('service')} ${g('service', 'eliminado', 'eliminada')}.`);
   };
 
   const handleAvatarFile = async (file) => {
@@ -2257,7 +2261,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           username: newBarber.username,
           password: newBarber.password,
         });
-        triggerToast('¡Perfil del profesional actualizado!');
+        triggerToast(`¡Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} actualizado!`);
         reevaluatePending(negocioId); // activo/horario/servicios pueden cambiar los candidatos
       } catch (err) {
         triggerToast('Error al actualizar el profesional: ' + err.message, 'error');
@@ -2293,7 +2297,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           availability: newBarber.availability
         });
 
-        triggerToast('¡Profesional creado con éxito!');
+        triggerToast(`¡${t('professional')} ${g('professional', 'creado', 'creada')} con éxito!`);
       } catch (err) {
         triggerToast('Error al crear el profesional: ' + err.message, 'error');
       }
@@ -2336,7 +2340,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'profesionales', id));
       await deleteDoc(doc(db, 'usuarios', id));
-      triggerToast('Perfil del profesional eliminado con éxito.');
+      triggerToast(`Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} eliminado con éxito.`);
       reevaluatePending(negocioId);
     } catch (err) {
       triggerToast('Error al eliminar el profesional: ' + err.message, 'error');
@@ -2534,6 +2538,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
   }
 
   return (
+    <BusinessProfileContext.Provider value={businessProfile}>
     <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
       
       {isMobileSidebarOpen && (
@@ -2593,7 +2598,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <div className="border-t border-nexus-navy-border my-2 mx-2" />
           )}
           
-          {hasFeature(planFeatures, 'dashboard') && (
+          {hasFeature(planFeatures, 'dashboard') && hasModule('dashboard') && (
           <button 
             onClick={() => {
               setActiveTab('dashboard');
@@ -2628,7 +2633,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <CalendarIcon className={`w-4 h-4 shrink-0 ${activeTab === 'agenda' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && (
               <>
-                <span className="truncate">Agenda del Staff</span>
+                <span className="truncate">Agenda</span>
                 {pendingBadgeCount > 0 && (
                   <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-nexus-primary text-white rounded-full">
                     {pendingBadgeCount}
@@ -2644,6 +2649,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <div className="border-t border-nexus-navy-border my-3 mx-2" />
           )}
 
+          {hasModule('barbers') && (
           <button 
             onClick={() => {
               setActiveTab('barbers');
@@ -2658,9 +2664,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
             }`}
           >
             <Users className={`w-4 h-4 shrink-0 ${activeTab === 'barbers' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Staff</span>}
+            {!isSidebarCollapsed && <span className="truncate">{t('professionals')}</span>}
           </button>
+          )}
 
+          {hasModule('services') && (
           <button 
             onClick={() => {
               setActiveTab('services');
@@ -2675,10 +2683,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
             }`}
           >
             <Scissors className={`w-4 h-4 shrink-0 ${activeTab === 'services' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Servicios</span>}
+            {!isSidebarCollapsed && <span className="truncate">{t('services')}</span>}
           </button>
+          )}
 
-          {hasFeature(planFeatures, 'clientes') && (
+          {hasFeature(planFeatures, 'clientes') && hasModule('clients') && (
           <button 
             onClick={() => {
               setActiveTab('clients');
@@ -2693,10 +2702,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
             }`}
           >
             <UserCheck className={`w-4 h-4 shrink-0 ${activeTab === 'clients' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Clientes</span>}
+            {!isSidebarCollapsed && <span className="truncate">{t('clients')}</span>}
           </button>
           )}
 
+          {hasModule('branches') && (
           <button 
             onClick={() => {
               setActiveTab('branches');
@@ -2713,8 +2723,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <Building2 className={`w-4 h-4 shrink-0 ${activeTab === 'branches' ? 'text-white' : 'text-nexus-primary'}`} />
             {!isSidebarCollapsed && <span className="truncate">Sucursales</span>}
           </button>
+          )}
 
-        {hasFeature(planFeatures, 'inventario') && (
+        {hasFeature(planFeatures, 'inventario') && hasModule('inventory') && (
           <button 
             onClick={() => {
               setActiveTab('inventory');
@@ -2740,7 +2751,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             <div className="border-t border-nexus-navy-border my-3 mx-2" />
           )}
 
-{hasFeature(planFeatures, 'comisiones') && (
+{hasFeature(planFeatures, 'comisiones') && hasModule('commissions') && (
           <button 
             onClick={() => {
               setActiveTab('commissions');
@@ -2759,7 +2770,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           </button>
           )}
 
-          {hasFeature(planFeatures, 'asistencia') && (
+          {hasFeature(planFeatures, 'asistencia') && hasModule('assistance') && (
           <button 
             onClick={() => {
               setActiveTab('assistance');
@@ -2778,7 +2789,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           </button>
           )}
 
-          {hasFeature(planFeatures, 'analiticas') && (
+          {hasFeature(planFeatures, 'analiticas') && hasModule('reports') && (
           <button 
             onClick={() => {
               setActiveTab('reports');
@@ -2879,10 +2890,10 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <span className="text-nexus-text-muted">/</span>
                 <span>
                   {activeTab === 'dashboard' && 'Panel General'}
-                  {activeTab === 'agenda' && 'Agenda del Staff'}
-                  {activeTab === 'barbers' && 'Gestión de Staff Profesional'}
-                  {activeTab === 'services' && 'Catálogo de Servicios'}
-                  {activeTab === 'clients' && 'Base de Datos de Clientes'}
+                  {activeTab === 'agenda' && `Agenda de ${t('professionals')}`}
+                  {activeTab === 'barbers' && `Gestión de ${t('professionals')}`}
+                  {activeTab === 'services' && `Catálogo de ${t('services')}`}
+                  {activeTab === 'clients' && `Base de Datos de ${t('clients')}`}
                   {activeTab === 'branches' && 'Gestión de Sucursales'}
                   {activeTab === 'inventory' && 'Inventario'}
                   {activeTab === 'commissions' && 'Liquidación de Comisiones'}
@@ -2967,7 +2978,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   className="ml-auto lg:ml-0 px-3 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md transition-all flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Nueva Cita
+                  {g('appointment', 'Nuevo', 'Nueva')} {t('appointment')}
                 </button>
               )}
             </div>
@@ -2995,12 +3006,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   )}
                 </div>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
-                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Citas Agendadas</span>
+                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">{t('appointments')} {g('appointment', 'Agendados', 'Agendadas')}</span>
                   <h3 className="text-xl font-black text-nexus-text font-mono mt-1">{(rangeReservations || []).length}</h3>
                   <p className="text-[9px] text-nexus-text-muted mt-1">Total acumuladas en rango</p>
                 </div>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
-                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Clientes Atendidos</span>
+                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">{t('clients')} {g('client', 'Atendidos', 'Atendidas')}</span>
                   <h3 className="text-xl font-black text-nexus-primary font-mono mt-1">{rangeMetrics?.clientsServed}</h3>
                   <p className="text-[9px] text-nexus-primary mt-1">Fidelización premium activa</p>
                 </div>
@@ -3037,12 +3048,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </div>
 
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm flex flex-col">
-                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">Próxima Cita</h4>
+                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">{g('appointment', 'Próximo', 'Próxima')} {t('appointment')}</h4>
                   {nextAppointment ? (
                     <div className="flex-1 flex flex-col justify-center">
                       <span className="text-2xl font-black text-nexus-primary font-mono">{nextAppointment.time}</span>
                       <span className="text-sm font-bold text-nexus-text mt-2">{nextAppointment.clientName}</span>
-                      <span className="text-xs text-nexus-text-secondary mt-0.5">{nextAppointment.serviceName || 'Servicio'}</span>
+                      <span className="text-xs text-nexus-text-secondary mt-0.5">{nextAppointment.serviceName || t('service')}</span>
                       <span className="text-[10px] text-nexus-text-muted mt-1">
                         {(barbers.find(b => b?.id === (nextAppointment.professionalId || nextAppointment.barberId))?.name) || 'Sin asignar'}
                       </span>
@@ -3190,7 +3201,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                     <div className="min-w-0">
                                       <p className="font-black text-[9px] tracking-wider uppercase leading-tight">PENDIENTE · {res?.time}</p>
                                       <p className="font-bold text-[9px] truncate leading-tight">{res?.clientName} · {res?.serviceName}</p>
-                                      <p className="text-[8px] truncate leading-tight opacity-80">Hay una reserva sin profesional asignado</p>
+                                      <p className="text-[8px] truncate leading-tight opacity-80">Hay una reserva sin {tl('professional')} {g('professional', 'asignado', 'asignada')}</p>
                                     </div>
                                   </div>
                                 );
@@ -3317,7 +3328,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             </div>
                           ))}
                           {dayRes.length === 0 && (
-                            <p className="text-[9px] text-nexus-text-muted text-center py-8 font-semibold">Sin citas</p>
+                            <p className="text-[9px] text-nexus-text-muted text-center py-8 font-semibold">Sin {tl('appointments')}</p>
                           )}
                         </div>
                         <button
@@ -3327,7 +3338,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           }}
                           className="w-full py-1 mt-2 border border-dashed border-nexus-border hover:border-nexus-primary/50 rounded text-[9px] font-bold text-nexus-text-secondary hover:text-nexus-text transition-all flex items-center justify-center gap-1 cursor-pointer"
                         >
-                          <Plus className="w-3 h-3" /> Agregar Cita
+                          <Plus className="w-3 h-3" /> Agregar {t('appointment')}
                         </button>
                       </div>
                     );
@@ -3417,7 +3428,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   </span>
                   <input 
                     type="text" 
-                    placeholder="Buscar profesional por nombre o sucursal..." 
+                    placeholder={`Buscar ${tl('professional')} por nombre o sucursal...`} 
                     value={searchBarberQuery}
                     onChange={(e) => setSearchBarberQuery(e.target.value)}
                     className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
@@ -3427,7 +3438,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   onClick={() => {
                     const staffLimit = getFeatureLimit(planFeatures, 'profesionales');
                     if (staffLimit !== null && barbers.length >= staffLimit) {
-                      triggerToast(`Tu plan permite hasta ${staffLimit} profesionales. Cambia de plan para agregar más.`, 'error');
+                      triggerToast(`Tu plan permite hasta ${staffLimit} ${tl('professionals')}. Cambia de plan para agregar más.`, 'error');
                       return;
                     }
                     resetBarberForm();
@@ -3437,7 +3448,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   className="w-full sm:w-auto px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
                   <Plus className="w-4 h-4" />
-                  Registrar Profesional
+                  Registrar {t('professional')}
                 </button>
               </div>
 
@@ -3496,7 +3507,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       ))}
                       {filteredBarbersList.length === 0 && (
                         <tr>
-                          <td colSpan="7" className="p-8 text-center text-nexus-text-muted">No se encontraron profesionales registrados.</td>
+                          <td colSpan="7" className="p-8 text-center text-nexus-text-muted">No se encontraron {tl('professionals')} {g('professional', 'registrados', 'registradas')}.</td>
                         </tr>
                       )}
                     </tbody>
@@ -3512,13 +3523,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
           {activeTab === 'services' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Tratamientos y Servicios Disponibles</h4>
+                <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">{t('services')} Disponibles</h4>
                 <button
                   onClick={openNewServiceModal}
                   className="px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
                   <Plus className="w-4 h-4" />
-                  Agregar Servicio
+                  Agregar {t('service')}
                 </button>
               </div>
 
@@ -3531,7 +3542,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleEditService(s)}
-                            title="Editar servicio"
+                            title={`Editar ${tl('service')}`}
                             className="p-1 hover:bg-nexus-surface-hover text-nexus-text-secondary rounded transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -3568,7 +3579,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   </span>
                   <input 
                     type="text" 
-                    placeholder="Buscar cliente por nombre o teléfono..." 
+                    placeholder={`Buscar ${tl('client')} por nombre o teléfono...`} 
                     value={searchClientQuery}
                     onChange={(e) => setSearchClientQuery(e.target.value)}
                     className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
@@ -3584,12 +3595,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       <th className="p-4">Teléfono</th>
                       <th className="p-4 text-center">Visitas</th>
                       <th className="p-4">Última Visita</th>
-                      <th className="p-4">Servicio Favorito</th>
+                      <th className="p-4">{t('service')} {g('service', 'Favorito', 'Favorita')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-nexus-border">
                     {filteredClientsList.map(c => (
-                      <tr key={c?.id} onClick={() => setSelectedClientId(c?.id)} title="Ver ficha del cliente" className="hover:bg-nexus-surface-hover transition-colors cursor-pointer">
+                      <tr key={c?.id} onClick={() => setSelectedClientId(c?.id)} title={`Ver ficha ${g('client', 'del', 'de la')} ${tl('client')}`} className="hover:bg-nexus-surface-hover transition-colors cursor-pointer">
                         <td className="p-4 font-bold text-nexus-text text-xs">{c?.name}</td>
                         <td className="p-4 font-mono text-nexus-text-secondary">{c?.phone}</td>
                         <td className="p-4 text-center">
@@ -4080,13 +4091,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Cliente (opcional)</label>
+                                <label className="text-[10px] text-slate-400 font-bold block mb-1">{t('client')} (opcional)</label>
                                 <select
                                   value={saleForm.clientName}
                                   onChange={e => setSaleForm(p => ({ ...p, clientName: e.target.value }))}
                                   className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
                                 >
-                                  <option value="">Cliente general</option>
+                                  <option value="">{t('client')} general</option>
                                   {clients.map(c => (
                                     <option key={c.id} value={c.name}>{c.name}</option>
                                   ))}
@@ -4278,7 +4289,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <thead>
                           <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
                             <th className="p-4">Fecha</th>
-                            <th className="p-4">Cliente</th>
+                            <th className="p-4">{t('client')}</th>
                             <th className="p-4">Productos</th>
                             <th className="p-4">Total</th>
                             <th className="p-4">Método de Pago</th>
@@ -4339,8 +4350,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
-                      <th className="p-4">Profesional</th>
-                      <th className="p-4 text-right">Servicios</th>
+                      <th className="p-4">{t('professional')}</th>
+                      <th className="p-4 text-right">{t('services')}</th>
                       <th className="p-4 text-right">Comisión Total</th>
                       <th className="p-4 text-right">Pagada</th>
                       <th className="p-4 text-right">Pendiente</th>
@@ -4379,7 +4390,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     ))}
                     {barberCommissionsList.length === 0 && (
                       <tr>
-                        <td colSpan="6" className="p-8 text-center text-nexus-text-muted">Sin profesionales asignados en esta sucursal.</td>
+                        <td colSpan="6" className="p-8 text-center text-nexus-text-muted">Sin {tl('professionals')} {g('professional', 'asignados', 'asignadas')} en esta sucursal.</td>
                       </tr>
                     )}
                   </tbody>
@@ -4416,7 +4427,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           </div>
                         ))}
                         {(detailBarber?.detalle || []).length === 0 && (
-                          <p className="text-center text-nexus-text-muted text-xs py-6">Sin servicios completados en este periodo.</p>
+                          <p className="text-center text-nexus-text-muted text-xs py-6">Sin {tl('services')} {g('service', 'completados', 'completadas')} en este periodo.</p>
                         )}
                       </div>
                     </div>
@@ -4445,7 +4456,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
-                      <th className="p-4">Profesional</th>
+                      <th className="p-4">{t('professional')}</th>
                       <th className="p-4 text-center">Asistido</th>
                       <th className="p-4 text-center">Retrasos</th>
                       <th className="p-4 text-center">A Tiempo</th>
@@ -4617,14 +4628,14 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
             <form onSubmit={handleCreateBlockout} className="space-y-3.5">
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 font-sans">Profesional Staff *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 font-sans">{t('professional')} *</label>
                 <select 
                   required
                   value={blockoutForm.barberId}
                   onChange={(e) => setBlockoutForm(prev => ({ ...prev, barberId: e.target.value }))}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none"
                 >
-                  <option value="">Seleccione Profesional...</option>
+                  <option value="">Seleccione {t('professional')}...</option>
                   {(branchBarbers || []).filter(b => b?.active).map(b => (
                     <option key={b?.id} value={b?.id}>{b?.name}</option>
                   ))}
@@ -4729,9 +4740,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
               <div>
                 <h3 className="text-base font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
                   <UserPlus className="w-5 h-5 text-nexus-primary" />
-                  {editingBarberId ? 'Editar Perfil del Profesional' : 'Registrar Nuevo Profesional'}
+                  {editingBarberId ? `Editar Perfil ${g('professional', 'del', 'de la')} ${t('professional')}` : `Registrar ${g('professional', 'Nuevo', 'Nueva')} ${t('professional')}`}
                 </h3>
-                <p className="text-[10px] text-nexus-text-secondary">Complete los pasos para configurar el perfil profesional del staff.</p>
+                <p className="text-[10px] text-nexus-text-secondary">Complete los pasos para configurar el perfil {g('professional', 'del', 'de la')} {tl('professional')}.</p>
               </div>
 
               <div className="flex items-center gap-2.5 font-mono text-[11px] self-stretch md:self-auto justify-between md:justify-start">
@@ -4762,7 +4773,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   }`}
                 >
                   <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">2</span>
-                  Servicios
+                  {t('services')}
                 </button>
                 <div className="w-6 h-[1.5px] bg-nexus-border hidden sm:block" />
                 <button 
@@ -4802,7 +4813,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       accept="image/*"
                       className="hidden"
                     />
-                    <span className="text-[10px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold block mb-1">Fotografía del Staff</span>
+                    <span className="text-[10px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold block mb-1">Fotografía {g('professional', 'del', 'de la')} {t('professional')}</span>
                     <div className="relative">
                     <Avatar
                         src={newBarber.avatar}
@@ -4978,7 +4989,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   
                   <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 flex flex-col h-[380px] shadow-sm">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-[11px] font-black uppercase text-nexus-primary tracking-wider font-mono font-bold">Servicios Seleccionados ({newBarber.services.length})</h4>
+                      <h4 className="text-[11px] font-black uppercase text-nexus-primary tracking-wider font-mono font-bold">{t('services')} {g('service', 'Seleccionados', 'Seleccionadas')} ({newBarber.services.length})</h4>
                       <button 
                         type="button" 
                         onClick={() => setNewBarber(prev => ({ ...prev, services: [] }))}
@@ -5009,7 +5020,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                   }));
                                 }}
                                 className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded-lg"
-                                title="Quitar Servicio"
+                                title={`Quitar ${t('service')}`}
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
@@ -5083,7 +5094,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       {newBarber.services.length === 0 && (
                         <div className="text-center text-nexus-text-muted py-16">
                           <Scissors className="w-8 h-8 mx-auto mb-2 opacity-35" />
-                          <p className="text-[10px] font-bold">No hay servicios seleccionados</p>
+                          <p className="text-[10px] font-bold">No hay {tl('services')} {g('service', 'seleccionados', 'seleccionadas')}</p>
                           <p className="text-[9px] text-nexus-text-muted">Agrégar de la lista de disponibles a la derecha.</p>
                         </div>
                       )}
@@ -5093,7 +5104,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 flex flex-col h-[380px] shadow-sm">
                     <div className="space-y-3.5 mb-3">
                       <div className="flex justify-between items-center">
-                        <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Servicios Disponibles</h4>
+                        <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">{t('services')} Disponibles</h4>
                         <button 
                           type="button"
                           onClick={() => {
@@ -5301,7 +5312,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   {hasFeature(planFeatures, 'permisosProfesional') && (
                   <div className="pt-4 border-t border-nexus-border space-y-3">
                     <div>
-                      <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Permisos del Profesional</h4>
+                      <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Permisos {g('professional', 'del', 'de la')} {t('professional')}</h4>
                       <p className="text-[9px] text-nexus-text-muted">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -5371,7 +5382,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     onClick={handleSaveBarber}
                     className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md transition-all cursor-pointer font-bold"
                   >
-                    {editingBarberId ? 'Guardar Cambios' : 'Crear Profesional'}
+                    {editingBarberId ? 'Guardar Cambios' : `Crear ${t('professional')}`}
                   </button>
                 )}
               </div>
@@ -5568,13 +5579,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl max-h-full overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <Scissors className="w-5 h-5 text-nexus-primary" />
-              {editingServiceId ? 'Editar Servicio' : 'Crear Nuevo Servicio'}
+              {editingServiceId ? `Editar ${t('service')}` : `Crear ${g('service', 'Nuevo', 'Nueva')} ${t('service')}`}
             </h3>
             <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal del tratamiento.</p>
             
             <form onSubmit={handleCreateService} className="space-y-4">
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Nombre del Servicio *</label>
+                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Nombre {g('service', 'del', 'de la')} {t('service')} *</label>
                 <input 
                   type="text" 
                   required
@@ -5698,7 +5709,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   type="submit" 
                   className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
-                  {editingServiceId ? 'Guardar Cambios' : 'Crear Servicio'}
+                  {editingServiceId ? 'Guardar Cambios' : `Crear ${t('service')}`}
                 </button>
               </div>
             </form>
@@ -5747,5 +5758,6 @@ const { businessSettings } = useBusinessSettings(negocioId);
       </svg>
 
     </div>
+    </BusinessProfileContext.Provider>
   );
 }

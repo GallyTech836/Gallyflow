@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 import { formatServicePrice } from '../servicePricing/servicePricing';
 import { calculateTotals } from './serviceSelection';
+import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -67,6 +68,7 @@ export default function AppointmentCreateModal({
   onSubmit,
   onClose,
 }) {
+  const terms = useBusinessTerms();
   // ── Estado interno del formulario ──────────────────────────────────
   const [draft, setDraft] = useState({
     clientName: '',
@@ -196,13 +198,13 @@ export default function AppointmentCreateModal({
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-5 relative shadow-xl">
-        <h3 className="text-base font-bold text-nexus-text mb-1">Agendar Nueva Cita</h3>
+        <h3 className="text-base font-bold text-nexus-text mb-1">Agendar {terms.g('appointment', 'Nuevo', 'Nueva')} {terms.t('appointment')}</h3>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
 
           {/* ── Cliente ─────────────────────────────────────────── */}
           <div className="relative">
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Cliente *</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('client')} *</label>
             {selectedClient && (
               <div>
                 <div className="flex items-center gap-2">
@@ -255,7 +257,7 @@ export default function AppointmentCreateModal({
                 onClick={() => { setIsNewClient(v => !v); change('clientName', ''); change('phone', ''); change('clientId', null); setClientSearch(''); }}
                 className="px-2.5 py-2 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer"
               >
-                {isNewClient ? 'Elegir Existente' : '+ Nuevo Cliente'}
+                {isNewClient ? 'Elegir Existente' : `+ ${terms.g('client', 'Nuevo', 'Nueva')} ${terms.t('client')}`}
               </button>
             </div>
 
@@ -323,7 +325,7 @@ export default function AppointmentCreateModal({
                 </div>
                 {detectedCountry?.isInternational && (
                   <span className="text-[8px] text-nexus-primary font-bold mt-1 block">
-                    Cliente internacional detectado ({detectedCountry.country})
+                    {terms.t('client')} internacional detectado ({detectedCountry.country})
                   </span>
                 )}
               </div>
@@ -333,7 +335,7 @@ export default function AppointmentCreateModal({
           {/* ── Servicio y Profesional ───────────────────────── */}
           <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Servicios *</label>
+            <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('services')} *</label>
             <button
               type="button"
               onClick={() => setShowServicesList(prev => !prev)}
@@ -366,7 +368,7 @@ export default function AppointmentCreateModal({
           </div>
 
             <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Profesional *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">{terms.t('professional')} *</label>
               {fixedProfessional ? (
                 <input
                   type="text"
@@ -381,7 +383,7 @@ export default function AppointmentCreateModal({
                   onChange={(e) => change('professionalId', e.target.value)}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
                 >
-                  <option value="pending">Sin Profesional (PENDIENTE)</option>
+                  <option value="pending">Sin {terms.t('professional')} (PENDIENTE)</option>
                   {professionals.filter(b => b?.active).map(b => (
                     <option key={b?.id} value={b?.id}>{b?.name}</option>
                   ))}

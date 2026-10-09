@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { resolveCapabilities, canUse, getLimit } from '../capabilities/capabilityModel';
+import { getBusinessProfile } from '../businessProfiles/businessProfileModel';
 
 const EMPTY = {};
 
@@ -9,7 +10,8 @@ const EMPTY = {};
  * Capacidades efectivas del negocio, en tiempo real.
  *
  * Escucha `negocios/{id}` (plan + capabilityOverrides) y `planes/{planId}`,
- * y resuelve con el modelo compartido (override > plan > default).
+ * y resuelve con el modelo compartido (override > plan > perfil del tipo de
+ * negocio > default).
  * Si el Super Admin cambia el plan o una excepción, se refleja solo.
  *
  * Devuelve:
@@ -24,6 +26,7 @@ const EMPTY = {};
 export function useNegocioPlan(negocioId) {
   const [planId, setPlanId] = useState(null);
   const [overrides, setOverrides] = useState(null);
+  const [businessType, setBusinessType] = useState(null);
   const [planData, setPlanData] = useState(null);
   const [negocioLoaded, setNegocioLoaded] = useState(false);
   const [planLoaded, setPlanLoaded] = useState(false);
@@ -35,6 +38,7 @@ export function useNegocioPlan(negocioId) {
       const data = snap.exists() ? snap.data() : {};
       setPlanId(data.plan || null);
       setOverrides(data.capabilityOverrides || null);
+      setBusinessType(data.businessType || null);
       setNegocioLoaded(true);
     }, () => setNegocioLoaded(true));
     return () => unsub();
@@ -57,8 +61,13 @@ export function useNegocioPlan(negocioId) {
 
   const features = planData?.features || EMPTY;
   const capabilities = useMemo(
-    () => resolveCapabilities({ planFeatures: planData?.features || null, overrides }),
-    [planData, overrides],
+    () => resolveCapabilities({
+      planFeatures: planData?.features || null,
+      overrides,
+      // Capacidades por defecto del tipo de negocio (entre plan y catálogo).
+      profileDefaults: getBusinessProfile(businessType).capabilityDefaults || null,
+    }),
+    [planData, overrides, businessType],
   );
   const can = useCallback((key) => canUse(capabilities, key), [capabilities]);
   const limitOf = useCallback((key) => getLimit(capabilities, key), [capabilities]);

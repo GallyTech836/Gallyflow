@@ -21,6 +21,7 @@ import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
+import { BusinessProfileContext, useBusinessProfile, useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -82,6 +83,8 @@ export default function App({ negocioSlug } = {}) {
   // de Firestore / backend; esto solo decide qué se muestra.)
   const { can: canUseCapability, loading: capabilitiesLoading } = useNegocioPlan(negocioId);
   const { businessSettings } = useBusinessSettings(negocioId);
+  // Tipo de negocio -> terminología (los pasos la leen con useBusinessTerms).
+  const businessProfile = useBusinessProfile(negocioId);
 
   useEffect(() => {
     const resolveNegocio = async () => {
@@ -763,6 +766,7 @@ export default function App({ negocioSlug } = {}) {
   }
 
   return (
+    <BusinessProfileContext.Provider value={businessProfile}>
     <div className="min-h-screen bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
@@ -830,6 +834,7 @@ export default function App({ negocioSlug } = {}) {
         ))}
       </div>
     </div>
+    </BusinessProfileContext.Provider>
   );
 }
 
@@ -847,11 +852,13 @@ const Home = ({ onNext, heroConfig, branches = [], proName = '' }) => (
   </div>
 );
 
-const BranchStep = ({ branches, selected, setSelected, onNext }) => (
+const BranchStep = ({ branches, selected, setSelected, onNext }) => {
+  const terms = useBusinessTerms();
+  return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
       <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Sucursal</h2>
-      <p className="text-xs text-nexus-text-secondary mb-5">Elige el local donde quieres realizar tu cita.</p>
+      <p className="text-xs text-nexus-text-secondary mb-5">Elige el local donde quieres realizar tu {terms.tl('appointment')}.</p>
 
       {branches.length === 0 ? (
         <p className="text-center py-8 text-xs text-nexus-text-muted">No hay sucursales disponibles por el momento.</p>
@@ -899,13 +906,16 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => (
       )}
     </div>
   </div>
-);
+  );
+};
 
-const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable = false }) => (
+const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable = false }) => {
+  const terms = useBusinessTerms();
+  return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Servicios</h2>
-      <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir múltiples tratamientos para tu cita.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona {terms.t('services')}</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir múltiples {terms.tl('services')} para tu {terms.tl('appointment')}.</p>
       
       <div className="space-y-3 max-h-[44vh] overflow-y-auto pr-1 no-scrollbar pb-4">
         {services.map((s) => {
@@ -967,7 +977,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
     <div className="pt-6 border-t border-nexus-border mt-6">
       <div className="flex justify-between items-center mb-5 px-1">
         <div>
-          <span className="text-nexus-text-secondary text-[10px] font-bold uppercase tracking-wider block">Servicios Seleccionados</span>
+          <span className="text-nexus-text-secondary text-[10px] font-bold uppercase tracking-wider block">{terms.t('services')} {terms.g('service', 'Seleccionados', 'Seleccionadas')}</span>
           <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
         </div>
         <div className="text-right">
@@ -980,18 +990,21 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
         onClick={onNext}
         className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
-        <span>Continuar Cita</span>
+        <span>Continuar {terms.t('appointment')}</span>
         <ChevronRight size={16} />
       </button>
     </div>
   </div>
-);
+  );
+};
 
-const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => (
+const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
+  const terms = useBusinessTerms();
+  return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Especialista</h2>
-      <p className="text-xs text-nexus-text-secondary mb-5">Elige un profesional o selecciona la opción pendiente para agilizar tu turno.</p>
+      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona {terms.t('professional')}</h2>
+      <p className="text-xs text-nexus-text-secondary mb-5">Elige {terms.g('professional', 'un', 'una')} {terms.tl('professional')} o selecciona la opción pendiente para agilizar tu turno.</p>
       
       <div className="space-y-3.5">
         {barbers.map((b) => (
@@ -1047,9 +1060,11 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => (
       </button>
     </div>
   </div>
-);
+  );
+};
 
 const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, currentMonth, setCurrentMonth }) => {
+  const terms = useBusinessTerms();
   
   const handlePrevMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
@@ -1174,7 +1189,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
               </div>
             </div>
           ) : (
-            <p className="text-center py-4 text-xs text-nexus-text-muted">Este profesional no tiene horario disponible ese día.</p>
+            <p className="text-center py-4 text-xs text-nexus-text-muted">{terms.g('professional', 'Este', 'Esta')} {terms.tl('professional')} no tiene horario disponible ese día.</p>
           )
         ) : (
           <p className="text-center py-4 text-xs text-nexus-text-muted">Selecciona un día del calendario para ver horarios.</p>
@@ -1253,7 +1268,9 @@ const ConfirmStep = ({
   hasVariable = false,
   onConfirm, 
   loading 
-}) => (
+}) => {
+  const terms = useBusinessTerms();
+  return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
       <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Confirmar Reserva</h2>
@@ -1286,13 +1303,13 @@ const ConfirmStep = ({
 
         <div className="bg-nexus-surface border border-nexus-border p-4 rounded-2xl space-y-3 mt-4 text-xs text-nexus-text-secondary">
           <div className="flex justify-between pb-2 border-b border-nexus-border">
-            <span className="font-semibold text-nexus-text-secondary">Servicios:</span>
+            <span className="font-semibold text-nexus-text-secondary">{terms.t('services')}:</span>
             <span className="font-bold text-right text-nexus-text">
               {selectedServices.map(s => s.name).join(', ')}
             </span>
           </div>
           <div className="flex justify-between pb-2 border-b border-nexus-border">
-            <span className="font-semibold text-nexus-text-secondary">Profesional:</span>
+            <span className="font-semibold text-nexus-text-secondary">{terms.t('professional')}:</span>
             <span className="font-bold text-nexus-text">{selectedBarber?.name}</span>
           </div>
           <div className="flex justify-between pb-2 border-b border-nexus-border">
@@ -1320,14 +1337,16 @@ const ConfirmStep = ({
         {loading ? (
           <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
         ) : (
-          "Confirmar Reserva Cita"
+          `Confirmar ${terms.t('appointment')}`
         )}
       </button>
     </div>
   </div>
-);
+  );
+};
 
 const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, hasVariable = false, branch = null }) => {
+  const terms = useBusinessTerms();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1367,7 +1386,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
         <div className="w-full bg-nexus-surface border border-nexus-border p-4 rounded-2xl space-y-2.5 text-xs text-nexus-text-secondary text-left">
           {selectedServices?.length > 0 && (
             <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
-              <span className="font-semibold text-nexus-text-secondary shrink-0">Servicios:</span>
+              <span className="font-semibold text-nexus-text-secondary shrink-0">{terms.t('services')}:</span>
               <span className="font-bold text-right text-nexus-text">
                 {selectedServices.map(s => s.name).join(', ')}
               </span>
@@ -1375,7 +1394,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           )}
           {selectedBarber && (
             <div className="flex justify-between pb-2 border-b border-nexus-border">
-              <span className="font-semibold text-nexus-text-secondary">Profesional:</span>
+              <span className="font-semibold text-nexus-text-secondary">{terms.t('professional')}:</span>
               <span className="font-bold text-nexus-text">{selectedBarber.name}</span>
             </div>
           )}

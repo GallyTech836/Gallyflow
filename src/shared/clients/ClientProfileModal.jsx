@@ -11,6 +11,7 @@ import {
   CONTACT_CHANNELS,
   BOOKING_CHANNEL_LABELS,
 } from './clientHistoryModel';
+import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 
 /**
  * Ficha completa del cliente (genérica para cualquier tipo de negocio).
@@ -23,8 +24,8 @@ import {
 const TABS = [
   { id: 'perfil', label: 'Perfil' },
   { id: 'actividad', label: 'Actividad', capability: 'historialCliente' },
-  { id: 'citas', label: 'Citas', capability: 'historialCliente' },
-  { id: 'servicios', label: 'Servicios', capability: 'historialCliente' },
+  { id: 'citas', label: 'Citas', termKey: 'appointments', capability: 'historialCliente' },
+  { id: 'servicios', label: 'Servicios', termKey: 'services', capability: 'historialCliente' },
   { id: 'pagos', label: 'Pagos', capability: 'historialCliente' },
   { id: 'notas', label: 'Notas', capability: 'fichaCliente' },
 ];
@@ -71,6 +72,7 @@ export default function ClientProfileModal({
   onToast = () => {},
   capabilities = null, // null = todo habilitado (compatibilidad)
 }) {
+  const terms = useBusinessTerms();
   const allow = (key) => !capabilities || canUse(capabilities, key);
   const visibleTabs = TABS.filter((t) => !t.capability || allow(t.capability));
   const [tab, setTab] = useState('perfil');
@@ -190,7 +192,7 @@ export default function ClientProfileModal({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 px-5 pb-5">
             {[
-              ['Citas', stats.total],
+              [terms.t('appointments'), stats.total],
               ['Completadas', stats.completed],
               ['Total pagado', money(stats.totalPaid)],
               ['Última visita', fmtDate(stats.lastVisit || client.lastVisit)],
@@ -213,7 +215,7 @@ export default function ClientProfileModal({
                 tab === t.id ? 'bg-nexus-primary text-white' : 'bg-nexus-background text-nexus-text-secondary hover:text-nexus-text'
               }`}
             >
-              {t.label}
+              {t.termKey ? terms.t(t.termKey) : t.label}
             </button>
           ))}
         </div>
@@ -247,7 +249,7 @@ export default function ClientProfileModal({
                 <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono mb-2">Preferencias</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>Profesional preferido</label>
+                    <label className={labelCls}>{terms.t('professional')} {terms.g('professional', 'preferido', 'preferida')}</label>
                     <select className={inputCls} value={draft.preferences.preferredProfessionalId} onChange={(e) => setPref('preferredProfessionalId', e.target.value)}>
                       <option value="">Sin preferencia</option>
                       {professionals.filter((p) => p?.active !== false).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

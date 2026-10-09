@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContaine
 import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
 import { verifyFinancePin, setFinancePin, getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
+import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 
 const CHANNEL_LABELS = {
   admin: 'Admin',
@@ -82,6 +83,7 @@ function ingresoDeCita(cita) {
 }
 
 export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId }) {
+  const terms = useBusinessTerms();
   const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
   const [financeSession, setFinanceSession] = useState(null);
   const [pinInput, setPinInput] = useState('');
@@ -422,7 +424,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
-            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes atendidos</p>
+            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">{terms.t('clients')} {terms.g('client', 'atendidos', 'atendidas')}</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes ?? '—'}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos ?? '—'}</b><span className="text-nexus-text-secondary">Nuevos</span></span>
@@ -431,7 +433,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico ?? '—'}</p>
-            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">Clientes totales</p>
+            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">{terms.t('clients')} totales</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">activos</span></span>
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d ?? '—'}</b><span className="text-nexus-text-secondary">sin volver</span></span>
@@ -452,7 +454,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Servicios</h3>
+        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">{terms.t('services')}</h3>
         <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
           <p className="font-bold text-sm text-nexus-text">Gráfico de servicios</p>
           <p className="text-xs text-nexus-text-secondary mb-3">Ordenado por ingreso generado</p>
@@ -484,7 +486,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Profesionales</h3>
+        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">{terms.t('professionals')}</h3>
         <div className="space-y-2">
           {profesionalesConFinanzas.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin profesionales.</p>}
           {profesionalesConFinanzas.map((p) => (
