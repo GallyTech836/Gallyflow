@@ -54,6 +54,7 @@ async function readAccess(negocioId) {
     plan = planSnap.exists ? planSnap.data() : null;
   }
 
+  const profile = getBusinessProfile(negocio.businessType);
   const status = computeEffectiveStatus(negocio.status, negocio.subscriptionEnd || null, negocio.trialEnd || null);
   return {
     negocioId,
@@ -65,7 +66,9 @@ async function readAccess(negocioId) {
     capabilities: resolveCapabilities({
       planFeatures: plan?.features || null,
       overrides: negocio.capabilityOverrides || null,
-      profileDefaults: getBusinessProfile(negocio.businessType).capabilityDefaults || null,
+      // El tipo de negocio solo restringe (nunca habilita).
+      profileDefaults: profile.capabilityDefaults || null,
+      relevantModules: profile.modules || null,
     }),
   };
 }

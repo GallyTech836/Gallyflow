@@ -10,8 +10,8 @@ const EMPTY = {};
  * Capacidades efectivas del negocio, en tiempo real.
  *
  * Escucha `negocios/{id}` (plan + capabilityOverrides) y `planes/{planId}`,
- * y resuelve con el modelo compartido (override > plan > perfil del tipo de
- * negocio > default).
+ * y resuelve con el modelo compartido (excepción > restricción del tipo de
+ * negocio > plan > default). El tipo nunca habilita nada por sí mismo.
  * Si el Super Admin cambia el plan o una excepción, se refleja solo.
  *
  * Devuelve:
@@ -60,14 +60,16 @@ export function useNegocioPlan(negocioId) {
   }, [planId]);
 
   const features = planData?.features || EMPTY;
-  const capabilities = useMemo(
-    () => resolveCapabilities({
+  const capabilities = useMemo(() => {
+    // El tipo de negocio solo RESTRINGE (módulos no relevantes / defaults en false).
+    const profile = getBusinessProfile(businessType);
+    return resolveCapabilities({
       planFeatures: planData?.features || null,
       overrides,
-      // Capacidades por defecto del tipo de negocio (entre plan y catálogo).
-      profileDefaults: getBusinessProfile(businessType).capabilityDefaults || null,
-    }),
-    [planData, overrides, businessType],
+      profileDefaults: profile.capabilityDefaults || null,
+      relevantModules: profile.modules || null,
+    });
+  }, [planData, overrides, businessType],
   );
   const can = useCallback((key) => canUse(capabilities, key), [capabilities]);
   const limitOf = useCallback((key) => getLimit(capabilities, key), [capabilities]);

@@ -1,6 +1,7 @@
 import { Ban, Clock3 } from 'lucide-react';
 
-export default function SuspendedScreen({ status, onLogout }) {
+// title/message opcionales: permiten reutilizar la pantalla (ej. capacidad no incluida).
+export default function SuspendedScreen({ status, onLogout, title, message }) {
   const isExpired = status === 'expired';
 
   return (
@@ -14,12 +15,12 @@ export default function SuspendedScreen({ status, onLogout }) {
           )}
         </div>
         <h1 className="text-lg font-bold text-nexus-text">
-          {isExpired ? 'Suscripción vencida' : 'Cuenta suspendida'}
+          {title || (isExpired ? 'Suscripción vencida' : 'Cuenta suspendida')}
         </h1>
         <p className="text-sm text-nexus-text-secondary leading-relaxed">
-          {isExpired
+          {message || (isExpired
             ? 'Tu periodo de suscripción venció. Contacta a soporte para renovar y seguir usando la plataforma.'
-            : 'Esta cuenta fue suspendida temporalmente. Contacta a soporte para más información.'}
+            : 'Esta cuenta fue suspendida temporalmente. Contacta a soporte para más información.')}
         </p>
         {onLogout && (
           <button

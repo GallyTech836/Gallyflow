@@ -1,6 +1,6 @@
 // capabilityModel.js
 //
-// ÚNICA fuente de verdad del sistema de CAPACIDADES de GallyFlow.
+// ÚNICA fuente de verdad del sistema de CAPACIDADES de Nexus (GallyFlow).
 //
 // ⚠️ Este archivo existe IDÉNTICO en tres lugares (sin dependencias, JS puro):
 //   - Nexus front:   src/shared/capabilities/capabilityModel.js
@@ -12,8 +12,12 @@
 // Modelo:
 //   planes/{planId}.features[key]            -> valor del plan
 //   negocios/{id}.capabilityOverrides[key]   -> excepción del negocio
+//   tipo de negocio (businessProfileModel)   -> SOLO restringe: módulos no
+//                                               relevantes o capabilityDefaults
+//                                               con enabled:false / límite menor
 //   CAPABILITIES[].default                   -> valor si nadie dice nada
-// Prioridad: override del negocio > plan > perfil del tipo de negocio > default.
+// Prioridad: excepción del negocio > restricción del tipo > plan > default.
+// El tipo de negocio NUNCA habilita una capacidad que el plan no incluye.
 //
 // Formato de un valor (plan u override), todos opcionales:
 //   true | false                       (atajo de { enabled })
@@ -30,15 +34,24 @@ export const CAPABILITY_STATUS = {
   soon: { label: 'Próximamente', canEnable: false },
 };
 
-export const CAPABILITY_CATEGORIES = [
-  { key: 'agenda', label: 'Agenda' },
-  { key: 'clientes', label: 'Clientes' },
-  { key: 'equipo', label: 'Equipo' },
-  { key: 'ventas', label: 'Ventas' },
-  { key: 'comunicacion', label: 'Comunicación' },
-  { key: 'analitica', label: 'Analítica' },
+// MÓDULOS = secciones de Nexus. La clave es la pestaña de AdminApp
+// (activeTab) y coincide con ALL_MODULES de businessProfileModel.js.
+// Cada capacidad pertenece a un módulo; un módulo agrupa varias capacidades.
+export const CAPABILITY_MODULES = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'agenda', label: 'Agenda y reservas' },
+  { key: 'clients', label: 'Clientes' },
+  { key: 'services', label: 'Servicios' },
+  { key: 'barbers', label: 'Equipo' },
+  { key: 'branches', label: 'Sucursales' },
+  { key: 'commissions', label: 'Comisiones' },
+  { key: 'inventory', label: 'Inventario y ventas' },
+  { key: 'assistance', label: 'Asistencia' },
+  { key: 'reports', label: 'Analítica' },
+  { key: 'settings', label: 'Configuración y comunicación' },
 ];
 
+// module: clave de CAPABILITY_MODULES.
 // kind:
 //   'toggle' -> se activa/desactiva. Puede tener `limit` de consumo.
 //   'quota'  -> siempre disponible, solo tiene un límite de cantidad
@@ -51,67 +64,70 @@ export const CAPABILITY_CATEGORIES = [
 // enforcedIn: dónde se valida de verdad ('ui', 'backend', 'rules').
 // limit.usageKey: campo en negocios/{id}/uso/{AAAA-MM} que mide el consumo.
 export const CAPABILITIES = [
-  // ── AGENDA ──
-  { key: 'agenda', category: 'agenda', label: 'Agenda', status: 'implemented', kind: 'toggle', core: true, default: true,
+  // ── AGENDA Y RESERVAS ──
+  { key: 'agenda', module: 'agenda', label: 'Agenda', status: 'implemented', kind: 'toggle', core: true, default: true,
     description: 'Agenda del staff, citas y bloqueos de horario.', enforcedIn: ['ui'] },
-  { key: 'servicios', category: 'agenda', label: 'Catálogo de servicios', status: 'implemented', kind: 'toggle', core: true, default: true,
+  { key: 'servicios', module: 'services', label: 'Catálogo de servicios', status: 'implemented', kind: 'toggle', core: true, default: true,
     description: 'Servicios, precios y duración.', enforcedIn: ['ui'] },
-  { key: 'reservaPublica', category: 'agenda', label: 'Reserva pública', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'reservaPublica', module: 'agenda', label: 'Reserva pública', status: 'implemented', kind: 'toggle', default: true,
     description: 'Link /reservar para que los clientes agenden solos.', enforcedIn: ['ui', 'backend', 'rules'] },
-  { key: 'linkPersonalProfesional', category: 'agenda', label: 'Link personal del profesional', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'linkPersonalProfesional', module: 'agenda', label: 'Link personal del profesional', status: 'implemented', kind: 'toggle', default: true,
     requires: 'reservaPublica', description: 'Cada profesional comparte su propio link de reserva.', enforcedIn: ['ui'] },
-  { key: 'listaEspera', category: 'agenda', label: 'Lista de espera', status: 'soon', kind: 'toggle', default: false },
-  { key: 'citasRecurrentes', category: 'agenda', label: 'Citas recurrentes', status: 'soon', kind: 'toggle', default: false },
+  { key: 'listaEspera', module: 'agenda', label: 'Lista de espera', status: 'soon', kind: 'toggle', default: false },
+  { key: 'citasRecurrentes', module: 'agenda', label: 'Citas recurrentes', status: 'soon', kind: 'toggle', default: false },
 
   // ── CLIENTES ──
-  { key: 'clientes', category: 'clientes', label: 'Clientes', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'clientes', module: 'clients', label: 'Clientes', status: 'implemented', kind: 'toggle', default: true,
     description: 'Base de datos de clientes.', enforcedIn: ['ui'] },
-  { key: 'fichaCliente', category: 'clientes', label: 'Ficha avanzada del cliente', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'fichaCliente', module: 'clients', label: 'Ficha avanzada del cliente', status: 'implemented', kind: 'toggle', default: true,
     requires: 'clientes', description: 'Ficha con pestañas, notas y datos extendidos.', enforcedIn: ['ui'] },
-  { key: 'historialCliente', category: 'clientes', label: 'Historial del cliente', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'historialCliente', module: 'clients', label: 'Historial del cliente', status: 'implemented', kind: 'toggle', default: true,
     requires: 'fichaCliente', description: 'Actividad, citas, servicios y pagos del cliente.', enforcedIn: ['ui'] },
-  { key: 'preferenciasCliente', category: 'clientes', label: 'Preferencias del cliente', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'preferenciasCliente', module: 'clients', label: 'Preferencias del cliente', status: 'implemented', kind: 'toggle', default: true,
     requires: 'fichaCliente', enforcedIn: ['ui'] },
-  { key: 'camposPersonalizados', category: 'clientes', label: 'Campos personalizados', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'camposPersonalizados', module: 'clients', label: 'Campos personalizados', status: 'implemented', kind: 'toggle', default: true,
     requires: 'fichaCliente', enforcedIn: ['ui'] },
 
-  // ── EQUIPO ──
-  { key: 'profesionales', category: 'equipo', label: 'Profesionales', status: 'implemented', kind: 'quota', default: true,
+  // ── EQUIPO / SUCURSALES / COMISIONES / ASISTENCIA ──
+  { key: 'profesionales', module: 'barbers', label: 'Profesionales', status: 'implemented', kind: 'quota', default: true,
     legacyKeys: ['staff'], limit: { unit: 'profesionales', period: null, defaultLimit: null },
     description: 'Cantidad máxima de profesionales.', enforcedIn: ['ui'] },
-  { key: 'sucursales', category: 'equipo', label: 'Sucursales', status: 'implemented', kind: 'quota', default: true,
+  { key: 'sucursales', module: 'branches', label: 'Sucursales', status: 'implemented', kind: 'quota', default: true,
     limit: { unit: 'sucursales', period: null, defaultLimit: null },
     description: 'Cantidad máxima de sucursales.', enforcedIn: ['ui'] },
-  { key: 'comisiones', category: 'equipo', label: 'Comisiones', status: 'implemented', kind: 'toggle', default: false,
+  { key: 'comisiones', module: 'commissions', label: 'Comisiones', status: 'implemented', kind: 'toggle', default: false,
     description: 'Liquidación de comisiones del staff.', enforcedIn: ['ui', 'backend'] },
-  { key: 'permisosProfesional', category: 'equipo', label: 'Permisos por profesional', status: 'implemented', kind: 'toggle', default: true,
-    description: 'Configurar qué puede hacer cada profesional en su panel.', enforcedIn: ['ui'] },
-  { key: 'asistencia', category: 'equipo', label: 'Control de asistencia (PIN)', status: 'mock', kind: 'toggle', default: false,
+  { key: 'appProfesionales', module: 'barbers', label: 'App para profesionales', status: 'implemented', kind: 'toggle', default: true,
+    description: 'Acceso de los profesionales a su panel (/barber). Default true: los planes guardados antes de existir esta capacidad la mantienen.',
+    enforcedIn: ['ui'] },
+  { key: 'permisosProfesional', module: 'barbers', label: 'Permisos por profesional', status: 'implemented', kind: 'toggle', default: true,
+    requires: 'appProfesionales', description: 'Configurar qué puede hacer cada profesional en su panel.', enforcedIn: ['ui'] },
+  { key: 'asistencia', module: 'assistance', label: 'Control de asistencia (PIN)', status: 'mock', kind: 'toggle', default: false,
     description: 'Pantalla existente pero no guarda datos reales.', enforcedIn: ['ui'] },
 
-  // ── VENTAS ──
-  { key: 'inventario', category: 'ventas', label: 'Inventario y venta de productos', status: 'mock', kind: 'toggle', default: false,
+  // ── INVENTARIO Y VENTAS ──
+  { key: 'inventario', module: 'inventory', label: 'Inventario y venta de productos', status: 'mock', kind: 'toggle', default: false,
     description: 'Pantalla existente con productos de ejemplo; no guarda en Firestore.', enforcedIn: ['ui'] },
-  { key: 'caja', category: 'ventas', label: 'Caja', status: 'soon', kind: 'toggle', default: false },
-  { key: 'pagos', category: 'ventas', label: 'Pagos en línea', status: 'soon', kind: 'toggle', default: false },
-  { key: 'anticipos', category: 'ventas', label: 'Anticipos', status: 'soon', kind: 'toggle', default: false },
+  { key: 'caja', module: 'inventory', label: 'Caja', status: 'soon', kind: 'toggle', default: false },
+  { key: 'pagos', module: 'agenda', label: 'Pagos en línea', status: 'soon', kind: 'toggle', default: false },
+  { key: 'anticipos', module: 'agenda', label: 'Anticipos', status: 'soon', kind: 'toggle', default: false },
 
-  // ── COMUNICACIÓN ──
-  { key: 'asistenteWhatsapp', category: 'comunicacion', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,
+  // ── CONFIGURACIÓN Y COMUNICACIÓN ──
+  { key: 'asistenteWhatsapp', module: 'settings', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,
     legacyKeys: ['automatizaciones'],
     limit: { unit: 'mensajes/mes', period: 'month', usageKey: 'whatsappMensajes', defaultLimit: null },
     description: 'Bot de reservas por WhatsApp (Railway). El límite cuenta mensajes enviados por el bot.',
     enforcedIn: ['ui', 'backend'] },
-  { key: 'recordatoriosPush', category: 'comunicacion', label: 'Recordatorios push al profesional', status: 'implemented', kind: 'toggle', default: true,
+  { key: 'recordatoriosPush', module: 'settings', label: 'Recordatorios push al profesional', status: 'implemented', kind: 'toggle', default: true,
     description: 'Aviso push al profesional antes de cada cita.', enforcedIn: ['backend'] },
-  { key: 'recordatoriosWhatsapp', category: 'comunicacion', label: 'Recordatorios por WhatsApp al cliente', status: 'soon', kind: 'toggle', default: false },
-  { key: 'recuperacionClientes', category: 'comunicacion', label: 'Recuperación de clientes', status: 'soon', kind: 'toggle', default: false },
-  { key: 'resenasGoogle', category: 'comunicacion', label: 'Reseñas de Google', status: 'soon', kind: 'toggle', default: false },
+  { key: 'recordatoriosWhatsapp', module: 'settings', label: 'Recordatorios por WhatsApp al cliente', status: 'soon', kind: 'toggle', default: false },
+  { key: 'recuperacionClientes', module: 'settings', label: 'Recuperación de clientes', status: 'soon', kind: 'toggle', default: false },
+  { key: 'resenasGoogle', module: 'settings', label: 'Reseñas de Google', status: 'soon', kind: 'toggle', default: false },
 
-  // ── ANALÍTICA ──
-  { key: 'dashboard', category: 'analitica', label: 'Dashboard', status: 'implemented', kind: 'toggle', default: true,
+  // ── DASHBOARD / ANALÍTICA ──
+  { key: 'dashboard', module: 'dashboard', label: 'Dashboard', status: 'implemented', kind: 'toggle', default: true,
     description: 'Panel general con métricas del día.', enforcedIn: ['ui'] },
-  { key: 'analiticas', category: 'analitica', label: 'Analítica financiera', status: 'implemented', kind: 'toggle', default: false,
+  { key: 'analiticas', module: 'reports', label: 'Analítica financiera', status: 'implemented', kind: 'toggle', default: false,
     description: 'Ingresos, comisiones por profesional y PIN financiero.', enforcedIn: ['ui', 'backend'] },
 ];
 
@@ -119,6 +135,23 @@ const BY_KEY = Object.fromEntries(CAPABILITIES.map((c) => [c.key, c]));
 
 export function getCapability(key) {
   return BY_KEY[key] || null;
+}
+
+/** Capacidades de un módulo, en el orden del catálogo. */
+export function getModuleCapabilities(moduleKey) {
+  return CAPABILITIES.filter((c) => c.module === moduleKey);
+}
+
+/** Capacidades que dependen (directa o indirectamente) de `key`. */
+export function getDependents(key) {
+  const out = [];
+  const walk = (k) => {
+    for (const c of CAPABILITIES) {
+      if (c.requires === k && !out.includes(c)) { out.push(c); walk(c.key); }
+    }
+  };
+  walk(key);
+  return out;
 }
 
 // ───────────────────────── Normalización de valores ─────────────────────────
@@ -171,8 +204,11 @@ function readFromMap(map, cap) {
  * @param {object} args
  * @param {object|null} args.planFeatures   planes/{id}.features
  * @param {object|null} args.overrides      negocios/{id}.capabilityOverrides
- * @param {object|null} args.profileDefaults capabilityDefaults del tipo de negocio
- *                                        (businessProfileModel). Va entre plan y catálogo.
+ * @param {object|null} args.profileDefaults capabilityDefaults del tipo de negocio.
+ *                                        SOLO restringe: enabled:false o límite menor.
+ * @param {string[]|null} args.relevantModules módulos del tipo de negocio; las
+ *                                        capacidades de otros módulos se apagan
+ *                                        (salvo excepción). null = todos.
  * @returns {Record<string, {
  *   enabled: boolean, limit: number|null,
  *   source: 'core'|'override'|'plan'|'profile'|'default'|'soon'|'requires',
@@ -181,13 +217,15 @@ function readFromMap(map, cap) {
  *   blockedBy?: string
  * }>}
  */
-export function resolveCapabilities({ planFeatures = null, overrides = null, profileDefaults = null } = {}) {
+export function resolveCapabilities({ planFeatures = null, overrides = null, profileDefaults = null, relevantModules = null } = {}) {
   const result = {};
 
   for (const cap of CAPABILITIES) {
     const plan = readFromMap(planFeatures, cap);
     const override = readFromMap(overrides, cap);
     const profile = readFromMap(profileDefaults, cap);
+    const moduleOff = Array.isArray(relevantModules) && cap.module && !relevantModules.includes(cap.module);
+    const profileRestricts = moduleOff || (profile && profile.enabled === false);
 
     let enabled;
     let source;
@@ -197,10 +235,10 @@ export function resolveCapabilities({ planFeatures = null, overrides = null, pro
       enabled = true; source = 'core';
     } else if (override && typeof override.enabled === 'boolean') {
       enabled = override.enabled; source = 'override';
+    } else if (profileRestricts) {
+      enabled = false; source = 'profile';
     } else if (plan && typeof plan.enabled === 'boolean') {
       enabled = plan.enabled; source = 'plan';
-    } else if (profile && typeof profile.enabled === 'boolean') {
-      enabled = profile.enabled; source = 'profile';
     } else {
       enabled = !!cap.default; source = 'default';
     }
@@ -210,8 +248,12 @@ export function resolveCapabilities({ planFeatures = null, overrides = null, pro
     if (cap.limit) {
       if (override && hasOwn(override, 'limit')) { limit = override.limit; limitSource = 'override'; }
       else if (plan && hasOwn(plan, 'limit')) { limit = plan.limit; limitSource = 'plan'; }
-      else if (profile && hasOwn(profile, 'limit')) { limit = profile.limit; limitSource = 'profile'; }
       else { limit = cap.limit.defaultLimit ?? null; limitSource = 'default'; }
+      // El tipo de negocio solo puede BAJAR el límite (nunca subirlo).
+      const pl = profile && hasOwn(profile, 'limit') ? profile.limit : null;
+      if (limitSource !== 'override' && typeof pl === 'number' && (limit === null || pl < limit)) {
+        limit = pl; limitSource = 'profile';
+      }
     }
 
     result[cap.key] = { enabled, limit, source, limitSource, plan, override };

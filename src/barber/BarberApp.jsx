@@ -243,7 +243,7 @@ export default function App() {
   const negocioId = barberUser?.negocioId;
   const { businessSettings } = useBusinessSettings(negocioId);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
-  const { can: canUseCapability } = useNegocioPlan(negocioId);
+  const { can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
   // Tipo de negocio -> terminología (businessProfileModel).
   const businessProfile = useBusinessProfile(negocioId);
   const { t, tl, g } = businessProfile;
@@ -332,10 +332,13 @@ const staffPerms = useMemo(
   [activeBarber, permisosPersonalizados],
 );
 const isVisibleAppt = (appt) => staffPerms.viewOthersAppointments || matchesBarber(appt, activeBarber?.id);
+// Comisiones: permiso del profesional Y capacidad comercial `comisiones` del plan.
+// (Negocios sin plan: `comisiones` es false por defecto -> la pestaña no aparece.)
+const canSeeCommissions = staffPerms.viewCommissions && canUseCapability('comisiones');
 useEffect(() => {
-  if (activeTab === "comisiones" && !staffPerms.viewCommissions) setActiveTab("agenda");
+  if (activeTab === "comisiones" && !planLoading && !canSeeCommissions) setActiveTab("agenda");
   if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab("agenda");
-}, [activeTab, staffPerms]);
+}, [activeTab, staffPerms, canSeeCommissions, planLoading]);
 
 // --- RANGO DE FECHAS QUE MUESTRA LA PANTALLA (Día / Semana / Mes / Año) ---
 // Mes incluye las 42 celdas de la grilla (días de meses vecinos). Solo se descarga este rango.
@@ -1206,6 +1209,23 @@ const fetchByDate = async (subcollection, date) => {
 
   if (isBlocked) {
     return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
+  }
+
+  // Capacidad `appProfesionales`: el plan decide si el staff puede usar su panel.
+  // Mientras carga el plan no se bloquea nada (pantalla vacía, igual que arriba);
+  // si la lectura falla, useNegocioPlan resuelve el default (true) -> no se bloquea.
+  if (planLoading) {
+    return <div style={{ background: '#F8FAFC', width: '100vw', height: '100vh' }} />;
+  }
+  if (!canUseCapability('appProfesionales')) {
+    return (
+      <SuspendedScreen
+        status="not_included"
+        title="Acceso no incluido en el plan"
+        message="El plan de este negocio no incluye el panel para profesionales. Consulta con el administrador del negocio."
+        onLogout={logout}
+      />
+    );
   }
 
   return (
@@ -2172,7 +2192,7 @@ const fetchByDate = async (subcollection, date) => {
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
           { id: "rendimiento", label: "Rendimiento", icon: Icons.TrendingUp },
           { id: "perfil", label: "Perfil", icon: Icons.User }
-        ].filter(tab => (tab.id !== "comisiones" || staffPerms.viewCommissions) && (tab.id !== "rendimiento" || staffPerms.viewFinancials)).map(tab => {
+        ].filter(tab => (tab.id !== "comisiones" || canSeeCommissions) && (tab.id !== "rendimiento" || staffPerms.viewFinancials)).map(tab => {
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
