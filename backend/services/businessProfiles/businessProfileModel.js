@@ -22,8 +22,8 @@
 // (ver capabilityModel.js). Prioridad final de una capacidad:
 //   excepción del negocio > restricción del tipo > plan > catálogo.
 //
-// FUTURO (no implementado): negocios/{id}.terminologyOverrides para que Super
-// Admin personalice etiquetas por negocio. getTerm() ya acepta ese mapa.
+// Personalización por negocio: negocios/{id}.terminologyOverrides (ver
+// sección Terminología más abajo). Prioridad: negocio > tipo > genérico.
 
 // Claves de terminología. Internamente el código sigue usando
 // professional / client / service / appointment; la UI pide la etiqueta aquí.
@@ -134,23 +134,108 @@ export function getBusinessTypeLabel(type) {
   return getBusinessProfile(type).label;
 }
 
+// ───────────────────────── Terminología ─────────────────────────
+//
+// Prioridad: personalización del negocio > perfil del tipo > genérico ('otro').
+//
+// Personalización (opcional, solo textos, no afecta datos ni capacidades):
+//   negocios/{id}.terminologyOverrides = {
+//     [concept]: { singular: string, plural: string, gender: 'm'|'f' }
+//   }
+// Se personaliza el CONCEPTO completo para que singular, plural y género
+// nunca queden desparejos. Borrar la clave = volver al término del tipo.
+// Las personalizaciones son del negocio: se conservan si cambia el tipo.
+
+export const TERM_CONCEPTS = ['professional', 'client', 'service', 'appointment'];
+export const TERM_CONCEPT_LABELS = {
+  professional: 'Profesional', client: 'Cliente', service: 'Servicio', appointment: 'Cita',
+};
+export const TERM_MAX_LENGTH = 30;
+
+function cleanText(v) {
+  if (typeof v !== 'string') return '';
+  // Solo texto plano: sin etiquetas/llaves, espacios normalizados.
+  return v.replace(/[<>{}]/g, '').replace(/\s+/g, ' ').trim().slice(0, TERM_MAX_LENGTH);
+}
+
+/**
+ * Normaliza terminologyOverrides: solo conceptos conocidos, completos y
+ * válidos. Lo demás se descarta. Devuelve {} si no queda nada.
+ */
+export function cleanTerminologyOverrides(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const concept of TERM_CONCEPTS) {
+    const v = raw[concept];
+    if (!v || typeof v !== 'object') continue;
+    const singular = cleanText(v.singular);
+    const plural = cleanText(v.plural);
+    const gender = v.gender === 'f' ? 'f' : v.gender === 'm' ? 'm' : null;
+    if (singular && plural && gender) out[concept] = { singular, plural, gender };
+  }
+  return out;
+}
+
+/**
+ * Terminología efectiva de un negocio.
+ * @returns {{ terminology: Record<string,string>, gender: Record<string,'m'|'f'>,
+ *             customized: Record<string, boolean> }}
+ */
+export function resolveTerminology(profile, overrides = null) {
+  const generic = BUSINESS_PROFILES[DEFAULT_BUSINESS_TYPE];
+  const terminology = { ...generic.terminology, ...(profile?.terminology || {}) };
+  const gender = { ...generic.gender, ...(profile?.gender || {}) };
+  const customized = {};
+  const clean = cleanTerminologyOverrides(overrides);
+  for (const [concept, v] of Object.entries(clean)) {
+    terminology[concept] = v.singular;
+    terminology[`${concept}s`] = v.plural;
+    gender[concept] = v.gender;
+    customized[concept] = true;
+  }
+  return { terminology, gender, customized };
+}
+
 /**
  * Etiqueta visible para una clave de terminología.
- * @param {object} profile    resultado de getBusinessProfile
- * @param {string} key        una de TERM_KEYS
- * @param {object} [overrides] FUTURO: negocios/{id}.terminologyOverrides
+ * @param {object} profile     resultado de getBusinessProfile
+ * @param {string} key         una de TERM_KEYS
+ * @param {object} [overrides] negocios/{id}.terminologyOverrides
  */
 export function getTerm(profile, key, overrides = null) {
-  const custom = overrides?.[key];
-  if (typeof custom === 'string' && custom.trim()) return custom.trim();
-  return profile?.terminology?.[key] ?? BUSINESS_PROFILES[DEFAULT_BUSINESS_TYPE].terminology[key] ?? key;
+  return resolveTerminology(profile, overrides).terminology[key] ?? key;
 }
 
 /** 'm' | 'f' del sustantivo base (professional, client, service, appointment). */
-export function getTermGender(profile, key) {
+export function getTermGender(profile, key, overrides = null) {
   const base = String(key).replace(/s$/, '');
-  return profile?.gender?.[base] || 'm';
+  return resolveTerminology(profile, overrides).gender[base] || 'm';
 }
+
+/**
+ * Funciones de texto listas para usar (UI, backend o módulos sin React):
+ *   t('clients')                    -> "Pacientes"
+ *   tl('client')                    -> "paciente" (para frases)
+ *   g('appointment', 'Nuevo', 'Nueva') -> concordancia de género
+ * Sin tipo ni personalización devuelve los términos genéricos.
+ */
+export function createTerms(businessType = null, overrides = null) {
+  const profile = getBusinessProfile(businessType);
+  const { terminology, gender, customized } = resolveTerminology(profile, overrides);
+  const t = (key) => terminology[key] ?? key;
+  return {
+    type: profile.type,
+    profile,
+    terminology,
+    customized,
+    t,
+    tl: (key) => t(key).toLowerCase(),
+    g: (key, masc, fem) => (gender[String(key).replace(/s$/, '')] === 'f' ? fem : masc),
+  };
+}
+
+/** Términos genéricos (cuando todavía no se conoce el negocio). */
+export const GENERIC_TERMS = createTerms(null, null);
 
 /** true si el módulo (pestaña) es relevante para el rubro. */
 export function isModuleRelevant(profile, moduleKey) {

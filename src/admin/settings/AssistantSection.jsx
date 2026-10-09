@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { MessageCircle, ToggleRight, ToggleLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { db } from '../../firebase/config';
+import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 
 // Asistente de reservas por WhatsApp (backend en Railway).
 // Lee/escribe negocios/{negocioId}.assistantConfig:
@@ -30,6 +31,7 @@ function haceCuanto(iso) {
 }
 
 export default function AssistantSection({ negocioId }) {
+  const { tl, g } = useBusinessTerms();
   const [negocio, setNegocio] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -83,7 +85,7 @@ export default function AssistantSection({ negocioId }) {
           <h3 className="text-sm font-bold text-nexus-text">Asistente de WhatsApp</h3>
         </div>
         <p className="text-[11px] text-nexus-text-muted mb-4">
-          Tus clientes pueden reservar escribiendo a tu número de WhatsApp. Las citas aparecen en la agenda al instante.
+          Tus {tl('clients')} pueden reservar escribiendo a tu número de WhatsApp. {g('appointment', 'Los', 'Las')} {tl('appointments')} aparecen en la agenda al instante.
         </p>
 
         <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl flex items-start gap-3">
@@ -118,7 +120,7 @@ export default function AssistantSection({ negocioId }) {
             <p className="text-xs font-bold text-nexus-text">Responder automáticamente</p>
             <p className="text-[11px] text-nexus-text-muted">
               {activo
-                ? 'El asistente atiende y agenda citas.'
+                ? `El asistente atiende y agenda ${tl('appointments')}.`
                 : 'Apagado: responde que por ahora no se reciben reservas por WhatsApp.'}
             </p>
           </div>
@@ -142,10 +144,10 @@ export default function AssistantSection({ negocioId }) {
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
         <h3 className="text-sm font-bold text-nexus-text mb-3">Cómo funciona</h3>
         <ul className="space-y-2 text-[11px] text-nexus-text-secondary list-disc pl-4">
-          <li>El cliente elige uno o varios servicios, el profesional, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
-          <li>Con «Cualquier profesional» la cita queda como <b>Pendiente</b>: si solo un profesional está libre se asigna sola; si hay varios, decides tú.</li>
-          <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si el cliente escribe «menu», vuelve el asistente.</li>
-          <li>El profesional recibe la notificación de cada reserva nueva.</li>
+          <li>{g('client', 'El', 'La')} {tl('client')} elige {g('service', 'uno o varios', 'una o varias')} {tl('services')}, {g('professional', 'el', 'la')} {tl('professional')}, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
+          <li>Con «Cualquier {tl('professional')}» {g('appointment', 'el', 'la')} {tl('appointment')} queda como <b>Pendiente</b>: si solo {g('professional', 'un', 'una')} {tl('professional')} está libre se asigna {g('appointment', 'solo', 'sola')}; si hay {g('professional', 'varios', 'varias')}, decides tú.</li>
+          <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si {g('client', 'el', 'la')} {tl('client')} escribe «menu», vuelve el asistente.</li>
+          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva.</li>
         </ul>
       </div>
     </div>

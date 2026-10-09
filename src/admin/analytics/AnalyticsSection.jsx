@@ -399,7 +399,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       )}
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Reservas y clientes</h3>
+        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Reservas y {terms.tl('clients')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
             <p className="text-xs text-nexus-text-secondary uppercase font-mono">Canales de reservas</p>
@@ -427,7 +427,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">{terms.t('clients')} {terms.g('client', 'atendidos', 'atendidas')}</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes ?? '—'}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos ?? '—'}</b><span className="text-nexus-text-secondary">Nuevos</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'Nuevos', 'Nuevas')}</span></span>
             </div>
           </div>
 
@@ -435,7 +435,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico ?? '—'}</p>
             <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">{terms.t('clients')} totales</p>
             <div className="flex justify-center gap-6 text-sm">
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">activos</span></span>
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'activos', 'activas')}</span></span>
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d ?? '—'}</b><span className="text-nexus-text-secondary">sin volver</span></span>
             </div>
             {!historyDocs && (
@@ -456,7 +456,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       <section>
         <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">{terms.t('services')}</h3>
         <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
-          <p className="font-bold text-sm text-nexus-text">Gráfico de servicios</p>
+          <p className="font-bold text-sm text-nexus-text">Gráfico de {terms.tl('services')}</p>
           <p className="text-xs text-nexus-text-secondary mb-3">Ordenado por ingreso generado</p>
           {serviciosStats.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin datos en este período.</p>}
           {serviciosStats.length > 0 && (
@@ -488,7 +488,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       <section>
         <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">{terms.t('professionals')}</h3>
         <div className="space-y-2">
-          {profesionalesConFinanzas.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin profesionales.</p>}
+          {profesionalesConFinanzas.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin {terms.tl('professionals')}.</p>}
           {profesionalesConFinanzas.map((p) => (
             <div key={p.id} className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 cursor-pointer" onClick={() => p.finanzas && handleExpandBarber(p.id)}>
@@ -496,8 +496,8 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                   <p className="font-bold text-base text-nexus-text mb-1">{p.name}</p>
                   <div className="flex gap-4 text-sm text-nexus-text-secondary">
                     <span>{p.reservasAtendidas} reservas</span>
-                    <span>{p.serviciosRealizados} servicios</span>
-                    <span>{p.clientesAtendidos} clientes</span>
+                    <span>{p.serviciosRealizados} {terms.tl('services')}</span>
+                    <span>{p.clientesAtendidos} {terms.tl('clients')}</span>
                   </div>
                 </div>
                 {p.finanzas && (

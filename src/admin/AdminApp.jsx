@@ -25,7 +25,7 @@ import { calculateCommission, calculateCommissionForCita } from '../shared/commi
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { formatServicePrice } from '../shared/servicePricing/servicePricing';
-import { STAFF_PERMISSION_OPTIONS, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
+import { getStaffPermissionOptions, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
@@ -1374,24 +1374,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
   // colección de eventos/actividad en Firestore, así que se construye a partir
   // de createdAt/updatedAt + status de las citas reales (sin inventar eventos).
   const recentActivity = useMemo(() => {
+    const cita = tl('appointment');
     const STATUS_ACTIVITY_LABELS = {
-      completed: 'cita completada',
-      cancelled: 'cita cancelada',
-      'in-process': 'cita en atención',
-      confirmed: 'cita confirmada',
+      completed: `${cita} ${g('appointment', 'completado', 'completada')}`,
+      cancelled: `${cita} ${g('appointment', 'cancelado', 'cancelada')}`,
+      'in-process': `${cita} en atención`,
+      confirmed: `${cita} ${g('appointment', 'confirmado', 'confirmada')}`,
       pending: 'nueva reserva'
     };
     return (recentActivityDocs || [])
       .filter(r => r?.branch === selectedBranch)
       .map(r => {
         const isNew = !!r?.createdAt && r.createdAt === r.updatedAt;
-        const label = isNew ? 'nueva reserva' : (STATUS_ACTIVITY_LABELS[r?.status] || 'cita actualizada');
-        return { id: r?.id, clientName: r?.clientName || 'Cliente', label, ts: r?.updatedAt || r?.createdAt };
+        const label = isNew ? 'nueva reserva' : (STATUS_ACTIVITY_LABELS[r?.status] || `${cita} ${g('appointment', 'actualizado', 'actualizada')}`);
+        return { id: r?.id, clientName: r?.clientName || t('client'), label, ts: r?.updatedAt || r?.createdAt };
       })
       .filter(ev => !!ev.ts)
       .sort((a, b) => new Date(b.ts) - new Date(a.ts))
       .slice(0, 6);
-  }, [recentActivityDocs, selectedBranch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentActivityDocs, selectedBranch, businessProfile]);
 
   const formatActivityTime = (ts) => {
     try {
@@ -1415,7 +1417,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         if (res?.commissionPaid) comisionPagada += result.totalAmount;
         return {
           id: res?.id,
-          serviceName: res?.serviceName || res?.service || 'Servicio',
+          serviceName: res?.serviceName || res?.service || t('service'),
           date: res?.date,
           amount: result.totalAmount,
           isConfigured: result.allConfigured,
@@ -1432,7 +1434,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
         detalle,
       };
     });
-  }, [branchBarbers, rangeReservations, services]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchBarbers, rangeReservations, services, businessProfile]);
 
   const handleLiquidarComisiones = async (barb) => {
     const pendientes = (barb?.detalle || []).filter(d => !d.paid);
@@ -1512,12 +1515,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
     if (isClientRole) {
       const todayStr = formatDate(new Date());
       if (date < todayStr) {
-        return { isValid: false, message: 'No se permiten citas en fechas pasadas para clientes.' };
+        return { isValid: false, message: `No se permiten ${tl('appointments')} en fechas pasadas para ${tl('clients')}.` };
       }
       if (date === todayStr) {
         const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
         if (startVal < nowMin + 30) {
-          return { isValid: false, message: 'Las citas en línea deben agendarse con al menos 30 minutos de anticipación.' };
+          return { isValid: false, message: `${g('appointment', 'Los', 'Las')} ${tl('appointments')} en línea deben agendarse con al menos 30 minutos de anticipación.` };
         }
       }
     }
@@ -1605,7 +1608,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     try {
       await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true });
     } catch (err) {
-      triggerToast('Error al guardar el cliente: ' + err.message, 'error');
+      triggerToast(`Error al guardar ${g('client', 'el', 'la')} ${tl('client')}: ` + err.message, 'error');
     }
 
     const finalPrice = (isTuesday && serviceObj?.promoPrice) ? serviceObj.promoPrice : (serviceObj?.price || 120);
@@ -1647,7 +1650,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       triggerToast(`¡${t('appointment')} ${g('appointment', 'agendado', 'agendada')} con éxito!`);
       notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) {
-      triggerToast('Error al guardar la cita: ' + err.message, 'error');
+      triggerToast(`Error al guardar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, 'error');
       return;
     }
 
@@ -1715,7 +1718,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       };
     }
     try { await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true }); }
-    catch (err) { triggerToast('Error al guardar el cliente: ' + err.message, 'error'); }
+    catch (err) { triggerToast(`Error al guardar ${g('client', 'el', 'la')} ${tl('client')}: ` + err.message, 'error'); }
 
     const currentBranchObj = branches.find(b => b.name === selectedBranch) || branches[0];
 
@@ -1850,7 +1853,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         );
       } else {
         const cancelada = editingReservation.status === 'cancelled';
-        const changes = describeAppointmentChanges(before, updatedRecord, { professionals: barbers });
+        const changes = describeAppointmentChanges(before, updatedRecord, { professionals: barbers, terms: businessProfile });
         // Si no cambió nada relevante (se abrió y se guardó igual), no se molesta a nadie.
         if (cancelada || changes.length > 0) {
           notify(
@@ -1866,7 +1869,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       // El horario/estado cambió: reevalúa las Pendientes de esa fecha.
       reevaluatePending(negocioId, editingReservation.date);
     } catch (err) {
-      triggerToast('Error al modificar la cita: ' + err.message, 'error');
+      triggerToast(`Error al modificar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, 'error');
       return;
     }
 
@@ -1955,8 +1958,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), payload);
       bumpCitasTick();
       const changes = targetReservation
-        ? describeAppointmentChanges(targetReservation, { ...targetReservation, ...payload }, { professionals: barbers })
-        : [`Estado: ${getStatusLabel(status)}`];
+        ? describeAppointmentChanges(targetReservation, { ...targetReservation, ...payload }, { professionals: barbers, terms: businessProfile })
+        : [`Estado: ${getStatusLabel(status, businessProfile)}`];
       notify(
         status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,
         negocioId,
@@ -1984,7 +1987,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       setAutomationLogs(prev => [newLog, ...prev]);
     }
 
-    triggerToast(`Estado actualizado a ${status === 'completed' ? 'Completado' : status === 'in-process' ? 'En Atención' : 'Confirmada'}`);
+    triggerToast(`Estado actualizado a ${getStatusLabel(status, businessProfile)}`);
   };
 
   const handleDeleteReservation = async (id) => {
@@ -2074,7 +2077,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
   const handleCreateService = async (e) => {
     if (e) e.preventDefault();
     if (!newService.name.trim() || !newService.price) {
-      triggerToast('Por favor completa todos los campos del servicio.', 'error');
+      triggerToast(`Por favor completa todos los campos ${g('service', 'del', 'de la')} ${tl('service')}.`, 'error');
       return;
     }
 
@@ -2185,7 +2188,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     }
     const pinExists = barbers.some(b => b.id !== editingBarberId && b.pin === newBarber.pin);
     if (pinExists) {
-      triggerToast('El PIN biométrico ya está registrado por otro profesional.', 'error');
+      triggerToast(`El PIN biométrico ya está registrado por ${g('professional', 'otro', 'otra')} ${tl('professional')}.`, 'error');
       return false;
     }
     return true;
@@ -2266,7 +2269,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         triggerToast(`¡Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} actualizado!`);
         reevaluatePending(negocioId); // activo/horario/servicios pueden cambiar los candidatos
       } catch (err) {
-        triggerToast('Error al actualizar el profesional: ' + err.message, 'error');
+        triggerToast(`Error al actualizar ${g('professional', 'el', 'la')} ${tl('professional')}: ` + err.message, 'error');
       }
     } else {
       try {
@@ -2301,7 +2304,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
         triggerToast(`¡${t('professional')} ${g('professional', 'creado', 'creada')} con éxito!`);
       } catch (err) {
-        triggerToast('Error al crear el profesional: ' + err.message, 'error');
+        triggerToast(`Error al crear ${g('professional', 'el', 'la')} ${tl('professional')}: ` + err.message, 'error');
       }
     }
 
@@ -2345,7 +2348,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       triggerToast(`Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} eliminado con éxito.`);
       reevaluatePending(negocioId);
     } catch (err) {
-      triggerToast('Error al eliminar el profesional: ' + err.message, 'error');
+      triggerToast(`Error al eliminar ${g('professional', 'el', 'la')} ${tl('professional')}: ` + err.message, 'error');
     }
   };
 
@@ -3062,7 +3065,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     </div>
                   ) : (
                     <div className="flex-1 flex items-center justify-center text-center text-[11px] text-nexus-text-muted">
-                      No hay próximas citas
+                      No hay {g('appointment', 'próximos', 'próximas')} {tl('appointments')}
                     </div>
                   )}
                 </div>
@@ -5128,7 +5131,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         </span>
                         <input 
                           type="text" 
-                          placeholder="Buscar tratamiento..." 
+                          placeholder={`Buscar ${tl('service')}...`} 
                           value={serviceSearch}
                           onChange={(e) => setServiceSearch(e.target.value)}
                           className="w-full bg-nexus-surface border border-nexus-border rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-nexus-text outline-none"
@@ -5318,7 +5321,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       <p className="text-[9px] text-nexus-text-muted">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {STAFF_PERMISSION_OPTIONS.map(opt => {
+                      {getStaffPermissionOptions(businessProfile).map(opt => {
                         const enabled = normalizeStaffPermissions(newBarber.permissions)[opt.key];
                         return (
                           <label key={opt.key} className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${enabled ? 'bg-nexus-primary-soft border-nexus-primary/30' : 'bg-nexus-surface border-nexus-border'}`}>
@@ -5580,10 +5583,10 @@ const { businessSettings } = useBusinessSettings(negocioId);
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl max-h-full overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
-            <ServiceIcon className="w-5 h-5 text-nexus-primary" />
+              <ServiceIcon className="w-5 h-5 text-nexus-primary" />
               {editingServiceId ? `Editar ${t('service')}` : `Crear ${g('service', 'Nuevo', 'Nueva')} ${t('service')}`}
             </h3>
-            <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal del tratamiento.</p>
+            <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal {g('service', 'del', 'de la')} {tl('service')}.</p>
             
             <form onSubmit={handleCreateService} className="space-y-4">
               <div>

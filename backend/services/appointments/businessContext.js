@@ -6,6 +6,7 @@
 import { db } from '../../config/firebase.js';
 import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabilityModel.js';
 import { getNegocioAccess } from '../capabilities/capabilityService.js';
+import { createTerms } from '../businessProfiles/businessProfileModel.js';
 
 // Caché en memoria: el asistente lee el negocio en cada mensaje; con esto se
 // lee como máximo una vez por minuto por negocio (más rápido y menos lecturas).
@@ -55,6 +56,8 @@ async function leerContexto(negocioId) {
     isBlocked: isBlockedStatus(effectiveStatus),
     plan: negocio.plan || null,
     capabilities: access.capabilities,
+    // Terminología del negocio para los mensajes del bot (personalización > tipo > genérico).
+    terms: createTerms(negocio.businessType, negocio.terminologyOverrides),
     assistantConfig: negocio.assistantConfig || { enabled: false, capabilities: {} },
     // Tener whatsappPhoneNumberId ya es la activación; esto solo permite
     // apagarlo explícitamente con assistantConfig.enabled = false.

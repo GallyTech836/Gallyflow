@@ -63,6 +63,9 @@ async function readAccess(negocioId) {
     isBlocked: isBlockedStatus(status),
     planId,
     planName: plan?.name || null,
+    // Para textos (terminología) — no afectan capacidades.
+    businessType: negocio.businessType || null,
+    terminologyOverrides: negocio.terminologyOverrides || null,
     capabilities: resolveCapabilities({
       planFeatures: plan?.features || null,
       overrides: negocio.capabilityOverrides || null,

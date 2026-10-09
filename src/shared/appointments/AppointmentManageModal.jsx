@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trash2, ChevronDown } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
+import { getLabel } from './statusModel';
 import { formatServicePrice } from '../servicePricing/servicePricing';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 
@@ -155,7 +156,7 @@ export default function AppointmentManageModal({
                 onClick={() => setShowClientPhone(v => !v)}
                 className="flex-1 min-w-0 flex items-center justify-between gap-2 bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text text-left cursor-pointer"
               >
-                <span className="truncate font-bold">{appointment.clientName || 'Sin cliente'}</span>
+                <span className="truncate font-bold">{appointment.clientName || `Sin ${terms.tl('client')}`}</span>
                 <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-nexus-text-secondary transition-transform ${showClientPhone ? 'rotate-180' : ''}`} />
               </button>
               {canEdit('clientName') && (
@@ -177,7 +178,7 @@ export default function AppointmentManageModal({
               <div className="mt-1.5 bg-nexus-background border border-nexus-border rounded-lg p-2 space-y-1.5">
                 <input
                   type="text"
-                  placeholder="Buscar cliente por nombre o número..."
+                  placeholder={`Buscar ${terms.tl('client')} por nombre o número...`}
                   value={clientQuery}
                   onChange={(e) => setClientQuery(e.target.value)}
                   className="w-full bg-nexus-surface border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
@@ -195,13 +196,13 @@ export default function AppointmentManageModal({
                     </button>
                   ))}
                   {pickerClients.length === 0 && (
-                    <p className="p-2 text-[10px] text-nexus-text-muted text-center">No se encontraron clientes</p>
+                    <p className="p-2 text-[10px] text-nexus-text-muted text-center">No se encontraron {terms.tl('clients')}</p>
                   )}
                 </div>
               </div>
             )}
             {clientMissing && (
-              <p className="text-[10px] text-nexus-error-text mt-1">Selecciona un cliente para poder guardar la cita.</p>
+              <p className="text-[10px] text-nexus-error-text mt-1">Selecciona {terms.g('client', 'un', 'una')} {terms.tl('client')} para poder guardar {terms.g('appointment', 'el', 'la')} {terms.tl('appointment')}.</p>
             )}
           </div>
 
@@ -223,8 +224,8 @@ export default function AppointmentManageModal({
               {Array.isArray(candidateProfessionals) && (
                 <p className="text-[9px] text-nexus-text-muted mt-1">
                   {candidateProfessionals.length > 0
-                    ? 'Solo profesionales disponibles que realizan el servicio.'
-                    : 'Ningún profesional disponible realiza este servicio a esta hora.'}
+                    ? `Solo ${terms.tl('professionals')} disponibles que realizan ${terms.g('service', 'el', 'la')} ${terms.tl('service')}.`
+                    : `${terms.g('professional', 'Ningún', 'Ninguna')} ${terms.tl('professional')} disponible realiza ${terms.g('service', 'este', 'esta')} ${terms.tl('service')} a esta hora.`}
                 </p>
               )}
             </div>
@@ -240,7 +241,7 @@ export default function AppointmentManageModal({
                 <span className="truncate">
                   {currentServices.length > 0
                     ? currentServices.map(s => s.serviceName).join(', ')
-                    : 'Selecciona servicios...'}
+                    : `Selecciona ${terms.tl('services')}...`}
                 </span>
                 <span className="text-nexus-text-secondary ml-2">{showServicesList ? '▲' : '▼'}</span>
               </button>
@@ -294,11 +295,11 @@ export default function AppointmentManageModal({
                 }}
                 className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-bold disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <option value="pending">Por Confirmar</option>
-                <option value="confirmed">Confirmada</option>
-                <option value="in-process">En Atención</option>
-                <option value="completed">Completada (Pagado)</option>
-                <option value="cancelled">Cancelada (Inactiva)</option>
+                <option value="pending">{getLabel('pending', terms)}</option>
+                <option value="confirmed">{getLabel('confirmed', terms)}</option>
+                <option value="in-process">{getLabel('in-process', terms)}</option>
+                <option value="completed">{getLabel('completed', terms)} (Pagado)</option>
+                <option value="cancelled">{getLabel('cancelled', terms)} ({terms.g('appointment', 'Inactivo', 'Inactiva')})</option>
               </select>
             </div>
           </div>
@@ -307,7 +308,7 @@ export default function AppointmentManageModal({
               elegir un método real (no "Pendiente") para poder guardar. */}
           {isCompleting && (
             <div>
-              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">¿Cómo pagó el cliente? *</label>
+              <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">¿Cómo pagó {terms.g('client', 'el', 'la')} {terms.tl('client')}? *</label>
               <select
                 required
                 disabled={!canEdit('paymentMethod')}
@@ -324,7 +325,7 @@ export default function AppointmentManageModal({
               </select>
               {paymentMethodMissing && (
                 <p className="text-[10px] text-nexus-error-text mt-1">
-                  Elige el método de pago para poder guardar la cita como completada.
+                  Elige el método de pago para poder guardar {terms.g('appointment', 'el', 'la')} {terms.tl('appointment')} como {terms.g('appointment', 'completado', 'completada')}.
                 </p>
               )}
             </div>
@@ -353,7 +354,7 @@ export default function AppointmentManageModal({
               />
               {finalPriceMissing && (
                 <p className="text-[10px] text-nexus-error-text mt-1">
-                  Este servicio tiene precio variable: ingresa el precio final para poder guardar la cita como completada.
+                  {terms.g('service', 'Este', 'Esta')} {terms.tl('service')} tiene precio variable: ingresa el precio final para poder guardar {terms.g('appointment', 'el', 'la')} {terms.tl('appointment')} como {terms.g('appointment', 'completado', 'completada')}.
                 </p>
               )}
             </div>

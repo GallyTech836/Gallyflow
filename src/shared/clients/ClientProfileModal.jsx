@@ -9,7 +9,7 @@ import {
   buildClientHistory,
   normalizeClientProfile,
   CONTACT_CHANNELS,
-  BOOKING_CHANNEL_LABELS,
+  bookingChannelLabel,
 } from './clientHistoryModel';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 
@@ -77,7 +77,7 @@ export default function ClientProfileModal({
   const visibleTabs = TABS.filter((t) => !t.capability || allow(t.capability));
   const [tab, setTab] = useState('perfil');
   const { citas, loading, error, reload } = useClientCitas(negocioId, client);
-  const history = useMemo(() => buildClientHistory(client, citas, { professionals }), [client, citas, professionals]);
+  const history = useMemo(() => buildClientHistory(client, citas, { professionals, terms }), [client, citas, professionals, terms]);
   const profile = useMemo(() => normalizeClientProfile(client), [client]);
 
   // Borrador editable del perfil (se re-inicializa solo si cambia de cliente).
@@ -117,7 +117,7 @@ export default function ClientProfileModal({
   };
 
   const saveProfile = async () => {
-    if (!draft.name.trim()) { onToast('El nombre del cliente es obligatorio.', 'error'); return; }
+    if (!draft.name.trim()) { onToast(`El nombre ${terms.g('client', 'del', 'de la')} ${terms.tl('client')} es obligatorio.`, 'error'); return; }
     setSaving(true);
     try {
       await setDoc(clientRef(), {
@@ -129,7 +129,7 @@ export default function ClientProfileModal({
         preferences: draft.preferences,
         customFields: draft.customFields.filter((f) => f.label.trim()),
       }, { merge: true });
-      onToast('Ficha del cliente guardada.');
+      onToast(`Ficha ${terms.g('client', 'del', 'de la')} ${terms.tl('client')} guardada.`);
       setEditing(false);
     } catch (err) {
       onToast('Error al guardar la ficha: ' + err.message, 'error');
@@ -193,7 +193,7 @@ export default function ClientProfileModal({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 px-5 pb-5">
             {[
               [terms.t('appointments'), stats.total],
-              ['Completadas', stats.completed],
+              [terms.g('appointment', 'Completados', 'Completadas'), stats.completed],
               ['Total pagado', money(stats.totalPaid)],
               ['Última visita', fmtDate(stats.lastVisit || client.lastVisit)],
             ].map(([l, v]) => (
@@ -312,7 +312,7 @@ export default function ClientProfileModal({
 
           {/* ACTIVIDAD */}
           {tab === 'actividad' && !loading && !error && (
-            history.timeline.length === 0 ? <Empty>Este cliente aún no tiene actividad.</Empty> : (
+            history.timeline.length === 0 ? <Empty>{terms.g('client', 'Este', 'Esta')} {terms.tl('client')} aún no tiene actividad.</Empty> : (
               <ol className="relative border-l border-nexus-border ml-2 space-y-4">
                 {history.timeline.map((ev) => (
                   <li key={ev.id} className="pl-4 relative">
@@ -335,7 +335,7 @@ export default function ClientProfileModal({
 
           {/* CITAS */}
           {tab === 'citas' && !loading && !error && (
-            history.appointments.length === 0 ? <Empty>Sin citas registradas.</Empty> : (
+            history.appointments.length === 0 ? <Empty>Sin {terms.tl('appointments')} {terms.g('appointment', 'registrados', 'registradas')}.</Empty> : (
               <div className="space-y-2">
                 {history.appointments.map((a) => (
                   <div key={a.id} className="bg-nexus-background border border-nexus-border rounded-xl p-3">
@@ -345,7 +345,7 @@ export default function ClientProfileModal({
                     </div>
                     <p className="text-xs text-nexus-text mt-1">{a.serviceLabel}</p>
                     <p className="text-[10px] text-nexus-text-muted mt-0.5">
-                      {[a.professionalName, a.branch, a.bookedBy && (BOOKING_CHANNEL_LABELS[a.bookedBy] || a.bookedBy)].filter(Boolean).join(' · ')}
+                      {[a.professionalName, a.branch, a.bookedBy && bookingChannelLabel(a.bookedBy, terms)].filter(Boolean).join(' · ')}
                     </p>
                     {a.notes && <p className="text-[10px] italic text-nexus-text-secondary mt-1">Nota: {a.notes}</p>}
                   </div>
@@ -356,7 +356,7 @@ export default function ClientProfileModal({
 
           {/* SERVICIOS */}
           {tab === 'servicios' && !loading && !error && (
-            history.services.length === 0 ? <Empty>Sin servicios registrados.</Empty> : (
+            history.services.length === 0 ? <Empty>Sin {terms.tl('services')} {terms.g('service', 'registrados', 'registradas')}.</Empty> : (
               <div className="space-y-2">
                 {history.services.map((s) => (
                   <div key={s.key} className="flex items-center justify-between bg-nexus-background border border-nexus-border rounded-xl p-3">
@@ -401,7 +401,7 @@ export default function ClientProfileModal({
           {tab === 'notas' && (
             <div className="space-y-3">
               <div className="flex gap-2">
-                <textarea rows={2} className={inputCls} placeholder="Escribe una nota sobre este cliente..." value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+                <textarea rows={2} className={inputCls} placeholder={`Escribe una nota sobre ${terms.g('client', 'este', 'esta')} ${terms.tl('client')}...`} value={noteText} onChange={(e) => setNoteText(e.target.value)} />
                 <button onClick={addNote} disabled={!noteText.trim()} className="px-3 bg-nexus-primary text-white text-xs font-bold rounded-lg cursor-pointer disabled:opacity-40">Agregar</button>
               </div>
               {profile.notes.length === 0 ? <Empty>Sin notas.</Empty> : profile.notes.map((n) => (

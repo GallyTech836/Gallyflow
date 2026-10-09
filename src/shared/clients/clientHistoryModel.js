@@ -19,12 +19,20 @@ export const CONTACT_CHANNELS = [
   { value: 'email', label: 'Correo' },
 ];
 
+import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel';
+
 export const BOOKING_CHANNEL_LABELS = {
   admin: 'Panel de administración',
   barber: 'Profesional',
   client: 'Reserva online',
   whatsapp: 'WhatsApp',
 };
+
+/** Etiqueta del canal de reserva con la terminología del negocio. */
+export function bookingChannelLabel(channel, terms = GENERIC_TERMS) {
+  if (channel === 'barber') return terms.t('professional');
+  return BOOKING_CHANNEL_LABELS[channel] || channel;
+}
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'in-process'];
 
@@ -91,9 +99,11 @@ function eventTime(iso, fallbackDate, fallbackTime) {
  * Construye todo lo que muestra la ficha a partir del cliente y sus citas.
  * @param {Object} client
  * @param {Array}  citas   - citas ya filtradas del cliente
- * @param {Object} lookups - { professionals: [], todayStr: 'YYYY-MM-DD' }
+ * @param {Object} lookups - { professionals: [], todayStr: 'YYYY-MM-DD', terms }
+ *   terms: createTerms(...) del negocio (textos); por defecto genéricos.
  */
-export function buildClientHistory(client, citas = [], { professionals = [], todayStr } = {}) {
+export function buildClientHistory(client, citas = [], { professionals = [], todayStr, terms = GENERIC_TERMS } = {}) {
+  const { t, g } = terms;
   const today = todayStr || new Date().toISOString().split('T')[0];
   const profName = (id) => professionals.find((p) => p.id === id)?.name || '';
 
@@ -107,7 +117,7 @@ export function buildClientHistory(client, citas = [], { professionals = [], tod
         time: c.time || c.startTime || '',
         status,
         services,
-        serviceLabel: services.map((s) => s.serviceName).filter(Boolean).join(' + ') || c.serviceName || c.service || 'Servicio',
+        serviceLabel: services.map((s) => s.serviceName).filter(Boolean).join(' + ') || c.serviceName || c.service || t('service'),
         price: Number(c.price || 0),
         paymentMethod: c.paymentMethod || '',
         professionalName: profName(c.professionalId || c.barberId) || '',
@@ -130,7 +140,7 @@ export function buildClientHistory(client, citas = [], { professionals = [], tod
     if (a.status === 'cancelled') return;
     a.services.forEach((s) => {
       const key = s.serviceId || s.serviceName;
-      const entry = svcMap.get(key) || { key, name: s.serviceName || 'Servicio', count: 0, completed: 0, spent: 0, lastDate: '' };
+      const entry = svcMap.get(key) || { key, name: s.serviceName || t('service'), count: 0, completed: 0, spent: 0, lastDate: '' };
       entry.count += 1;
       if (a.status === 'completed') {
         entry.completed += 1;
@@ -167,20 +177,20 @@ export function buildClientHistory(client, citas = [], { professionals = [], tod
   appointments.forEach((a) => {
     timeline.push({
       id: `${a.id}-created`, kind: 'appointment', at: eventTime(a.createdAt, a.date, a.time),
-      title: 'Cita agendada',
-      detail: `${a.serviceLabel} · ${a.date} ${a.time}${a.bookedBy ? ` · ${BOOKING_CHANNEL_LABELS[a.bookedBy] || a.bookedBy}` : ''}`,
+      title: `${t('appointment')} ${g('appointment', 'agendado', 'agendada')}`,
+      detail: `${a.serviceLabel} · ${a.date} ${a.time}${a.bookedBy ? ` · ${bookingChannelLabel(a.bookedBy, terms)}` : ''}`,
     });
     if (a.status === 'completed') {
       timeline.push({
         id: `${a.id}-done`, kind: 'service', at: eventTime(a.updatedAt, a.date, a.time),
-        title: 'Servicio realizado',
+        title: `${t('service')} ${g('service', 'realizado', 'realizada')}`,
         detail: `${a.serviceLabel}${a.professionalName ? ` · ${a.professionalName}` : ''}`,
       });
     }
     if (a.status === 'cancelled') {
       timeline.push({
         id: `${a.id}-cancel`, kind: 'cancel', at: eventTime(a.updatedAt, a.date, a.time),
-        title: 'Cita cancelada', detail: `${a.serviceLabel} · ${a.date} ${a.time}`,
+        title: `${t('appointment')} ${g('appointment', 'cancelado', 'cancelada')}`, detail: `${a.serviceLabel} · ${a.date} ${a.time}`,
       });
     }
   });
@@ -195,7 +205,7 @@ export function buildClientHistory(client, citas = [], { professionals = [], tod
     timeline.push({ id: `note-${n.id}`, kind: 'note', at: n.createdAt || '', title: 'Nota agregada', detail: n.text });
   });
   if (client?.createdAt) {
-    timeline.push({ id: 'client-created', kind: 'client', at: client.createdAt, title: 'Cliente registrado', detail: '' });
+    timeline.push({ id: 'client-created', kind: 'client', at: client.createdAt, title: `${t('client')} ${g('client', 'registrado', 'registrada')}`, detail: '' });
   }
   timeline.sort((a, b) => String(b.at).localeCompare(String(a.at)));
 

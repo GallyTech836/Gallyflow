@@ -433,12 +433,12 @@ const fetchByDate = async (subcollection, date) => {
     e.preventDefault();
 
     if (!newClientName.trim()) {
-      triggerToast("Ingresa el nombre del cliente", "error");
+      triggerToast(`Ingresa el nombre ${g('client', 'del', 'de la')} ${tl('client')}`, "error");
       return;
     }
 
     if (!newService) {
-      triggerToast("Selecciona un servicio", "error");
+      triggerToast(`Selecciona ${g('service', 'un', 'una')} ${tl('service')}`, "error");
       return;
     }
 
@@ -463,7 +463,7 @@ const fetchByDate = async (subcollection, date) => {
     );
 
     if (duplicateAppt) {
-      triggerToast("Este profesional ya tiene una reserva agendada a esta hora.", "error");
+      triggerToast(`${g('professional', 'Este', 'Esta')} ${tl('professional')} ya tiene una reserva agendada a esta hora.`, "error");
       return;
     }
 
@@ -525,7 +525,7 @@ const fetchByDate = async (subcollection, date) => {
       notify(NotificationType.RESERVA_CREADA_BARBER, negocioId, { clientName: newAppt.clientName, time: newAppt.time }, barberUser?.id, barberUser?.id);
       reevaluatePending(negocioId, newAppt.date);
     } catch (err) {
-      triggerToast("Error al agendar la cita: " + err.message, "error");
+      triggerToast(`Error al agendar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, "error");
       return;
     }
 
@@ -539,11 +539,11 @@ const fetchByDate = async (subcollection, date) => {
   const handleCreateNewClient = async (e) => {
     e.preventDefault();
     if (!newClientModalName.trim()) {
-      triggerToast("Por favor, ingresa el nombre completo del cliente", "error");
+      triggerToast(`Por favor, ingresa el nombre completo ${g('client', 'del', 'de la')} ${tl('client')}`, "error");
       return;
     }
     if (!newClientModalPhone.trim()) {
-      triggerToast("Por favor, ingresa el teléfono del cliente", "error");
+      triggerToast(`Por favor, ingresa el teléfono ${g('client', 'del', 'de la')} ${tl('client')}`, "error");
       return;
     }
 
@@ -552,7 +552,7 @@ const fetchByDate = async (subcollection, date) => {
     const phoneExists = clientes.some(c => c.phone === formattedPhone);
 
     if (phoneExists) {
-      triggerToast("Ya existe un cliente registrado con ese número de teléfono", "error");
+      triggerToast(`Ya existe ${g('client', 'un', 'una')} ${tl('client')} ${g('client', 'registrado', 'registrada')} con ese número de teléfono`, "error");
       return;
     }
 
@@ -605,7 +605,7 @@ const fetchByDate = async (subcollection, date) => {
       try {
         citasDeLaFecha = await fetchByDate('citas', blockDate);
       } catch (err) {
-        triggerToast("No se pudo verificar las citas de esa fecha: " + err.message, "error");
+        triggerToast(`No se pudo verificar ${g('appointment', 'los', 'las')} ${tl('appointments')} de esa fecha: ` + err.message, "error");
         return;
       }
     }
@@ -616,7 +616,7 @@ const fetchByDate = async (subcollection, date) => {
     });
 
     if (conflictAppt) {
-      triggerToast(`Hay una cita existente con ${conflictAppt.clientName} en el rango seleccionado.`, "error");
+      triggerToast(`Hay ${g('appointment', 'un', 'una')} ${tl('appointment')} existente con ${conflictAppt.clientName} en el rango seleccionado.`, "error");
       return;
     }
 
@@ -691,7 +691,7 @@ const fetchByDate = async (subcollection, date) => {
     }
     // Cita original (antes de editar) para decir qué cambió en la notificación.
     const before = appointments.find(a => a.id === managingAppt.id);
-    const changes = describeAppointmentChanges(before, { ...before, ...payload });
+    const changes = describeAppointmentChanges(before, { ...before, ...payload }, { terms: businessProfile });
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, updatedAt: new Date().toISOString() });
       triggerToast(`${t('appointment')} ${g('appointment', 'actualizado', 'actualizada')}`);
@@ -1489,7 +1489,7 @@ const fetchByDate = async (subcollection, date) => {
                             {slotPendings.map(pa => (
                               <div key={pa.id} className="border border-dashed border-nexus-warning/60 bg-nexus-surface-hover text-nexus-warning-text rounded-2xl px-4 py-2 select-none">
                                 <span className="text-[10px] font-black tracking-widest uppercase block">PENDIENTE · {pa.time}</span>
-                                <span className="text-xs font-semibold block">Hay una reserva sin profesional asignado</span>
+                                <span className="text-xs font-semibold block">Hay una reserva sin {tl('professional')} {g('professional', 'asignado', 'asignada')}</span>
                                 <span className="text-[10px] opacity-80 block">{pa.serviceName}</span>
                               </div>
                             ))}
@@ -1687,7 +1687,7 @@ const fetchByDate = async (subcollection, date) => {
                       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-12 text-center">
                         <Icons.Dollar className="w-10 h-10 text-nexus-text-muted mx-auto mb-2" />
                         <span className="text-sm font-bold text-nexus-text-secondary block">No hay comisiones generadas</span>
-                        <p className="text-xs text-nexus-text-muted mt-1">Completa citas de la agenda para registrar su comisión.</p>
+                        <p className="text-xs text-nexus-text-muted mt-1">Completa {tl('appointments')} de la agenda para registrar su comisión.</p>
                       </div>
                     ) : (
                       commissionSummary.allFinalized.map((item) => (
@@ -1815,7 +1815,7 @@ const fetchByDate = async (subcollection, date) => {
                     <div className="h-64 flex items-center justify-center relative">
                       {performanceData.totalServicios === 0 ? (
                         <div className="h-full flex items-center justify-center text-xs text-nexus-text-muted">
-                          Sin servicios en este periodo
+                          Sin {tl('services')} en este periodo
                         </div>
                       ) : (
                         <>
@@ -1891,7 +1891,7 @@ const fetchByDate = async (subcollection, date) => {
 
                 <div className="space-y-3 pt-4">
                   <button 
-                    onClick={() => triggerToast("Tutorial de la App: ¡Prueba agendar una cita o completar un corte!", "info")}
+                    onClick={() => triggerToast(`Tutorial de la App: ¡Prueba agendar ${g('appointment', 'un', 'una')} ${tl('appointment')} o completar ${g('service', 'un', 'una')} ${tl('service')}!`, "info")}
                     className="w-full py-3 px-4 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-xs tracking-wider uppercase rounded-xl transition-all"
                   >
                     Ver Tutorial

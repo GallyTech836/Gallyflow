@@ -286,7 +286,7 @@ export default function AppointmentCreateModal({
                   </div>
                 ))}
                 {filteredClients.length === 0 && (
-                  <p className="p-3 text-[10px] text-nexus-text-muted text-center">No se encontraron clientes</p>
+                  <p className="p-3 text-[10px] text-nexus-text-muted text-center">No se encontraron {terms.tl('clients')}</p>
                 )}
               </div>
             )}
@@ -344,14 +344,14 @@ export default function AppointmentCreateModal({
               <span className="truncate">
                 {draft.serviceIds.length > 0
                   ? servicesForDate.filter(s => draft.serviceIds.includes(s.id)).map(s => s.name).join(', ')
-                  : 'Selecciona servicios...'}
+                  : `Selecciona ${terms.tl('services')}...`}
               </span>
               <span className="text-nexus-text-secondary ml-2">{showServicesList ? '▲' : '▼'}</span>
             </button>
             {showServicesList && (
               <div className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 mt-1 max-h-32 overflow-y-auto space-y-1">
                 {servicesForDate.length === 0 && (
-                  <p className="text-[10px] text-nexus-text-muted p-1">No hay servicios disponibles para el día seleccionado.</p>
+                  <p className="text-[10px] text-nexus-text-muted p-1">No hay {terms.tl('services')} disponibles para el día seleccionado.</p>
                 )}
                 {servicesForDate.map(s => (
                   <label key={s?.id} className="flex items-center gap-2 text-xs text-nexus-text cursor-pointer">
@@ -402,13 +402,13 @@ export default function AppointmentCreateModal({
               className="w-3.5 h-3.5 accent-nexus-warning cursor-pointer"
             />
             <label htmlFor="overtime-toggle" className="text-[10px] font-bold text-nexus-warning-text cursor-pointer select-none">
-              Ajuste de la duracion de los servicos.
+              Ajuste de la duración de {terms.g('service', 'los', 'las')} {terms.tl('services')}.
             </label>
           </div>
 
           {draft.overtime && draft.serviceIds.length > 0 && (
             <div className="p-3 bg-nexus-background border border-nexus-warning/20 rounded-lg space-y-2">
-              <label className="text-[9px] text-nexus-warning-text font-bold block">Duración por servicio (minutos)</label>
+              <label className="text-[9px] text-nexus-warning-text font-bold block">Duración por {terms.tl('service')} (minutos)</label>
               {services.filter(s => draft.serviceIds.includes(s?.id)).map(s => (
                 <div key={s?.id} className="flex items-center justify-between gap-2">
                   <span className="text-[10px] text-nexus-text-secondary truncate flex-1">{s?.name}</span>
@@ -462,7 +462,7 @@ export default function AppointmentCreateModal({
           </div>
 
           {!String(draft.clientName || '').trim() && (
-            <p className="text-[10px] text-nexus-error-text">Selecciona un cliente (o crea uno nuevo) para poder reservar.</p>
+            <p className="text-[10px] text-nexus-error-text">Selecciona {terms.g('client', 'un', 'una')} {terms.tl('client')} (o crea {terms.g('client', 'uno nuevo', 'una nueva')}) para poder reservar.</p>
           )}
 
           {/* ── Botones ──────────────────────────────────────── */}

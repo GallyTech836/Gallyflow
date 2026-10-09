@@ -668,7 +668,7 @@ export default function App({ negocioSlug } = {}) {
       }
       // Sin "await" a propósito: la confirmación visual (SuccessStep) no
       // debe esperar al diálogo de permiso de notificaciones del navegador.
-      confirmBookingToClient({ time: selectedHour });
+      confirmBookingToClient({ time: selectedHour, negocioId }); // negocioId: solo para la terminología del push
       setStep(6); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);
@@ -892,7 +892,7 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
                 )}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <DirectionsButton branch={b} compact />
-                  <WhatsAppButton phone={b.phone} message="Hola, quiero consultar sobre una cita." compact />
+                  <WhatsAppButton phone={b.phone} message={`Hola, quiero consultar sobre ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}.`} compact />
                 </div>
               </div>
               {selected?.id === b.id && (
@@ -1027,7 +1027,7 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
             
             <div className="flex-1 text-left">
               <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
-              <p className="text-nexus-text-secondary text-[11px] mt-0.5">{b.specialty}</p>
+              <p className="text-nexus-text-secondary text-[11px] mt-0.5">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
               {!b.isPending && (
                 <div className="flex items-center gap-1 mt-1">
                   <Star size={10} className="text-amber-400 fill-amber-400" />
@@ -1378,7 +1378,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
         </h2>
 
         <p className="text-nexus-text-secondary text-xs leading-relaxed max-w-xs mx-auto">
-          Tu cita quedó agendada. El profesionales seleccionado ya recibió la información y se preparará para tu llegada.
+          Tu {terms.tl('appointment')} {terms.g('appointment', 'quedó agendado', 'quedó agendada')}. {terms.g('professional', 'El', 'La')} {terms.tl('professional')} {terms.g('professional', 'seleccionado', 'seleccionada')} ya recibió la información y se preparará para tu llegada.
         </p>
       </div>
 
@@ -1427,7 +1427,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
             <div className="flex-1">
               <WhatsAppButton
                 phone={branch.phone}
-                message={`Hola, acabo de reservar una cita${fechaLegible ? ` para el ${fechaLegible}` : ''}${selectedHour ? ` a las ${selectedHour} Hrs` : ''}.`}
+                message={`Hola, acabo de reservar ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}${fechaLegible ? ` para el ${fechaLegible}` : ''}${selectedHour ? ` a las ${selectedHour} Hrs` : ''}.`}
               />
             </div>
           </div>

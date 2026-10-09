@@ -4,6 +4,7 @@
 // notificación "Reserva modificada". Función pura: la usan Admin y Barber.
 
 import { getLabel } from './statusModel';
+import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel';
 
 const txt = (v) => (v ?? '').toString().trim();
 
@@ -15,29 +16,31 @@ function serviceNames(cita) {
   return single ? [single] : [];
 }
 
-function professionalName(id, professionals) {
+function professionalName(id, professionals, terms) {
   if (!id || id === 'pending') return 'Sin asignar';
-  return professionals.find((p) => p?.id === id)?.name || 'Otro profesional';
+  return professionals.find((p) => p?.id === id)?.name || `${terms.g('professional', 'Otro', 'Otra')} ${terms.tl('professional')}`;
 }
 
-export function describeAppointmentChanges(before, after, { professionals = [] } = {}) {
+// terms: createTerms(...) del negocio; por defecto genéricos.
+export function describeAppointmentChanges(before, after, { professionals = [], terms = GENERIC_TERMS } = {}) {
   if (!before || !after) return [];
+  const { t, g } = terms;
   const out = [];
 
   if (after.status && before.status !== after.status) {
-    out.push(`Estado: ${getLabel(before.status)} → ${getLabel(after.status)}`);
+    out.push(`Estado: ${getLabel(before.status, terms)} → ${getLabel(after.status, terms)}`);
   }
 
   const bNames = serviceNames(before);
   const aNames = serviceNames(after);
   const added = aNames.filter((n) => !bNames.includes(n));
   const removed = bNames.filter((n) => !aNames.includes(n));
-  if (added.length && removed.length) out.push(`Servicio: ${bNames.join(' + ')} → ${aNames.join(' + ')}`);
-  else if (added.length) out.push(`Servicio agregado: ${added.join(', ')}`);
-  else if (removed.length) out.push(`Servicio quitado: ${removed.join(', ')}`);
+  if (added.length && removed.length) out.push(`${t('service')}: ${bNames.join(' + ')} → ${aNames.join(' + ')}`);
+  else if (added.length) out.push(`${t('service')} ${g('service', 'agregado', 'agregada')}: ${added.join(', ')}`);
+  else if (removed.length) out.push(`${t('service')} ${g('service', 'quitado', 'quitada')}: ${removed.join(', ')}`);
 
   if (txt(before.clientName) !== txt(after.clientName) && txt(after.clientName)) {
-    out.push(`Cliente: ${txt(before.clientName) || 'Sin cliente'} → ${txt(after.clientName)}`);
+    out.push(`${t('client')}: ${txt(before.clientName) || `Sin ${terms.tl('client')}`} → ${txt(after.clientName)}`);
   }
 
   if (txt(before.date) !== txt(after.date) && txt(after.date)) out.push(`Fecha: ${txt(before.date)} → ${txt(after.date)}`);
@@ -46,7 +49,7 @@ export function describeAppointmentChanges(before, after, { professionals = [] }
   const bPro = before.professionalId || before.barberId || 'pending';
   const aPro = after.professionalId || after.barberId || 'pending';
   if (bPro !== aPro) {
-    out.push(`Profesional: ${professionalName(bPro, professionals)} → ${professionalName(aPro, professionals)}`);
+    out.push(`${t('professional')}: ${professionalName(bPro, professionals, terms)} → ${professionalName(aPro, professionals, terms)}`);
   }
 
   if (before.price !== undefined && after.price !== undefined && Number(before.price) !== Number(after.price)) {

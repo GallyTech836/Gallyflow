@@ -29,13 +29,25 @@ export const STATUS_TRANSITIONS = {
   [STATUS.CANCELLED]: [],
 };
 
+// Variante masculina, para cuando el término de "cita" del negocio es
+// masculino (ej. personalizado como "Turno"). Solo cambia el texto.
+const STATUS_LABELS_MASC = {
+  ...STATUS_LABELS,
+  [STATUS.CONFIRMED]: 'Confirmado',
+  [STATUS.COMPLETED]: 'Completado',
+  [STATUS.CANCELLED]: 'Cancelado',
+};
+
 /**
  * Devuelve el label en español para un estado.
  * Si el estado no existe en el mapa, devuelve el valor crudo
  * (esto evita pantallas en blanco si llega un dato inesperado).
+ * @param {object} [terms] terminología del negocio (createTerms); concuerda
+ *   el género con el término de "cita". Sin terms = femenino (como siempre).
  */
-export function getLabel(status) {
-  return STATUS_LABELS[status] || status || STATUS_LABELS[STATUS.PENDING];
+export function getLabel(status, terms = null) {
+  const labels = terms?.g?.('appointment', 'm', 'f') === 'm' ? STATUS_LABELS_MASC : STATUS_LABELS;
+  return labels[status] || status || labels[STATUS.PENDING];
 }
 
 /**

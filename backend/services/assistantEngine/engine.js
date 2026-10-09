@@ -21,6 +21,7 @@ import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
 import { canUse } from '../capabilities/capabilityModel.js';
+import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -121,7 +122,14 @@ function prosElegidos(ctx, conv) {
 // Opciones "Cualquier profesional": una por sucursal con 2+ profesionales que
 // hacen los servicios. La cita Pendiente se guarda con esa sucursal (la agenda
 // de AdminApp filtra por sucursal) y solo compiten candidatos de esa sucursal.
-function opcionesCualquiera(pros) {
+// Título que cabe en el límite de WhatsApp; si el término del negocio es muy
+// largo usa una alternativa corta en vez de cortar la palabra a la mitad.
+function cabe(texto, max, alternativa) {
+  return String(texto).length <= max ? texto : alternativa;
+}
+
+function opcionesCualquiera(pros, terms = GENERIC_TERMS) {
+  const base = cabe(`Cualquier ${terms.tl('professional')}`, 24, 'Cualquiera disponible');
   const porSucursal = new Map();
   for (const p of pros) {
     const b = p.branch || '';
@@ -132,7 +140,7 @@ function opcionesCualquiera(pros) {
   return grupos.map(([branch, ids]) => ({
     branch,
     candidateIds: ids,
-    label: grupos.length > 1 && branch ? `Cualquier profesional (${branch})` : 'Cualquier profesional',
+    label: grupos.length > 1 && branch ? `${base} (${branch})` : base,
   }));
 }
 
@@ -335,7 +343,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
 
       const elegidos = indices.map((i) => servicios[i]);
       if (profesionalesPara(context, elegidos.map((s) => s.id)).length === 0) {
-        return responder(prefijo(`Ningún profesional realiza todos esos servicios juntos. Elige de nuevo.\n\n`, mensajeServicios(context)), conversation);
+        const { tl, g } = context.terms;
+        return responder(prefijo(`${g('professional', 'Ningún', 'Ninguna')} ${tl('professional')} realiza ${g('service', 'todos esos', 'todas esas')} ${tl('services')} ${g('service', 'juntos', 'juntas')}. Elige de nuevo.\n\n`, mensajeServicios(context)), conversation);
       }
       conversation = await updateConversation(negocioId, phone, { selectedServices: elegidos.map(aServicioCita) });
       return irAProfesionales();
@@ -362,7 +371,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
         return responder(mensajeServiciosExtra(), conversation);
       }
       const idx = parseInt(texto, 10) - 1;
-      const opciones = opcionesCualquiera(pros);
+      const opciones = opcionesCualquiera(pros, context.terms);
       const profesional = pros[idx];
       const cualquiera = opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null);
       if (!profesional && !cualquiera) return responder(prefijo(`No entendí. \n\n`, mensajeProfesionales(pros)), conversation);
@@ -499,9 +508,10 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
       conQuien = ` con ${conv.selectedStaff.name}`;
     }
 
-    const notaPendiente = esPendiente && !conQuien ? '\nEn breve el negocio te asignará un profesional.' : '';
+    const { t, tl, g } = context.terms;
+    const notaPendiente = esPendiente && !conQuien ? `\nEn breve el negocio te asignará ${g('professional', 'un', 'una')} ${tl('professional')}.` : '';
     conversation = await resetConversation(negocioId, phone);
-    return responder(`✅ Cita confirmada para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ¡Gracias!${notaPendiente}`, conversation);
+    return responder(`✅ ${t('appointment')} ${g('appointment', 'confirmado', 'confirmada')} para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ¡Gracias!${notaPendiente}`, conversation);
   }
 
   function aServicioCita(s) {
@@ -554,7 +564,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     }
     // Sin lugar en los próximos días: volver a elegir profesional.
     const opciones = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
-    const quien = conversation.selectedStaff?.name || 'Ese profesional';
+    const quien = conversation.selectedStaff?.name || `${context.terms.g('professional', 'Ese', 'Esa')} ${context.terms.tl('professional')}`;
     conversation = await updateConversation(negocioId, phone, {
       currentFlow: 'choosing_staff',
       staffOptionsIds: opciones.map((p) => p.id),
@@ -655,59 +665,69 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   }
 
   function mensajeBienvenida(ctx, nombre = null, repetir = null) {
+    const { tl, g } = ctx.terms;
+    const cita = tl('appointment');
     const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋`;
     if (repetir) {
       const ultima = `${repetir.services.map((x) => x.serviceName).join(' + ')} con ${repetir.staff.name}`;
-      const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?\n\n¿Repetimos tu última cita?\n${ultima}`;
+      const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?\n\n¿Repetimos tu ${g('appointment', 'último', 'última')} ${cita}?\n${ultima}`;
       return menuBotones({
-        texto: `${cuerpo}\n\nEscribe "repetir", 1 para agendar otra cita o 2 para hablar con alguien.`,
+        texto: `${cuerpo}\n\nEscribe "repetir", 1 para agendar ${g('appointment', 'otro', 'otra')} ${cita} o 2 para hablar con alguien.`,
         cuerpo,
-        botones: [{ id: 'repetir', title: 'Repetir cita' }, { id: '1', title: 'Agendar cita' }, { id: '2', title: 'Hablar con alguien' }],
+        botones: [{ id: 'repetir', title: cabe(`Repetir ${cita}`, 20, 'Repetir') }, { id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
       });
     }
     const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?`;
     return menuBotones({
-      texto: `${saludo} Soy el asistente de ${ctx.businessName}.\n\n1. Agendar una cita\n2. Hablar con alguien`,
+      texto: `${saludo} Soy el asistente de ${ctx.businessName}.\n\n1. Agendar ${g('appointment', 'un', 'una')} ${cita}\n2. Hablar con alguien`,
       cuerpo,
-      botones: [{ id: '1', title: 'Agendar cita' }, { id: '2', title: 'Hablar con alguien' }],
+      botones: [{ id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
     });
   }
   function mensajeServicios(ctx) {
+    const { tl } = ctx.terms;
     const servicios = serviciosOfrecidos(ctx);
-    if (servicios.length === 0) return 'Por ahora no hay servicios disponibles para reservar.';
+    if (servicios.length === 0) return `Por ahora no hay ${tl('services')} disponibles para reservar.`;
     const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s)}`);
+    const pregunta = `¿Qué ${tl('service')} deseas?`;
     return menuLista({
-      texto: `¿Qué servicio deseas?\n\n${lista}`,
-      cuerpo: '¿Qué servicio deseas?',
-      boton: 'Ver servicios',
+      texto: `${pregunta}\n\n${lista}`,
+      cuerpo: pregunta,
+      boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
       items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s)} · ${duracionServicio(s)} min` })),
       page: paginaActual(),
     });
   }
   // Solo los que se pueden sumar; el id es la posición en la lista completa de servicios.
   function mensajeServiciosExtra() {
+    const { tl } = context.terms;
     const todos = serviciosOfrecidos(context);
     const extras = serviciosExtraCompatibles();
     return menuLista({
-      texto: `¿Qué servicio agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s)}`).join('\n')}`,
-      cuerpo: `Elegiste: ${nombresServicios(conversation)}.\n¿Qué servicio agregas?`,
-      boton: 'Ver servicios',
+      texto: `¿Qué ${tl('service')} agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s)}`).join('\n')}`,
+      cuerpo: `Elegiste: ${nombresServicios(conversation)}.\n¿Qué ${tl('service')} agregas?`,
+      boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
       items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s)} · ${duracionServicio(s)} min` })),
       page: paginaActual(),
     });
   }
   function mensajeProfesionales(pros) {
-    const opciones = opcionesCualquiera(pros);
+    const { tl, g } = context.terms;
+    const opciones = opcionesCualquiera(pros, context.terms);
     const items = [...pros.map((p) => ({ title: p.name })), ...opciones.map((o) => ({ title: o.label, description: 'El primero disponible' }))];
     const puedeAgregar = serviciosExtraCompatibles().length > 0;
     const elegido = nombresServicios(conversation);
     const titulo = `${elegido ? `Elegiste: ${elegido}.\n` : ''}¿Con quién deseas atenderte?`;
     return menuLista({
-      texto: `${titulo}\n\n${listaNumerada(items, (i) => i.title)}${puedeAgregar ? '\n\n(Escribe "agregar" para sumar otro servicio)' : ''}`,
+      texto: `${titulo}\n\n${listaNumerada(items, (i) => i.title)}${puedeAgregar ? `\n\n(Escribe "agregar" para sumar ${g('service', 'otro', 'otra')} ${tl('service')})` : ''}`,
       cuerpo: titulo,
-      boton: 'Ver profesionales',
+      boton: cabe(`Ver ${tl('professionals')}`, 20, 'Ver opciones'),
       items,
-      fijas: puedeAgregar ? [{ id: 'agregar', title: '➕ Agregar servicio', description: 'Sumar otro servicio a esta cita' }] : [],
+      fijas: puedeAgregar ? [{
+        id: 'agregar',
+        title: cabe(`➕ Agregar ${tl('service')}`, 24, '➕ Agregar otro'),
+        description: `Sumar ${g('service', 'otro', 'otra')} ${tl('service')} a ${g('appointment', 'este', 'esta')} ${tl('appointment')}`,
+      }] : [],
       page: paginaActual(),
     });
   }
@@ -736,7 +756,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
     });
   }
   function mensajeResumen(conv) {
-    const resumen = `Confirma tu cita:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}`;
+    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}`;
     return menuBotones({
       texto: `${resumen}\n\n1. Confirmar\n2. Cancelar\n(Escribe "nombre" para cambiar el nombre)`,
       cuerpo: resumen,

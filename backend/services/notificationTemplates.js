@@ -1,7 +1,13 @@
 // services/notificationTemplates.js
+//
+// `terms`: terminología del negocio (createTerms). Sin negocio -> genéricos.
 
-export function buildMessage(tipo, data = {}) {
-  const cliente = data.clientName ? data.clientName : 'Un cliente';
+import { GENERIC_TERMS } from './businessProfiles/businessProfileModel.js';
+
+export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
+  const { t, tl, g } = terms;
+  const cliente = data.clientName ? data.clientName : `${g('client', 'Un', 'Una')} ${tl('client')}`;
+  const servicio = data.serviceName || t('service');
   const hora = data.time ? ` a las ${data.time}` : '';
 
   switch (tipo) {
@@ -10,9 +16,9 @@ export function buildMessage(tipo, data = {}) {
     case 'RESERVA_CREADA_ADMIN':
       return { titulo: '🔔¡Nueva reserva!', cuerpo: `Se registró una reserva${hora} con ${cliente}.` };
     case 'RESERVA_CREADA_BARBER':
-      return { titulo: '🔔¡Nueva reserva!', cuerpo: `Un profesional registró una reserva${hora} con ${cliente}.` };
+      return { titulo: '🔔¡Nueva reserva!', cuerpo: `${g('professional', 'Un', 'Una')} ${tl('professional')} registró una reserva${hora} con ${cliente}.` };
       case 'CLIENTE_QUIERE_HABLAR':
-        return { titulo: '💬 Un cliente quiere hablar', cuerpo: `${cliente}${data.clientPhone ? ` (${data.clientPhone})` : ''} pidió hablar con alguien por WhatsApp.` };
+        return { titulo: `💬 ${g('client', 'Un', 'Una')} ${tl('client')} quiere hablar`, cuerpo: `${cliente}${data.clientPhone ? ` (${data.clientPhone})` : ''} pidió hablar con alguien por WhatsApp.` };
       case 'RESERVA_CANCELADA':
       return { titulo: '🔔¡Reserva cancelada!', cuerpo: `Se canceló la reserva de ${cliente}${hora}.` };
     case 'RESERVA_MODIFICADA': {
@@ -28,21 +34,21 @@ export function buildMessage(tipo, data = {}) {
     }
     case 'RECORDATORIO_CITA':
       return {
-        titulo: `⏰ Tu cita es en ${data.minutes || 30} min`,
-        cuerpo: `${data.serviceName || 'Servicio'}${data.time ? ` · ${data.time}` : ''}\nCliente: ${cliente}`,
+        titulo: `⏰ Tu ${tl('appointment')} es en ${data.minutes || 30} min`,
+        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\n${t('client')}: ${cliente}`,
       };
     case 'RESERVA_PENDIENTE':
       return {
         titulo: '🔔 Nueva reserva pendiente',
-        cuerpo: `${data.serviceName || 'Servicio'}${data.time ? ` · ${data.time}` : ''}\nEsta reserva aún no tiene profesional asignado.`,
+        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nEsta reserva aún no tiene ${tl('professional')} ${g('professional', 'asignado', 'asignada')}.`,
       };
     case 'RESERVA_PENDIENTE_ASIGNADA':
       return {
         titulo: '✅ Reserva asignada',
-        cuerpo: `${data.serviceName || 'Servicio'}${data.time ? ` · ${data.time}` : ''}\nSe te asignó la reserva de ${cliente}.`,
+        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nSe te asignó la reserva de ${cliente}.`,
       };
     case 'RESERVA_CONFIRMADA_CLIENTE':
-      return { titulo: '✅ ¡Reserva confirmada!', cuerpo: `Tu cita${hora} quedó agendada. ¡Te esperamos!` };
+      return { titulo: '✅ ¡Reserva confirmada!', cuerpo: `Tu ${tl('appointment')}${hora} ${g('appointment', 'quedó agendado', 'quedó agendada')}. ¡Te esperamos!` };
     default:
       return { titulo: 'GallyFlow', cuerpo: 'Tienes una actualización en tus reservas.' };
   }

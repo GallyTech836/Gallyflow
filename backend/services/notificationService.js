@@ -6,6 +6,7 @@
 import { db } from '../config/firebase.js';
 import { logger } from '../utils/logger.js';
 import { buildMessage } from './notificationTemplates.js';
+import { getBusinessTerms } from './businessProfiles/businessTerms.js';
 import * as oneSignalProvider from './providers/oneSignalProvider.js';
 import * as whatsappProvider from './providers/whatsappProvider.js';
 import * as emailProvider from './providers/emailProvider.js';
@@ -65,7 +66,10 @@ export async function sendDirectNotification({ oneSignalId, tipo, data }) {
     return { sent: 0, skipped: true, reason: 'sin oneSignalId' };
   }
 
-  const mensaje = buildMessage(tipo, data);
+  // El cliente no está asociado a `usuarios`; si el front manda data.negocioId
+  // se usa solo para la terminología. Sin él -> términos genéricos.
+  const terms = await getBusinessTerms(data?.negocioId);
+  const mensaje = buildMessage(tipo, data, terms);
 
   try {
     await PROVIDERS.push.send(oneSignalId, mensaje);
@@ -90,7 +94,8 @@ export async function sendNotification({ tipo, negocioId, data, actorUid, target
     return { sent: 0, total: 0 };
   }
 
-  const mensaje = buildMessage(tipo, data);
+  const terms = await getBusinessTerms(negocioId);
+  const mensaje = buildMessage(tipo, data, terms);
 
   const results = await Promise.allSettled(
     recipients.map((r) => PROVIDERS.push.send(r.oneSignalId, mensaje, APP_URLS[r.rol]))

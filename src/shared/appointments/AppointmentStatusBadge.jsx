@@ -1,4 +1,5 @@
 import { STATUS, getLabel } from './statusModel';
+import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 
 // Cada variante define SOLO sus clases visuales: el wrapper base,
 // el tamaño y la paleta de color por estado. La lógica (qué estado,
@@ -58,7 +59,8 @@ export default function AppointmentStatusBadge({ status, variant = 'admin', size
   const config = VARIANTS[variant] || VARIANTS.admin;
   const color = config.colors[status] || config.defaultColor;
   const sizeClass = config.sizeClasses[size] || config.sizeClasses.sm;
-  const label = getLabel(status);
+  const terms = useBusinessTerms();
+  const label = getLabel(status, terms);
 
   return (
     <span className={`${config.wrapperBase} ${color} ${sizeClass}`}>
