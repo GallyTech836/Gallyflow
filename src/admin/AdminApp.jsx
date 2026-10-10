@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, CreditCard as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -1110,10 +1110,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
       const monthNamesFull = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       
       if (view === 'dia') {
-        const d = String(date.getDate()).padStart(2, '0');
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const y = date.getFullYear();
-        return `${d}/${m}/${y}`;
+        const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        return `${dayNames[date.getDay()]}, ${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
       }
       if (view === 'semana') {
         const day = date.getDay();
@@ -1128,7 +1126,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
         const endMonth = monthNames[endOfWeek.getMonth()];
         const year = endOfWeek.getFullYear();
 
-        return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}`;
+        if (startOfWeek.getFullYear() !== endOfWeek.getFullYear()) {
+          return `${startDay} ${startMonth} ${startOfWeek.getFullYear()} – ${endDay} ${endMonth} ${year}`;
+        }
+        if (startMonth !== endMonth) return `${startDay} ${startMonth} – ${endDay} ${endMonth} ${year}`;
+        return `${startDay}–${endDay} ${endMonth} ${year}`;
       }
       if (view === 'mes') {
         return `${monthNamesFull[date.getMonth()]} ${date.getFullYear()}`;
@@ -2630,7 +2632,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
-    <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
+    <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-hidden relative">
       
       {isMobileSidebarOpen && (
         <div
@@ -2840,7 +2842,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         </nav>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main className="relative flex-1 flex flex-col min-w-0 overflow-y-auto">
 
         {/* CABECERA (Fase 4). En celular: menú + título + acción principal en una
             fila, y los controles de periodo/sucursal debajo, con áreas de 40px. */}
@@ -2915,12 +2917,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   onClick={handlePrevPeriod}
                   aria-label="Periodo anterior"
                   title="Periodo anterior"
-                  className="h-full w-10 inline-flex items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-r border-nexus-border shrink-0 cursor-pointer"
+                  className="h-full w-9 sm:w-10 inline-flex items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-r border-nexus-border shrink-0 cursor-pointer"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
 
-                <div className="flex-1 flex items-center justify-center px-3 text-sm text-nexus-text font-semibold nx-num select-none sm:min-w-[136px] whitespace-nowrap" aria-live="polite">
+                <div className="flex-1 min-w-0 flex items-center justify-center px-1.5 sm:px-3 text-sm text-nexus-text font-semibold nx-num select-none sm:min-w-[170px] whitespace-nowrap" aria-live="polite">
                   {getFormattedDateLabel(selectedDate, agendaView)}
                 </div>
 
@@ -2929,19 +2931,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   onClick={handleNextPeriod}
                   aria-label="Periodo siguiente"
                   title="Periodo siguiente"
-                  className="h-full w-10 inline-flex items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-l border-nexus-border shrink-0 cursor-pointer"
+                  className="h-full w-9 sm:w-10 inline-flex items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-l border-nexus-border shrink-0 cursor-pointer"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
 
-              <label className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg h-10 pl-2.5 pr-1 text-sm text-nexus-text gap-1.5 shrink-0 max-w-[45%] sm:max-w-none">
+              <label className={`items-center bg-nexus-surface border border-nexus-border rounded-lg h-10 pl-2.5 pr-1 text-sm text-nexus-text gap-1.5 shrink-0 ${(branches || []).length > 1 ? 'flex order-last w-full sm:order-none sm:w-auto' : 'hidden sm:flex'}`}>
                 <MapPin className="w-4 h-4 text-nexus-primary shrink-0" aria-hidden="true" />
                 <span className="sr-only">Sucursal</span>
                 <select
                   value={selectedBranch || ''}
                   onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="h-full min-w-0 bg-transparent border-0 outline-none text-nexus-text font-semibold cursor-pointer text-base sm:text-sm truncate"
+                  className="h-full min-w-0 flex-1 sm:flex-none bg-transparent border-0 outline-none text-nexus-text font-semibold cursor-pointer text-base sm:text-sm truncate"
                 >
                   {(branches || []).map(b => (
                     <option key={b?.id || b?.name} value={b?.name} className="bg-nexus-surface">{b?.name}</option>
@@ -5510,7 +5512,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-nexus-surface flex justify-end gap-2.5 pt-3 pb-1 border-t border-nexus-border">
+              <div className="sticky -bottom-5 sm:-bottom-6 z-20 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 px-5 sm:px-6 pt-3 pb-5 sm:pb-6 bg-nexus-surface flex justify-end gap-2.5 border-t border-nexus-border">
                 <button 
                   type="button" 
                   onClick={() => {
