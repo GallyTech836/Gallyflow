@@ -1542,7 +1542,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     });
   }, [branchBarbers, selectedDate, agendaView]);
 
-  const hoursRange = Array.from({ length: 28 }, (_, i) => 8 + i * 0.5);
+  
 
   const formatHourLabel = (h) => {
     const hh = Math.floor(h);
@@ -2917,7 +2917,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 size="sm"
                 icon={Plus}
                 onClick={() => {
-                  setNewReservation(prev => ({ ...prev, date: selectedDate }));
+                  setNewReservation(prev => ({ ...prev, date: selectedDate, professionalId: 'pending', barberId: 'pending', time: '' }));
                   setActiveModal('add-reservation');
                 }}
               >
@@ -3001,7 +3001,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <Button
                     icon={Plus}
                     onClick={() => {
-                      setNewReservation(prev => ({ ...prev, date: selectedDate }));
+                      setNewReservation(prev => ({ ...prev, date: selectedDate, professionalId: 'pending', barberId: 'pending', time: '' }));
                       setActiveModal('add-reservation');
                     }}
                   >
@@ -3149,12 +3149,23 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 // una cita de 30 min muestre hora, nombre y servicio sin cortarse.
                 const SLOT_PX = 48;
                 const PX_PER_MIN = SLOT_PX / 30;
-                const GRID_START_MIN = 480;
+                const dayStarts = [480], dayEnds = [1320];
+                (filteredReservations || []).forEach(r => {
+                  const st = timeToMin(r?.time || '12:00');
+                  dayStarts.push(st); dayEnds.push(st + getReservationDuration(r, services));
+                });
+                (blockouts || []).filter(bl => bl?.date === selectedDate).forEach(bl => {
+                  dayStarts.push(timeToMin(bl?.startTime)); dayEnds.push(timeToMin(bl?.endTime));
+                });
+                const GRID_START_MIN = Math.max(0, Math.floor(Math.min(...dayStarts.filter(Number.isFinite)) / 60) * 60);
+                const GRID_END_MIN = Math.min(24 * 60, Math.ceil(Math.max(...dayEnds.filter(Number.isFinite)) / 60) * 60);
+                const gridHours = [];
+                for (let m = GRID_START_MIN; m < GRID_END_MIN; m += 30) gridHours.push(m / 60);
                 const HOUR_COL_PX = 56;
                 const COL_MIN_PX = 150;
                 const dayMinWidth = HOUR_COL_PX + totalCols * COL_MIN_PX;
                 const toTop = (min) => (min - GRID_START_MIN) * PX_PER_MIN;
-                const showNowLine = selectedDate === formatDate(new Date()) && currentTimeMinutes >= 480 && currentTimeMinutes <= 1320;
+                const showNowLine = selectedDate === formatDate(new Date()) && currentTimeMinutes >= GRID_START_MIN && currentTimeMinutes <= GRID_END_MIN;
                 return (
                 <div className="space-y-3">
                   {/* Filtro de profesional (solo vista; usa el filtro que ya existía). En
@@ -3233,7 +3244,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                         {/* COLUMNA DE HORAS (fija a la izquierda) */}
                         <div style={{ width: HOUR_COL_PX }} className="sticky left-0 z-20 shrink-0 bg-nexus-surface border-r border-nexus-border">
-                          {hoursRange.map(hour => (
+                        {gridHours.map(hour => (
                             <div key={hour} style={{ height: SLOT_PX }} className="px-2 flex items-start justify-end pt-1 border-b border-nexus-border/60">
                               <span className={`nx-num text-xs ${hour % 1 === 0 ? 'text-nexus-text-secondary font-semibold' : 'text-nexus-text-muted'}`}>{formatHourLabel(hour)}</span>
                             </div>
@@ -3254,7 +3265,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                           {filterBarberId === 'all' && (
                             <div style={{ minWidth: COL_MIN_PX }} className="flex-1 relative bg-nexus-surface-hover">
-                              {hoursRange.map(hour => (
+                              {gridHours.map(hour => (
                                 <div
                                   key={hour}
                                   style={{ height: SLOT_PX }}
@@ -3300,7 +3311,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             return (
                               <div key={barber?.id} style={{ minWidth: COL_MIN_PX }} className="flex-1 relative">
 
-                                {hoursRange.map(hour => (
+{gridHours.map(hour => (
                                   isHourWithinAvailability(barberDayAvailability, hour) ? (
                                     <div
                                       key={hour}
@@ -3425,7 +3436,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <button
                           type="button"
                           onClick={() => {
-                            setNewReservation(prev => ({ ...prev, date: day?.dateStr }));
+                            setNewReservation(prev => ({ ...prev, date: day?.dateStr, professionalId: 'pending', barberId: 'pending', time: '' }));
                             setActiveModal('add-reservation');
                           }}
                           className="w-full h-9 mt-2 border border-dashed border-nexus-border hover:border-nexus-primary/50 rounded-lg text-sm font-medium text-nexus-text-secondary hover:text-nexus-text transition-colors flex items-center justify-center gap-1.5 cursor-pointer"

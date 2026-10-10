@@ -1509,7 +1509,7 @@ const fetchByDate = async (subcollection, date) => {
                     dayBlocks.forEach(b => { starts.push(convertTimeToMinutes(b.startTime)); ends.push(convertTimeToMinutes(b.endTime)); });
                     const hasGrid = starts.length > 0;
                     const gridStart = hasGrid ? Math.floor(Math.min(...starts) / 60) * 60 : 0;
-                    const gridEnd = hasGrid ? Math.min(24 * 60, Math.ceil(Math.max(...ends) / 60) * 60) : 0;
+                    const gridEnd = hasGrid ? Math.min(24 * 60, Math.ceil(Math.max(...ends) / 60) * 60 + 60) : 0;
                     const slots = [];
                     for (let m = gridStart; m < gridEnd; m += 30) slots.push(m);
                     const toTop = (min) => (min - gridStart) * PX_PER_MIN;
