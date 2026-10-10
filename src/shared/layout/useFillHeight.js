@@ -11,8 +11,11 @@ export function useFillHeight(ref, deps = [], { min = 380, bottom = 24 } = {}) {
     const top = main
       ? el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop
       : el.getBoundingClientRect().top;
-      const below = main ? Math.max(0, main.scrollHeight - top - el.offsetHeight) : bottom;
-      setHeight(Math.max(min, Math.floor(available - top - below - 2)));
+    // Fase 4: antes se restaba "lo que queda debajo" usando scrollHeight, pero el
+    // contenedor de la pantalla ocupa todo el alto disponible, así que ese espacio
+    // vacío se contaba como contenido y la agenda nunca crecía (quedaba un hueco
+    // en blanco). Ahora solo se reserva el margen inferior (`bottom`).
+    setHeight(Math.max(min, Math.floor(available - top - bottom)));
   }, [ref, min, bottom]);
 
   useLayoutEffect(() => {

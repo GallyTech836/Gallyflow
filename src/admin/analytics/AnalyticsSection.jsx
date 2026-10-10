@@ -388,7 +388,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     <div className="p-4 md:p-6 space-y-6">
       {financeSummary && (
         <section>
-          <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Rendimiento general</h3>
+          <h3 className="text-base font-semibold text-nexus-text mb-3">Rendimiento general</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <BigMetric label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
             <BigMetric label="Comisiones generadas" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
@@ -399,10 +399,10 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       )}
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">Reservas y {terms.tl('clients')}</h3>
+        <h3 className="text-base font-semibold text-nexus-text mb-3">Reservas y {terms.tl('clients')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
-            <p className="text-xs text-nexus-text-secondary uppercase font-mono">Canales de reservas</p>
+            <p className="text-xs text-nexus-text-secondary nx-num">Canales de reservas</p>
             <div className="space-y-1.5">
               {canalesStats.map((c) => (
                 <DashedRow key={c.canal} label={c.label} value={`${c.porcentaje.toFixed(0)}%`} />
@@ -413,18 +413,18 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 flex flex-col justify-center gap-3">
             <div>
-              <p className="text-xs text-nexus-text-secondary uppercase font-mono">Reservas</p>
+              <p className="text-xs text-nexus-text-secondary nx-num">Reservas</p>
               <p className="text-2xl font-black text-nexus-text">{performance.reservas}</p>
             </div>
             <div>
-              <p className="text-xs text-nexus-text-secondary uppercase font-mono">Completadas</p>
+              <p className="text-xs text-nexus-text-secondary nx-num">Completadas</p>
               <p className="text-2xl font-black text-nexus-text">{performance.completadas}</p>
             </div>
           </div>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
-            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">{terms.t('clients')} {terms.g('client', 'atendidos', 'atendidas')}</p>
+            <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('clients')} {terms.g('client', 'atendidos', 'atendidas')}</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes ?? '—'}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'Nuevos', 'Nuevas')}</span></span>
@@ -433,7 +433,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico ?? '—'}</p>
-            <p className="text-xs text-nexus-text-secondary uppercase font-mono mb-2">{terms.t('clients')} totales</p>
+            <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('clients')} totales</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'activos', 'activas')}</span></span>
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d ?? '—'}</b><span className="text-nexus-text-secondary">sin volver</span></span>
@@ -443,18 +443,18 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                 type="button"
                 onClick={handleCalcularHistorico}
                 disabled={historyLoading}
-                className="mt-3 text-[10px] font-bold uppercase tracking-wider font-mono text-nexus-primary border border-nexus-primary/40 rounded px-3 py-1.5 disabled:opacity-50"
+                className="mt-3 inline-flex h-10 items-center px-4 text-sm font-semibold text-nexus-primary border border-nexus-primary/40 rounded-lg hover:bg-nexus-primary-soft disabled:opacity-50 cursor-pointer"
               >
                 {historyLoading ? 'Calculando…' : 'Calcular histórico'}
               </button>
             )}
-            {historyError && <p className="text-[10px] text-nexus-error-text mt-2">{historyError}</p>}
+            {historyError && <p className="text-xs text-nexus-error-text mt-2">{historyError}</p>}
           </div>
         </div>
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">{terms.t('services')}</h3>
+        <h3 className="text-base font-semibold text-nexus-text mb-3">{terms.t('services')}</h3>
         <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
           <p className="font-bold text-sm text-nexus-text">Gráfico de {terms.tl('services')}</p>
           <p className="text-xs text-nexus-text-secondary mb-3">Ordenado por ingreso generado</p>
@@ -465,8 +465,8 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                 <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={serviciosStats}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" strokeOpacity={0.25} />
-                    <XAxis dataKey="serviceName" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={55} />
-                    <YAxis tick={{ fontSize: 10 }} />
+                    <XAxis dataKey="serviceName" tick={{ fontSize: 12 }} interval={0} angle={-25} textAnchor="end" height={55} />
+                    <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip formatter={(v) => `Bs ${Number(v).toFixed(2)}`} />
                     <Bar dataKey="ingreso" fill="var(--nx-primary)" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -476,7 +476,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                 {serviciosStats.map((s) => (
                   <div key={s.serviceName}>
                     <DashedRow label={s.serviceName} value={`${s.participacion.toFixed(1)}%`} />
-                    <p className="text-[11px] text-nexus-text-secondary pl-1">{s.reservas} reservas · Bs {s.precioPromedio.toFixed(2)} prom. · {s.duracionPromedio.toFixed(0)} min prom.</p>
+                    <p className="text-xs text-nexus-text-secondary pl-1">{s.reservas} reservas · Bs {s.precioPromedio.toFixed(2)} prom. · {s.duracionPromedio.toFixed(0)} min prom.</p>
                   </div>
                 ))}
               </div>
@@ -486,7 +486,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       </section>
 
       <section>
-        <h3 className="text-xs font-bold text-nexus-primary uppercase tracking-wider font-mono mb-2">{terms.t('professionals')}</h3>
+        <h3 className="text-base font-semibold text-nexus-text mb-3">{terms.t('professionals')}</h3>
         <div className="space-y-2">
           {profesionalesConFinanzas.length === 0 && <p className="text-sm text-nexus-text-secondary">Sin {terms.tl('professionals')}.</p>}
           {profesionalesConFinanzas.map((p) => (
@@ -535,7 +535,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 function BigMetric({ label, value }) {
   return (
     <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-      <p className="text-xs text-nexus-text-secondary uppercase tracking-wider font-mono mb-1">{label}</p>
+      <p className="text-xs text-nexus-text-secondary nx-num mb-1">{label}</p>
       <p className="text-2xl font-black text-nexus-text">{value}</p>
     </div>
   );

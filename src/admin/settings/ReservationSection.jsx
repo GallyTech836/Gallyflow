@@ -8,11 +8,11 @@ export default function ReservationSection() {
         <CalendarCheck className="w-4 h-4 text-indigo-400" />
         <h3 className="text-sm font-bold text-white">Reglas de Reserva</h3>
       </div>
-      <p className="text-[11px] text-slate-500 mb-4">
+      <p className="text-xs text-slate-500 mb-4">
         Anticipación mínima, duración de bloqueos y políticas de cancelación para ClienteApp.
       </p>
       <div className="border border-dashed border-[#232B4C] rounded-xl p-6 text-center">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono">Próximamente</p>
+        <p className="text-xs font-bold text-slate-400 nx-num">Próximamente</p>
       </div>
     </div>
   );

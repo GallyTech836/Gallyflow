@@ -37,6 +37,10 @@ export default function AppointmentManageModal({
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [clientQuery, setClientQuery] = useState('');
   const [finalPriceDraft, setFinalPriceDraft] = useState({ id: null, text: '' });
+  // Ajustar la duración (Fase 4): texto que se está escribiendo en cada servicio,
+  // para poder borrar y reescribir el número sin que salte a otro valor.
+  const [showDuration, setShowDuration] = useState(false);
+  const [durationDraft, setDurationDraft] = useState({ id: null, values: {} });
   const [saving, setSaving] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
   const formId = useId();
@@ -116,6 +120,37 @@ export default function AppointmentManageModal({
     if (hasVariable && !(Number(appointment.price) > 0)) applyFinalPrice(minTotal);
   };
 
+  // --- Duración: minutos por servicio. Se guardan en services[].duration y el
+  // total en `duration` (los mismos campos que ya usa el guardado). Como el total
+  // siempre se calcula desde services[], agregar o quitar otro servicio conserva
+  // los minutos ya ajustados de los demás. ---
+  const MIN_DURATION = 5;
+  const MAX_DURATION = 720;
+  const storedDuration = Number(appointment.duration) > 0
+    ? Number(appointment.duration)
+    : calculateTotals(currentServices).totalDuration;
+  const draftValues = durationDraft.id === appointment.id ? durationDraft.values : {};
+  const durationText = (cs) => (cs.serviceId in draftValues ? draftValues[cs.serviceId] : String(cs.duration ?? 30));
+  const isValidMinutes = (raw) => {
+    const n = Number(raw);
+    return String(raw).trim() !== '' && Number.isFinite(n) && n >= MIN_DURATION && n <= MAX_DURATION;
+  };
+  const durationInvalid = currentServices.some(cs => cs.serviceId in draftValues && !isValidMinutes(draftValues[cs.serviceId]));
+  const applyServiceDuration = (serviceId, raw) => {
+    setDurationDraft({ id: appointment.id, values: { ...draftValues, [serviceId]: raw } });
+    if (!isValidMinutes(raw)) return; // se mantiene el último valor válido hasta corregirlo
+    const minutes = Math.round(Number(raw));
+    const next = currentServices.map(cs => (cs.serviceId === serviceId ? { ...cs, duration: minutes } : cs));
+    onChangeField('services', next);
+    onChangeField('duration', calculateTotals(next).totalDuration);
+  };
+  const endTimeLabel = (() => {
+    const [h, m] = String(appointment.time || '').split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+    const end = (h * 60 + m + storedDuration) % (24 * 60);
+    return `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+  })();
+
   // --- Cliente: solo se cambia eligiendo otro de la lista ---
   const clientMissing = !String(appointment.clientName || '').trim();
   const pickerClients = (clients || []).filter(c => {
@@ -151,7 +186,7 @@ export default function AppointmentManageModal({
     onClose();
   };
 
-  const saveDisabled = !anyEditable || paymentMethodMissing || finalPriceMissing || clientMissing;
+  const saveDisabled = !anyEditable || paymentMethodMissing || finalPriceMissing || clientMissing || durationInvalid;
   const actionBtn = 'inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-nexus-primary/20 bg-nexus-primary-soft px-3 text-sm font-semibold text-nexus-primary whitespace-nowrap cursor-pointer hover:brightness-95';
 
   return (
@@ -351,6 +386,59 @@ export default function AppointmentManageModal({
             </Select>
           </Field>
         </div>
+
+        {currentServices.length > 0 && (
+          <div className="rounded-lg border border-nexus-border bg-nexus-background p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-nexus-text-secondary">Duración</p>
+                <p className="text-sm font-semibold text-nexus-text">
+                  <span className="nx-num">{storedDuration} min</span>
+                  {endTimeLabel && <span className="font-normal text-nexus-text-secondary"> · termina a las <span className="nx-num">{endTimeLabel}</span></span>}
+                </p>
+              </div>
+              {canEdit('duration') && (
+                <button
+                  type="button"
+                  onClick={() => setShowDuration(v => !v)}
+                  aria-expanded={showDuration}
+                  className={actionBtn}
+                >
+                  {showDuration ? 'Listo' : 'Ajustar la duración'}
+                </button>
+              )}
+            </div>
+            {showDuration && canEdit('duration') && (
+              <div className="mt-3 space-y-2 border-t border-nexus-border pt-3">
+                {currentServices.map(cs => (
+                  <div key={cs.serviceId} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate text-sm text-nexus-text">{cs.serviceName}</span>
+                    <div className="flex w-28 shrink-0 items-center gap-2">
+                      <Input
+                        type="number"
+                        min={MIN_DURATION}
+                        max={MAX_DURATION}
+                        step="5"
+                        inputMode="numeric"
+                        aria-label={`Duración de ${cs.serviceName} en minutos`}
+                        value={durationText(cs)}
+                        onChange={(e) => applyServiceDuration(cs.serviceId, e.target.value)}
+                        error={cs.serviceId in draftValues && !isValidMinutes(draftValues[cs.serviceId])}
+                        className="nx-num text-center"
+                      />
+                      <span className="text-xs text-nexus-text-secondary">min</span>
+                    </div>
+                  </div>
+                ))}
+                {durationInvalid && (
+                  <p role="alert" className="text-xs text-nexus-error-text">
+                    Ingresa entre {MIN_DURATION} y {MAX_DURATION} minutos para cada {terms.tl('service')}.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Solo aparece mientras el estatus elegido es "Completada". Es obligatorio
             elegir un método real (no "Pendiente") para poder guardar. */}

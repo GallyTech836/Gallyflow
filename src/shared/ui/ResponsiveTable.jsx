@@ -7,6 +7,8 @@
  * actions?(row): botones de la fila (se muestran en ambas vistas).
  * onRowClick?(row): fila/tarjeta clickeable.
  * breakpoint: desde qué ancho se usa la tabla ('md' por defecto).
+ * mobileActions: 'top' (junto al título, para íconos) o 'bottom' (debajo, a lo
+ *   ancho, para botones con texto). Solo afecta a las tarjetas de celular.
  */
 const SHOW = { sm: ['hidden sm:block', 'sm:hidden'], md: ['hidden md:block', 'md:hidden'], lg: ['hidden lg:block', 'lg:hidden'] };
 const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' };
@@ -19,6 +21,7 @@ export default function ResponsiveTable({
   onRowClick = null,
   empty = null,
   breakpoint = 'md',
+  mobileActions = 'top',
   className = '',
 }) {
   const [desktopCls, mobileCls] = SHOW[breakpoint] || SHOW.md;
@@ -72,7 +75,7 @@ export default function ResponsiveTable({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 font-semibold text-nexus-text">{cell(primary, row)}</div>
-              {actions && (
+              {actions && mobileActions !== 'bottom' && (
                 <div className="-mr-2 -mt-2 flex shrink-0 items-center" onClick={(e) => e.stopPropagation()}>{actions(row)}</div>
               )}
             </div>
@@ -85,6 +88,9 @@ export default function ResponsiveTable({
                   </div>
                 ))}
               </dl>
+            )}
+            {actions && mobileActions === 'bottom' && (
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-nexus-border pt-3 [&>*]:flex-1 sm:[&>*]:flex-none" onClick={(e) => e.stopPropagation()}>{actions(row)}</div>
             )}
           </li>
         ))}

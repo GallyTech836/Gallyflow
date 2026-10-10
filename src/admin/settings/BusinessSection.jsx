@@ -8,7 +8,7 @@ import { CAPABILITIES } from '../../shared/capabilities/capabilityModel';
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-nexus-surface border border-nexus-border rounded-2xl p-5 ${className}`}>
+    <div className={`bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 ${className}`}>
       {children}
     </div>
   );
@@ -84,33 +84,32 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
       {/* ── Marca activa ─────────────────────────────────────────── */}
       <Card>
         <div className="flex items-center gap-2.5 mb-3">
-          <Building2 className="w-4 h-4 text-nexus-primary" />
-          <h3 className="text-sm font-bold text-nexus-text">Marca Activa</h3>
+          <Building2 className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+          <h3 className="text-base font-semibold text-nexus-text">Marca activa</h3>
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center font-bold text-nexus-primary text-xs shrink-0">
+          <div className="w-11 h-11 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center font-bold text-nexus-primary text-sm shrink-0">
             GF
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono">MARCA ACTIVA</p>
-            <p className="text-xs font-semibold text-nexus-text truncate">{businessName}</p>
-            <p className="text-[10px] text-nexus-text-muted mt-1">Para cambiar el nombre, contacta a soporte.</p>
+            <p className="text-base font-semibold text-nexus-text truncate">{businessName}</p>
+            <p className="text-sm text-nexus-text-secondary mt-0.5">Para cambiar el nombre, contacta a soporte.</p>
           </div>
         </div>
       </Card>
 
       {/* ── Cuenta / Sesión ──────────────────────────────────────── */}
       <Card>
-        <h3 className="text-sm font-bold text-nexus-text mb-1">Cuenta</h3>
-        <p className="text-[11px] text-nexus-text-muted mb-3">
+        <h3 className="text-base font-semibold text-nexus-text mb-1">Cuenta</h3>
+        <p className="text-sm text-nexus-text-secondary mb-3 break-words">
           {user?.email ? `Sesión activa: ${user.email}` : 'Sesión activa.'}
         </p>
         <button
           type="button"
           onClick={onLogout}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-nexus-error-text hover:bg-nexus-error-bg border border-nexus-error/20 transition-colors text-xs font-bold uppercase tracking-widest cursor-pointer"
+          className="inline-flex h-10 items-center gap-2 px-4 rounded-lg text-nexus-error-text hover:bg-nexus-error-bg border border-nexus-error/25 transition-colors text-sm font-semibold cursor-pointer"
         >
-          <LogOut size={14} />
+          <LogOut size={16} aria-hidden="true" />
           Cerrar sesión
         </button>
       </Card>
@@ -118,33 +117,33 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
       {/* ── Suscripción (solo lectura) ───────────────────────────── */}
       <Card>
         <div className="flex items-center gap-2.5 mb-3">
-          <CreditCard className="w-4 h-4 text-nexus-primary" />
-          <h3 className="text-sm font-bold text-nexus-text">Suscripción</h3>
+          <CreditCard className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+          <h3 className="text-base font-semibold text-nexus-text">Suscripción</h3>
         </div>
         {planLoading ? (
-          <p className="text-[11px] text-nexus-text-muted">Cargando...</p>
+          <p className="text-sm text-nexus-text-muted">Cargando...</p>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono">Plan actual</p>
-                <p className="text-sm font-bold text-nexus-text">{planName || 'Sin plan asignado'}</p>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="min-w-0">
+                <p className="text-xs text-nexus-text-secondary">Plan actual</p>
+                <p className="text-base font-semibold text-nexus-text">{planName || 'Sin plan asignado'}</p>
               </div>
-              <span className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-black uppercase font-mono ${statusInfo.className}`}>
-                <statusInfo.Icon className="w-3 h-3" />
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${statusInfo.className}`}>
+                <statusInfo.Icon className="w-3.5 h-3.5" aria-hidden="true" />
                 {statusInfo.label}
               </span>
             </div>
             {featureEntries.length > 0 ? (
-              <ul className="space-y-1.5">
+              <ul className="divide-y divide-nexus-border/70">
                 {featureEntries.map(([cap, val]) => {
                   const enabled = !!val?.enabled;
                   const limit = typeof val?.limit === 'number' ? val.limit : null;
                   const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}`) : 'Incluido';
                   return (
-                    <li key={cap.key} className="flex items-center justify-between text-[11px] border-b border-nexus-border/60 pb-1.5 last:border-0">
-                      <span className="text-nexus-text-secondary">{cap.label}</span>
-                      <span className={`font-mono font-bold ${enabled ? 'text-nexus-success-text' : 'text-nexus-text-muted'}`}>
+                    <li key={cap.key} className="flex items-center justify-between gap-3 text-sm py-2">
+                      <span className="text-nexus-text-secondary min-w-0">{cap.label}</span>
+                      <span className={`font-semibold shrink-0 nx-num ${enabled ? 'text-nexus-success-text' : 'text-nexus-text-muted'}`}>
                         {enabled ? limitText : 'No incluido'}
                       </span>
                     </li>
@@ -152,9 +151,9 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
                 })}
               </ul>
             ) : (
-              <p className="text-[11px] text-nexus-text-muted">Este plan no tiene funciones configuradas.</p>
+              <p className="text-sm text-nexus-text-muted">Este plan no tiene funciones configuradas.</p>
             )}
-            <p className="text-[10px] text-nexus-text-muted mt-3">Para cambiar de plan, contacta a soporte.</p>
+            <p className="text-sm text-nexus-text-muted mt-3">Para cambiar de plan, contacta a soporte.</p>
           </>
         )}
       </Card>
@@ -162,208 +161,206 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
       {/* ── Horario del negocio ──────────────────────────────────── */}
       <Card>
         <div className="flex items-center gap-2.5 mb-1">
-          <Clock className="w-4 h-4 text-nexus-primary" />
-          <h3 className="text-sm font-bold text-nexus-text">Horario del negocio</h3>
+          <Clock className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+          <h3 className="text-base font-semibold text-nexus-text">Horario del negocio</h3>
         </div>
-        <p className="text-[11px] text-nexus-text-muted mb-4">
+        <p className="text-sm text-nexus-text-secondary mb-4">
           Días y horas en que el negocio atiende. Un día cerrado aquí bloquea las reservas
           públicas ese día, sin importar el horario de cada profesional.
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-[9px] text-nexus-text-muted uppercase tracking-wider font-mono border-b border-nexus-border">
-                <th className="py-2 px-2">Día</th>
-                <th className="py-2 px-2 text-center">Estado</th>
-                <th className="py-2 px-2 text-center">Desde</th>
-                <th className="py-2 px-2 text-center">Hasta</th>
-                <th className="py-2 px-2 text-right">Copiar a todos</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-nexus-border">
-              {form.schedule.map((d, idx) => {
-                const isClosed = d.status === 'Cerrado';
-                return (
-                  <tr key={d.day}>
-                    <td className="py-2 px-2 font-bold text-nexus-text">{d.day}</td>
-                    <td className="py-2 px-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => updateDay(idx, { status: isClosed ? 'Disponible' : 'Cerrado' })}
-                        className={`px-2 py-0.5 rounded text-[9px] font-extrabold font-mono tracking-wider transition-colors border cursor-pointer ${
-                          isClosed
-                            ? 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25 hover:opacity-80'
-                            : 'bg-nexus-primary-soft text-nexus-primary border-nexus-primary/25 hover:opacity-80'
-                        }`}
-                      >
-                        {d.status.toUpperCase()}
-                      </button>
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <input
-                        type="time"
-                        disabled={isClosed}
-                        value={d.start}
-                        onChange={(e) => updateDay(idx, { start: e.target.value })}
-                        className={`bg-nexus-background border border-nexus-border rounded px-2 py-1 text-[11px] outline-none text-nexus-text font-mono text-center transition-opacity ${isClosed ? 'opacity-40 pointer-events-none' : ''}`}
-                      />
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <input
-                        type="time"
-                        disabled={isClosed}
-                        value={d.end}
-                        onChange={(e) => updateDay(idx, { end: e.target.value })}
-                        className={`bg-nexus-background border border-nexus-border rounded px-2 py-1 text-[11px] outline-none text-nexus-text font-mono text-center transition-opacity ${isClosed ? 'opacity-40 pointer-events-none' : ''}`}
-                      />
-                    </td>
-                    <td className="py-2 px-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyToAll(idx)}
-                        className="px-2 py-1 bg-nexus-background border border-nexus-border hover:border-nexus-primary rounded text-[9px] font-bold text-nexus-text-secondary transition-colors inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        <Copy className="w-3 h-3 text-nexus-primary" /> Copiar
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Fase 4: filas tipo tabla en escritorio; en celular cada día en su bloque. */}
+        <div className="rounded-lg border border-nexus-border divide-y divide-nexus-border">
+          <div className="hidden md:grid grid-cols-[1fr_8rem_8rem_8rem_8rem] items-center gap-3 px-3 py-2 bg-nexus-background rounded-t-lg text-xs font-semibold text-nexus-text-secondary">
+            <span>Día</span>
+            <span className="text-center">Estado</span>
+            <span className="text-center">Desde</span>
+            <span className="text-center">Hasta</span>
+            <span className="text-right">Copiar a todos</span>
+          </div>
+          {form.schedule.map((d, idx) => {
+            const isClosed = d.status === 'Cerrado';
+            const timeCls = `h-10 w-full bg-nexus-background border border-nexus-border rounded-lg px-2 text-base sm:text-sm outline-none text-nexus-text nx-num text-center focus:border-nexus-primary transition-opacity ${isClosed ? 'opacity-40 pointer-events-none' : ''}`;
+            return (
+              <div key={d.day} className="grid grid-cols-2 md:grid-cols-[1fr_8rem_8rem_8rem_8rem] items-center gap-x-3 gap-y-2 px-3 py-3 md:py-2">
+                <span className="text-sm font-semibold text-nexus-text">{d.day}</span>
+                <div className="justify-self-end md:justify-self-center">
+                  <button
+                    type="button"
+                    aria-pressed={!isClosed}
+                    onClick={() => updateDay(idx, { status: isClosed ? 'Disponible' : 'Cerrado' })}
+                    className={`h-9 px-3 rounded-md text-sm font-semibold transition-colors border cursor-pointer whitespace-nowrap ${
+                      isClosed
+                        ? 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25 hover:opacity-80'
+                        : 'bg-nexus-primary-soft text-nexus-primary border-nexus-primary/25 hover:opacity-80'
+                    }`}
+                  >
+                    {d.status}
+                  </button>
+                </div>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-nexus-text-muted md:sr-only">Desde</span>
+                  <input
+                    type="time"
+                    disabled={isClosed}
+                    value={d.start}
+                    onChange={(e) => updateDay(idx, { start: e.target.value })}
+                    className={timeCls}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-nexus-text-muted md:sr-only">Hasta</span>
+                  <input
+                    type="time"
+                    disabled={isClosed}
+                    value={d.end}
+                    onChange={(e) => updateDay(idx, { end: e.target.value })}
+                    className={timeCls}
+                  />
+                </label>
+                <div className="col-span-2 md:col-span-1 md:justify-self-end">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyToAll(idx)}
+                    aria-label={`Copiar el horario del ${d.day} a todos los días`}
+                    className="h-9 w-full md:w-auto px-3 bg-nexus-background border border-nexus-border hover:border-nexus-primary rounded-md text-sm font-medium text-nexus-text-secondary transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Copy className="w-4 h-4 text-nexus-primary" aria-hidden="true" /> Copiar
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-  {/* ── Anticipación para reservar ───────────────────────────── */}
-  <Card>
-    <h3 className="text-sm font-bold text-nexus-text mb-1">
-      Anticipación para reservar
-    </h3>
+        {/* ── Anticipación para reservar ───────────────────────────── */}
+        <Card>
+          <h3 className="text-base font-semibold text-nexus-text mb-1">
+            Anticipación para reservar
+          </h3>
+          <p className="text-sm text-nexus-text-secondary mb-3">
+            Tiempo mínimo antes de una cita para que un cliente pueda reservarla desde el link
+            público. 0 = sin restricción (puede reservar para dentro de un momento).
+          </p>
+          <label className="flex items-center gap-3">
+            <input
+              type="number"
+              min="0"
+              step="15"
+              inputMode="numeric"
+              value={form.minAdvanceMinutes}
+              onChange={(e) => {
+                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                setForm((prev) => ({ ...prev, minAdvanceMinutes: val }));
+                setSaved(false);
+              }}
+              className="h-10 w-28 bg-nexus-background border border-nexus-border rounded-lg px-3 text-base sm:text-sm nx-num text-nexus-text outline-none focus:border-nexus-primary"
+            />
+            <span className="text-sm text-nexus-text-secondary">
+              minutos de anticipación mínima
+            </span>
+          </label>
+        </Card>
 
-    <p className="text-[11px] text-nexus-text-muted mb-3">
-      Tiempo mínimo antes de una cita para que un cliente pueda reservarla desde el link
-      público. 0 = sin restricción (puede reservar para dentro de un momento).
-    </p>
+        {/* ── Métodos de pago ───────────────────────────────────────── */}
+        <Card>
+          <div className="flex items-center gap-2.5 mb-1">
+            <Wallet className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+            <h3 className="text-base font-semibold text-nexus-text">
+              Métodos de pago
+            </h3>
+          </div>
+          <p className="text-sm text-nexus-text-secondary mb-3">
+            Opciones que aparecen al marcar una cita como "Completada" en Admin y Barber,
+            para registrar cómo pagó el cliente.
+          </p>
 
-    <div className="flex items-center gap-3">
-      <input
-        type="number"
-        min="0"
-        step="15"
-        value={form.minAdvanceMinutes}
-        onChange={(e) => {
-          const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-          setForm((prev) => ({ ...prev, minAdvanceMinutes: val }));
-          setSaved(false);
-        }}
-        className="w-28 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-xs font-mono text-nexus-text outline-none focus:border-nexus-primary/70"
-      />
+          <div className="flex flex-wrap gap-2 mb-3">
+            {form.paymentMethods.map((method, idx) => (
+              <span
+                key={method}
+                className="inline-flex items-center gap-1 pl-3 pr-1 h-9 rounded-full bg-nexus-background border border-nexus-border text-sm font-medium text-nexus-text"
+              >
+                {method}
+                <button
+                  type="button"
+                  aria-label={`Quitar ${method}`}
+                  title={`Quitar ${method}`}
+                  onClick={() => {
+                    if (form.paymentMethods.length <= 1) return;
+                    setForm((prev) => ({
+                      ...prev,
+                      paymentMethods: prev.paymentMethods.filter((_, i) => i !== idx)
+                    }));
+                    setSaved(false);
+                  }}
+                  disabled={form.paymentMethods.length <= 1}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-nexus-error-bg hover:text-nexus-error-text disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </span>
+            ))}
+          </div>
 
-      <span className="text-[11px] text-nexus-text-muted">
-        minutos de anticipación mínima
-      </span>
-    </div>
-  </Card>
-
-  {/* ── Métodos de pago ───────────────────────────────────────── */}
-  <Card>
-    <div className="flex items-center gap-2.5 mb-1">
-      <Wallet className="w-4 h-4 text-nexus-primary" />
-
-      <h3 className="text-sm font-bold text-nexus-text">
-        Métodos de pago
-      </h3>
-    </div>
-
-    <p className="text-[11px] text-nexus-text-muted mb-3">
-      Opciones que aparecen al marcar una cita como "Completada" en Admin y Barber,
-      para registrar cómo pagó el cliente.
-    </p>
-
-    <div className="flex flex-wrap gap-2 mb-3">
-      {form.paymentMethods.map((method, idx) => (
-        <span
-          key={method}
-          className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-nexus-background border border-nexus-border text-[11px] font-semibold text-nexus-text"
-        >
-          {method}
-
-          <button
-            type="button"
-            onClick={() => {
-              if (form.paymentMethods.length <= 1) return;
-
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = newMethod.trim();
+              if (
+                !value ||
+                form.paymentMethods.some(
+                  (m) => m.toLowerCase() === value.toLowerCase()
+                )
+              ) return;
               setForm((prev) => ({
                 ...prev,
-                paymentMethods: prev.paymentMethods.filter((_, i) => i !== idx)
+                paymentMethods: [...prev.paymentMethods, value]
               }));
-
+              setNewMethod('');
               setSaved(false);
             }}
-            disabled={form.paymentMethods.length <= 1}
-            className="p-0.5 rounded-full hover:bg-nexus-error-bg hover:text-nexus-error-text disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            className="flex items-center gap-2"
           >
-            <X className="w-3 h-3" />
+            <input
+              type="text"
+              value={newMethod}
+              onChange={(e) => setNewMethod(e.target.value)}
+              placeholder="Ej: QR, Pago móvil..."
+              aria-label="Nuevo método de pago"
+              className="h-10 flex-1 min-w-0 bg-nexus-background border border-nexus-border rounded-lg px-3 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary"
+            />
+            <button
+              type="submit"
+              aria-label="Agregar método de pago"
+              title="Agregar método de pago"
+              className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 hover:opacity-80 cursor-pointer"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </form>
+        </Card>
+
+      </div>
+
+      {/* ── Guardar (horario + anticipación + métodos de pago) ─────────
+          Fase 4: barra fija con fondo propio, así el contenido no se ve
+          por detrás ni queda tapado. */}
+      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border">
+        <div className="flex items-center justify-end gap-3">
+          {saved && !saving && <span className="text-sm text-nexus-success-text" role="status">Cambios guardados</span>}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !negocioId}
+            className="w-full sm:w-auto inline-flex h-11 items-center justify-center gap-2 px-6 rounded-lg bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
+            {saving ? 'Guardando...' : saved ? 'Guardado ✓' : 'Guardar cambios'}
           </button>
-        </span>
-      ))}
-    </div>
-
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-
-        const value = newMethod.trim();
-
-        if (
-          !value ||
-          form.paymentMethods.some(
-            (m) => m.toLowerCase() === value.toLowerCase()
-          )
-        ) return;
-
-        setForm((prev) => ({
-          ...prev,
-          paymentMethods: [...prev.paymentMethods, value]
-        }));
-
-        setNewMethod('');
-        setSaved(false);
-      }}
-      className="flex items-center gap-2"
-    >
-      <input
-        type="text"
-        value={newMethod}
-        onChange={(e) => setNewMethod(e.target.value)}
-        placeholder="Ej: QR, Pago móvil..."
-        className="flex-1 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary/70"
-      />
-
-      <button
-        type="submit"
-        className="shrink-0 p-2 rounded-lg bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 hover:opacity-80 cursor-pointer"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
-    </form>
-  </Card>
-
-</div>
-
-      {/* ── Guardar (horario + anticipación) ─────────────────────── */}
-      <div className="sticky bottom-0 pb-1 pt-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || !negocioId}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(15,111,255,0.35)] hover:shadow-[0_0_30px_rgba(15,111,255,0.5)]"
-        >
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          {saving ? 'Guardando...' : saved ? 'Guardado ✓' : 'Guardar cambios'}
-        </button>
+        </div>
       </div>
 
     </div>

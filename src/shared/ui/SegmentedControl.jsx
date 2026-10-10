@@ -13,7 +13,7 @@ export default function SegmentedControl({ options = [], value, onChange, size =
               role="radio"
               aria-checked={active}
               onClick={() => onChange?.(o.value)}
-              className={`${h} min-w-[44px] flex-1 whitespace-nowrap rounded-md px-3 font-medium transition-colors cursor-pointer ${active ? 'bg-nexus-surface text-nexus-text shadow-sm' : 'text-nexus-text-secondary hover:text-nexus-text'}`}
+              className={`${h} min-w-[44px] flex-auto whitespace-nowrap rounded-md px-3 font-medium transition-colors cursor-pointer ${active ? 'bg-nexus-surface text-nexus-text shadow-sm' : 'text-nexus-text-secondary hover:text-nexus-text'}`}
             >
               {o.label}
             </button>

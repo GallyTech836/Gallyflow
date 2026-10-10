@@ -84,7 +84,7 @@ export default function AssistantSection({ negocioId }) {
           <MessageCircle className="w-4 h-4 text-nexus-primary" />
           <h3 className="text-sm font-bold text-nexus-text">Asistente de WhatsApp</h3>
         </div>
-        <p className="text-[11px] text-nexus-text-muted mb-4">
+        <p className="text-xs text-nexus-text-muted mb-4">
           Tus {tl('clients')} pueden reservar escribiendo a tu número de WhatsApp. {g('appointment', 'Los', 'Las')} {tl('appointments')} aparecen en la agenda al instante.
         </p>
 
@@ -118,7 +118,7 @@ export default function AssistantSection({ negocioId }) {
         <div className={`mt-4 flex items-center justify-between gap-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
           <div className="min-w-0">
             <p className="text-xs font-bold text-nexus-text">Responder automáticamente</p>
-            <p className="text-[11px] text-nexus-text-muted">
+            <p className="text-xs text-nexus-text-muted">
               {activo
                 ? `El asistente atiende y agenda ${tl('appointments')}.`
                 : 'Apagado: responde que por ahora no se reciben reservas por WhatsApp.'}
@@ -138,12 +138,12 @@ export default function AssistantSection({ negocioId }) {
             )}
           </button>
         </div>
-        {error && <p className="mt-2 text-[11px] text-nexus-error-text">{error}</p>}
+        {error && <p className="mt-2 text-xs text-nexus-error-text">{error}</p>}
       </div>
 
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
         <h3 className="text-sm font-bold text-nexus-text mb-3">Cómo funciona</h3>
-        <ul className="space-y-2 text-[11px] text-nexus-text-secondary list-disc pl-4">
+        <ul className="space-y-2 text-xs text-nexus-text-secondary list-disc pl-4">
           <li>{g('client', 'El', 'La')} {tl('client')} elige {g('service', 'uno o varios', 'una o varias')} {tl('services')}, {g('professional', 'el', 'la')} {tl('professional')}, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
           <li>Con «Cualquier {tl('professional')}» {g('appointment', 'el', 'la')} {tl('appointment')} queda como <b>Pendiente</b>: si solo {g('professional', 'un', 'una')} {tl('professional')} está libre se asigna {g('appointment', 'solo', 'sola')}; si hay {g('professional', 'varios', 'varias')}, decides tú.</li>
           <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si {g('client', 'el', 'la')} {tl('client')} escribe «menu», vuelve el asistente.</li>

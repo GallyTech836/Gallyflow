@@ -27,8 +27,8 @@ export default function AutomationSection({
         <div className="space-y-5 lg:col-span-1">
           <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg space-y-4">
             <div className="flex justify-between items-center">
-              <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Servicio de Conexión</h4>
-              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase font-mono ${
+              <h4 className="text-xs font-bold text-nexus-text nx-num">Servicio de Conexión</h4>
+              <span className={`px-2 py-0.5 rounded text-xs font-black uppercase nx-num ${
                 whatsappSettings.isConnected ? 'bg-nexus-success-bg text-nexus-success-text' : 'bg-nexus-error-bg text-nexus-error-text'
               }`}>
                 {whatsappSettings.isConnected ? 'Conectado (Mock)' : 'Desconectado'}
@@ -42,12 +42,12 @@ export default function AutomationSection({
                     <Check className="w-8 h-8" />
                   </div>
                   <p className="text-xs font-bold text-nexus-text">Bot de Mensajería Listo</p>
-                  <p className="text-[10px] text-nexus-text-muted font-mono">Última sinc: {new Date(whatsappSettings.lastSync).toLocaleTimeString()}</p>
+                  <p className="text-xs text-nexus-text-muted nx-num">Última sinc: {new Date(whatsappSettings.lastSync).toLocaleTimeString()}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="w-32 h-32 bg-white p-2 mx-auto rounded-lg flex items-center justify-center">
-                    <div className="w-full h-full bg-nexus-text flex items-center justify-center text-white text-[9px] font-bold font-mono text-center leading-tight">
+                    <div className="w-full h-full bg-nexus-text flex items-center justify-center text-white text-xs font-bold nx-num text-center leading-tight">
                       [ QR CODE <br/> SIMULATOR ]
                     </div>
                   </div>
@@ -69,7 +69,7 @@ export default function AutomationSection({
             </div>
 
             <div className="space-y-3 pt-2">
-              <h5 className="text-[10px] text-nexus-text-muted font-bold uppercase tracking-wider font-mono">Disparadores del Bot</h5>
+              <h5 className="text-xs text-nexus-text-muted font-bold nx-num">Disparadores del Bot</h5>
 
               <div className="flex items-center justify-between p-2 bg-nexus-background border border-nexus-border rounded-lg">
                 <span className="text-xs text-nexus-text-secondary">Confirmación al reservar</span>
@@ -138,11 +138,11 @@ export default function AutomationSection({
 
           <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg space-y-4">
             <div className="flex justify-between items-center border-b border-nexus-border pb-3">
-              <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Estructura de Mensajes (Templates)</h4>
+              <h4 className="text-xs font-bold text-nexus-text nx-num">Estructura de Mensajes (Templates)</h4>
               <button
                 type="button"
                 onClick={handleTestTriggerMessage}
-                className="px-2.5 py-1 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 text-[10px] rounded font-mono font-bold hover:opacity-80"
+                className="px-2.5 py-1 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 text-xs rounded nx-num font-bold hover:opacity-80"
               >
                 Probar Envío de Prueba
               </button>
@@ -150,7 +150,7 @@ export default function AutomationSection({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] text-nexus-primary font-bold block uppercase tracking-widest font-mono">Confirmación de Cita</label>
+                <label className="text-xs text-nexus-primary font-bold block nx-num">Confirmación de Cita</label>
                 <textarea
                   rows="3"
                   value={whatsappSettings.messageTemplates.confirmation}
@@ -158,12 +158,12 @@ export default function AutomationSection({
                     ...prev,
                     messageTemplates: { ...prev.messageTemplates, confirmation: e.target.value }
                   }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-nexus-primary font-bold block uppercase tracking-widest font-mono">Recordatorio Cita (24H)</label>
+                <label className="text-xs text-nexus-primary font-bold block nx-num">Recordatorio Cita (24H)</label>
                 <textarea
                   rows="3"
                   value={whatsappSettings.messageTemplates.reminder}
@@ -171,12 +171,12 @@ export default function AutomationSection({
                     ...prev,
                     messageTemplates: { ...prev.messageTemplates, reminder: e.target.value }
                   }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-nexus-primary font-bold block uppercase tracking-widest font-mono">Aviso de Cancelación</label>
+                <label className="text-xs text-nexus-primary font-bold block nx-num">Aviso de Cancelación</label>
                 <textarea
                   rows="3"
                   value={whatsappSettings.messageTemplates.cancellation}
@@ -184,12 +184,12 @@ export default function AutomationSection({
                     ...prev,
                     messageTemplates: { ...prev.messageTemplates, cancellation: e.target.value }
                   }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] text-nexus-primary font-bold block uppercase tracking-widest font-mono">Agradecimiento Final</label>
+                <label className="text-xs text-nexus-primary font-bold block nx-num">Agradecimiento Final</label>
                 <textarea
                   rows="3"
                   value={whatsappSettings.messageTemplates.thankYou}
@@ -197,18 +197,18 @@ export default function AutomationSection({
                     ...prev,
                     messageTemplates: { ...prev.messageTemplates, thankYou: e.target.value }
                   }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary font-sans resize-none"
                 />
               </div>
             </div>
           </div>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-lg space-y-4">
-            <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Cola de Eventos Recientes (Logs)</h4>
+            <h4 className="text-xs font-bold text-nexus-text nx-num">Cola de Eventos Recientes (Logs)</h4>
             <div className="overflow-x-auto max-h-56 rounded-lg border border-nexus-border bg-nexus-background">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-nexus-border bg-nexus-surface-hover text-[9px] text-nexus-text-secondary uppercase tracking-widest font-mono">
+                  <tr className="border-b border-nexus-border bg-nexus-surface-hover text-xs text-nexus-text-secondary nx-num">
                     <th className="py-2 px-3">Cita</th>
                     <th className="py-2 px-3">Destinatario</th>
                     <th className="py-2 px-3">Mensaje</th>
@@ -216,14 +216,14 @@ export default function AutomationSection({
                     <th className="py-2 px-3 text-right">Fecha Registro</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-nexus-border font-mono text-[10px]">
+                <tbody className="divide-y divide-nexus-border nx-num text-xs">
                   {automationLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-nexus-surface-hover transition-colors">
                       <td className="py-2 px-3 text-nexus-primary font-bold">#{log.reservationId}</td>
                       <td className="py-2 px-3 font-sans text-nexus-text-secondary font-semibold">{log.phone}</td>
                       <td className="py-2 px-3 text-nexus-text-muted uppercase">{log.type}</td>
                       <td className="py-2 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase font-mono ${
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-black uppercase nx-num ${
                           log.status === 'sent' ? 'bg-nexus-success-bg text-nexus-success-text' : 'bg-nexus-error-bg text-nexus-error-text'
                         }`}>
                           {log.status === 'sent' ? 'Enviado' : 'Fallido'}

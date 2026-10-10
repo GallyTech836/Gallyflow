@@ -6,7 +6,7 @@ import BusinessHeroPreview from './BusinessHeroPreview';
 import HeroLogoUploader from './HeroLogoUploader';
 
 const inputClass =
-  'w-full bg-nexus-background border border-nexus-border text-nexus-text rounded-lg text-xs px-3 py-2.5 outline-none focus:border-nexus-primary/70 transition-colors placeholder:text-nexus-text-muted';
+  'w-full bg-nexus-background border border-nexus-border text-nexus-text rounded-lg h-10 text-base sm:text-sm px-3 outline-none focus:border-nexus-primary transition-colors placeholder:text-nexus-text-muted';
 
 function SectionCard({ children, className = '' }) {
   return (
@@ -18,7 +18,7 @@ function SectionCard({ children, className = '' }) {
 
 function FieldLabel({ children }) {
   return (
-    <span className="block text-[10px] text-nexus-text-muted uppercase tracking-widest font-mono mb-1.5">
+    <span className="block text-xs text-nexus-text-muted nx-num mb-1.5">
       {children}
     </span>
   );
@@ -67,7 +67,7 @@ export default function BusinessHeroSettings({ negocioId }) {
           <LayoutTemplate className="w-4 h-4 text-nexus-primary shrink-0" />
           <h3 className="text-sm font-bold text-nexus-text">Link Público</h3>
         </div>
-        <p className="text-[11px] text-nexus-text-muted ml-6.5">
+        <p className="text-xs text-nexus-text-muted ml-6.5">
           Personaliza lo que tus clientes ven antes de reservar una cita.
         </p>
       </SectionCard>
@@ -119,8 +119,8 @@ export default function BusinessHeroSettings({ negocioId }) {
               </svg>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-nexus-text-muted">Subir imagen de portada</p>
-              <p className="text-[10px] text-nexus-text-muted mt-0.5">Solo se mostrará en futuras versiones</p>
+              <p className="text-xs font-bold text-nexus-text-muted">Subir imagen de portada</p>
+              <p className="text-xs text-nexus-text-muted mt-0.5">Solo se mostrará en futuras versiones</p>
             </div>
           </div>
         </SectionCard>
@@ -134,7 +134,7 @@ export default function BusinessHeroSettings({ negocioId }) {
           <div className="flex items-center justify-between mt-1">
             <div>
             <p className="text-xs font-semibold text-nexus-text leading-tight">Activa esta opción</p>
-            <p className="text-[10px] text-nexus-text-muted mt-0.5">para mostrar estrellas y rating.</p>
+            <p className="text-xs text-nexus-text-muted mt-0.5">para mostrar estrellas y rating.</p>
             </div>
             <button
               type="button"
@@ -156,7 +156,7 @@ export default function BusinessHeroSettings({ negocioId }) {
         {/* Valor del rating */}
         <SectionCard>
           <FieldLabel>Rating</FieldLabel>
-          <p className="text-[10px] text-nexus-text-muted mb-2">Calificación que verán tus clientes.</p>
+          <p className="text-xs text-nexus-text-muted mb-2">Calificación que verán tus clientes.</p>
           <div className={`flex items-center gap-2 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 ${!form.showRating ? 'opacity-40 pointer-events-none' : ''}`}>
             <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
             <input
@@ -167,7 +167,7 @@ export default function BusinessHeroSettings({ negocioId }) {
               disabled={!form.showRating}
               value={form.rating}
               onChange={(e) => update('rating', parseFloat(e.target.value))}
-              className="flex-1 bg-transparent text-nexus-text text-xs font-bold outline-none disabled:cursor-not-allowed w-full"
+              className="flex-1 h-9 bg-transparent text-nexus-text text-base sm:text-sm font-semibold outline-none disabled:cursor-not-allowed w-full"
             />
           </div>
         </SectionCard>
@@ -176,7 +176,7 @@ export default function BusinessHeroSettings({ negocioId }) {
       {/* ── Texto secundario (full width) ───────────────────────── */}
       <SectionCard>
       <FieldLabel>Texto secundario (opcional)</FieldLabel>
-        <p className="text-[10px] text-nexus-text-muted mb-2">Texto corto que aparecerá debajo del rating.</p>
+        <p className="text-xs text-nexus-text-muted mb-2">Texto corto que aparecerá debajo del rating.</p>
         <div className="relative">
           <input
             type="text"
@@ -188,7 +188,7 @@ export default function BusinessHeroSettings({ negocioId }) {
             placeholder="⚡ Reserva en 1 minuto"
             maxLength={40}
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-nexus-text-muted font-mono pointer-events-none">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-nexus-text-muted nx-num pointer-events-none">
             {form.highlightText?.length ?? 0}/40
           </span>
         </div>
@@ -198,16 +198,16 @@ export default function BusinessHeroSettings({ negocioId }) {
       <BusinessHeroPreview config={form} />
 
       {/* ── Botón Guardar (fijo al final) ───────────────────────── */}
-      <div className="sticky bottom-0 pb-1 pt-2">
+      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border flex justify-end">
       <button
           type="button"
           onClick={handleSave}
           disabled={saving || logoUploading || !negocioId}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(15,111,255,0.35)] hover:shadow-[0_0_30px_rgba(15,111,255,0.5)]"
+          className="w-full sm:w-auto inline-flex h-11 items-center justify-center gap-2 px-6 rounded-lg bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
         >
           {saving
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : <Save className="w-3.5 h-3.5" />}
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Save className="w-4 h-4" />}
           {saving
             ? 'Guardando...'
             : logoUploading

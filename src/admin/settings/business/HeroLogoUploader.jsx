@@ -70,12 +70,12 @@ export default function HeroLogoUploader({ value, onChange, onUploadingChange })
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/25 text-nexus-primary rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-1.5"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/25 text-nexus-primary rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-1.5"
         >
           <Upload className="w-3 h-3" />
           {uploading ? 'Subiendo...' : 'Subir Logo'}
         </button>
-        <p className="text-[9px] text-nexus-text-muted leading-relaxed">
+        <p className="text-xs text-nexus-text-muted leading-relaxed">
           PNG, JPG o WEBP. Máx 2MB.<br />
           Recomendado: 512×512px
         </p>

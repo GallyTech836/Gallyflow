@@ -12,13 +12,13 @@ export default function BusinessHeroPreview({ config }) {
             <Eye className="w-4 h-4 text-nexus-primary shrink-0" />
             <h3 className="text-sm font-bold text-nexus-text">Vista Previa</h3>
           </div>
-          <p className="text-[11px] text-nexus-text-muted mt-0.5 ml-6">
+          <p className="text-xs text-nexus-text-muted mt-0.5 ml-6">
             Así se verá para tus clientes, antes de "Reservar Cita Ahora".
           </p>
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-nexus-primary-soft border border-nexus-primary/20 rounded-lg shrink-0">
           <div className="w-1.5 h-1.5 rounded-full bg-nexus-primary animate-pulse" />
-          <span className="text-[9px] text-nexus-primary font-bold uppercase tracking-wider font-mono">En vivo</span>
+          <span className="text-xs text-nexus-primary font-bold nx-num">En vivo</span>
         </div>
       </div>
 

@@ -19,7 +19,7 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
-import { useConfirm } from '../shared/ui';
+import { useConfirm, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl } from '../shared/ui';
 import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
@@ -50,13 +50,69 @@ const GEOLOCATIONS_DB = [
 
 const INITIAL_AUTOMATION_LOGS = [];
 
+// Fase 4: ítems del menú lateral con un solo estilo (40px de alto, texto de 14px).
+// `collapsed` solo aplica en escritorio; en celular el panel muestra siempre los nombres.
+function SidebarItem({ icon: Icon, label, active = false, collapsed = false, badge = 0, badgeLabel, trailing = null, expanded, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
+      aria-current={active ? 'page' : undefined}
+      aria-expanded={expanded}
+      className={`w-full flex h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors duration-150 cursor-pointer ${
+        collapsed ? 'justify-center' : 'gap-3'
+      } ${
+        active ? 'bg-nexus-primary text-white shadow-sm' : 'text-white/75 hover:text-white hover:bg-nexus-navy-soft'
+      }`}
+    >
+      <span className="relative inline-flex shrink-0">
+        <Icon className={`w-[18px] h-[18px] ${active ? 'text-white' : 'text-nexus-primary'}`} aria-hidden="true" />
+        {collapsed && badge > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full bg-nexus-warning ring-2 ring-nexus-navy" aria-label={badgeLabel} />
+        )}
+      </span>
+      {!collapsed && (
+        <>
+          <span className="flex-1 truncate text-left">{label}</span>
+          {badge > 0 && (
+            <span
+              className={`min-w-6 h-6 px-1.5 inline-flex items-center justify-center rounded-full text-xs font-bold nx-num ${active ? 'bg-white text-nexus-primary' : 'bg-nexus-primary text-white'}`}
+              aria-label={badgeLabel}
+            >
+              {badge}
+            </span>
+          )}
+          {trailing}
+        </>
+      )}
+    </button>
+  );
+}
+
+// Fase 4: buscador estándar de las listas (40px de alto, 16px en celular).
+function SearchField({ value, onChange, placeholder, className = 'sm:w-80' }) {
+  return (
+    <div className={`relative w-full ${className}`}>
+      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-nexus-text-muted" aria-hidden="true" />
+      <Input type="search" aria-label={placeholder} placeholder={placeholder} value={value} onChange={onChange} className="pl-9" />
+    </div>
+  );
+}
+
+function SidebarSection({ label, collapsed = false, first = false }) {
+  if (collapsed) return <div className={`border-t border-nexus-navy-border mx-2 ${first ? 'mb-2' : 'my-3'}`} />;
+  return <p className={`px-3 pb-1 ${first ? 'pt-0' : 'pt-4'} text-xs font-semibold tracking-wider text-white/45 uppercase`}>{label}</p>;
+}
+
 export default function App({ user }) {
   function DashboardChartTooltip({ active, payload, label }) {
     if (!active || !payload || !payload.length) return null;
     const bucket = payload[0].payload || {};
     const displayLabel = bucket.fullLabel || label;
     return (
-      <div className="bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 shadow-lg text-[10px] space-y-0.5">
+      <div className="bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 shadow-lg text-xs space-y-0.5">
         <p className="font-bold text-nexus-text">{displayLabel}</p>
         <p className="text-nexus-text-secondary">{t('appointments')}: {bucket.citas || 0}</p>
       <p className="text-nexus-text-secondary">Ventas: {Number(bucket.ventas || 0).toLocaleString('es-BO')} Bs</p>
@@ -100,7 +156,6 @@ const [activeTab, setActiveTab] = useState('agenda');
   };
   const [agendaView, setAgendaView] = useState('dia');
   const agendaBoxRef = useRef(null);
-  const agendaBoxHeight = useFillHeight(agendaBoxRef, [activeTab, agendaView], { min: 560 });
   const [inventoryTab, setInventoryTab] = useState('stock');
   const [showNewProductPanel, setShowNewProductPanel] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -289,6 +344,10 @@ const [saleForm, setSaleForm] = useState({
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  // En celular el panel abierto siempre muestra los nombres, aunque en escritorio esté contraído.
+  const navCollapsed = isSidebarCollapsed && !isMobileSidebarOpen;
+  // Pantallas que muestran los controles de periodo y sucursal en la cabecera.
+  const headerHasToolbar = ['agenda', 'dashboard', 'commissions', 'assistance', 'reports', 'automatizaciones'].includes(activeTab);
 
   const [businessName, setBusinessName] = useState('GallyFlow');
   const [isEditingBusinessName, setIsEditingBusinessName] = useState(false);
@@ -394,6 +453,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
     if (!Array.isArray(barbers)) return [];
     return barbers.filter(b => b?.branch === selectedBranch);
   }, [barbers, selectedBranch]);
+  // Alto de la agenda Día: ocupa el espacio visible. Se vuelve a medir si aparece
+  // la fila de filtro por profesional (Fase 4).
+  const agendaBoxHeight = useFillHeight(agendaBoxRef, [activeTab, agendaView, (branchBarbers || []).length > 1], { min: 480 });
 
   const branchReservations = useMemo(() => {
     if (!Array.isArray(reservations)) return [];
@@ -2571,281 +2633,174 @@ const { businessSettings } = useBusinessSettings(negocioId);
     <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-x-hidden relative">
       
       {isMobileSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-40 md:hidden"
+        <div
+          className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-xs z-40 md:hidden"
           onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
-      {}
-      <aside 
+      {/* MENÚ LATERAL (Fase 4: ítems de 40px, textos de 12px o más). En celular
+          es un panel que se abre con el botón de menú y muestra siempre los nombres. */}
+      <aside
         className={`fixed md:relative inset-y-0 left-0 bg-nexus-navy border-r border-nexus-navy-border flex flex-col shrink-0 z-50 transition-all duration-300 ease-in-out ${
-          isMobileSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'
+          isMobileSidebarOpen ? 'translate-x-0 w-72 max-w-[85vw]' : '-translate-x-full md:translate-x-0'
         } ${
           isSidebarCollapsed ? 'md:w-20' : 'md:w-60'
         }`}
       >
-        <div className={`p-5 border-b border-nexus-navy-border flex items-center justify-between gap-2 ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
-          <div className={`items-center gap-2.5 overflow-hidden flex ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
-            <img 
+        <div className={`h-16 px-4 border-b border-nexus-navy-border flex items-center justify-between gap-2 shrink-0 ${navCollapsed ? 'md:justify-center md:px-2' : ''}`}>
+          <div className={`items-center gap-2.5 overflow-hidden flex min-w-0 ${navCollapsed ? 'hidden' : ''}`}>
+            <img
               src="/favicon.svg"
-              alt="GallyFlow"
+              alt=""
               className="w-9 h-9 rounded-lg shadow-md shrink-0 object-contain"
             />
-            {!isSidebarCollapsed && (
-              <div className="transition-all duration-300 ease-in-out opacity-100 animate-fadeIn">
-                <h1 className="text-xs font-extrabold tracking-wider text-nexus-text-inverse" style={{ color: '#FFFFFF' }}>
-                  GallyFlow
-                </h1>
-                <p className="text-[9px] text-white/40 font-bold tracking-widest uppercase">Multi-Business SaaS</p>
-              </div>
-            )}
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold tracking-wide text-white truncate">
+                GallyFlow
+              </h1>
+              <p className="text-xs text-white/50 truncate">Multi-Business SaaS</p>
+            </div>
           </div>
 
-          <button 
+          <button
+            type="button"
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="hidden md:flex p-1.5 hover:bg-nexus-navy-soft text-white/70 hover:text-white rounded-lg transition-colors"
-            title={isSidebarCollapsed ? "Expandir" : "Contraer"}
+            className="hidden md:inline-flex h-10 w-10 items-center justify-center hover:bg-nexus-navy-soft text-white/70 hover:text-white rounded-lg transition-colors cursor-pointer shrink-0"
+            title={isSidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+            aria-label={isSidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
           >
-            <span className={`inline-flex transition-transform duration-300 ${isSidebarCollapsed ? 'rotate-0' : 'rotate-180'}`}>
-              {isSidebarCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
-            </span>
+            {isSidebarCollapsed ? <Menu className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
           </button>
 
-          <button 
+          <button
+            type="button"
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="md:hidden p-1.5 hover:bg-nexus-navy-soft text-white/70 hover:text-white rounded-lg"
+            className="md:hidden inline-flex h-10 w-10 items-center justify-center hover:bg-nexus-navy-soft text-white/70 hover:text-white rounded-lg cursor-pointer shrink-0"
+            aria-label="Cerrar menú"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {!isSidebarCollapsed ? (
-            <p className="px-2.5 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Principal</p>
-          ) : (
-            <div className="border-t border-nexus-navy-border my-2 mx-2" />
-          )}
-          
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto" aria-label="Menú principal">
+          <SidebarSection label="Principal" collapsed={navCollapsed} first />
+
           {hasFeature(planFeatures, 'dashboard') && hasModule('dashboard') && (
-          <button 
-            onClick={() => {
-              setActiveTab('dashboard');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'dashboard' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <LayoutDashboard className={`w-4 h-4 shrink-0 ${activeTab === 'dashboard' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Dashboard</span>}
-          </button>
+            <SidebarItem
+              icon={LayoutDashboard}
+              label="Dashboard"
+              collapsed={navCollapsed}
+              active={activeTab === 'dashboard'}
+              onClick={() => { setActiveTab('dashboard'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
-          <button 
-            onClick={() => {
-              setActiveTab('agenda');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'agenda' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <CalendarIcon className={`w-4 h-4 shrink-0 ${activeTab === 'agenda' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && (
-              <>
-                <span className="truncate">Agenda</span>
-                {pendingBadgeCount > 0 && (
-                  <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold bg-nexus-primary text-white rounded-full">
-                    {pendingBadgeCount}
-                  </span>
-                )}
-              </>
-            )}
-          </button>
+          <SidebarItem
+            icon={CalendarIcon}
+            label="Agenda"
+            collapsed={navCollapsed}
+            active={activeTab === 'agenda'}
+            badge={pendingBadgeCount}
+            badgeLabel={`${pendingBadgeCount} pendientes`}
+            onClick={() => { setActiveTab('agenda'); setIsMobileSidebarOpen(false); }}
+          />
 
-          {!isSidebarCollapsed ? (
-            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Gestión</p>
-          ) : (
-            <div className="border-t border-nexus-navy-border my-3 mx-2" />
-          )}
+          <SidebarSection label="Gestión" collapsed={navCollapsed} />
 
           {hasModule('barbers') && (
-          <button 
-            onClick={() => {
-              setActiveTab('barbers');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'barbers' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <Users className={`w-4 h-4 shrink-0 ${activeTab === 'barbers' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">{t('professionals')}</span>}
-          </button>
+            <SidebarItem
+              icon={Users}
+              label={t('professionals')}
+              collapsed={navCollapsed}
+              active={activeTab === 'barbers'}
+              onClick={() => { setActiveTab('barbers'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
           {hasModule('services') && (
-          <button 
-            onClick={() => {
-              setActiveTab('services');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'services' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <ServiceIcon className={`w-4 h-4 shrink-0 ${activeTab === 'services' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">{t('services')}</span>}
-          </button>
+            <SidebarItem
+              icon={ServiceIcon}
+              label={t('services')}
+              collapsed={navCollapsed}
+              active={activeTab === 'services'}
+              onClick={() => { setActiveTab('services'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
           {hasFeature(planFeatures, 'clientes') && hasModule('clients') && (
-          <button 
-            onClick={() => {
-              setActiveTab('clients');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'clients' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <UserCheck className={`w-4 h-4 shrink-0 ${activeTab === 'clients' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">{t('clients')}</span>}
-          </button>
+            <SidebarItem
+              icon={UserCheck}
+              label={t('clients')}
+              collapsed={navCollapsed}
+              active={activeTab === 'clients'}
+              onClick={() => { setActiveTab('clients'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
           {hasModule('branches') && (
-          <button 
-            onClick={() => {
-              setActiveTab('branches');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'branches' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <Building2 className={`w-4 h-4 shrink-0 ${activeTab === 'branches' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Sucursales</span>}
-          </button>
+            <SidebarItem
+              icon={Building2}
+              label="Sucursales"
+              collapsed={navCollapsed}
+              active={activeTab === 'branches'}
+              onClick={() => { setActiveTab('branches'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
-        {hasFeature(planFeatures, 'inventario') && hasModule('inventory') && (
-          <button 
-            onClick={() => {
-              setActiveTab('inventory');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'inventory' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <Package className={`w-4 h-4 shrink-0 ${activeTab === 'inventory' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Inventario</span>}
-          </button>
-         )}
-
-
-          {!isSidebarCollapsed ? (
-            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Finanzas</p>
-          ) : (
-            <div className="border-t border-nexus-navy-border my-3 mx-2" />
+          {hasFeature(planFeatures, 'inventario') && hasModule('inventory') && (
+            <SidebarItem
+              icon={Package}
+              label="Inventario"
+              collapsed={navCollapsed}
+              active={activeTab === 'inventory'}
+              onClick={() => { setActiveTab('inventory'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
-{hasFeature(planFeatures, 'comisiones') && hasModule('commissions') && (
-          <button 
-            onClick={() => {
-              setActiveTab('commissions');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'commissions' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <DollarSign className={`w-4 h-4 shrink-0 ${activeTab === 'commissions' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Comisiones</span>}
-          </button>
+          <SidebarSection label="Finanzas" collapsed={navCollapsed} />
+
+          {hasFeature(planFeatures, 'comisiones') && hasModule('commissions') && (
+            <SidebarItem
+              icon={DollarSign}
+              label="Comisiones"
+              collapsed={navCollapsed}
+              active={activeTab === 'commissions'}
+              onClick={() => { setActiveTab('commissions'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
           {hasFeature(planFeatures, 'asistencia') && hasModule('assistance') && (
-          <button 
-            onClick={() => {
-              setActiveTab('assistance');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'assistance' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <Clock className={`w-4 h-4 shrink-0 ${activeTab === 'assistance' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Asistencia</span>}
-          </button>
+            <SidebarItem
+              icon={Clock}
+              label="Asistencia"
+              collapsed={navCollapsed}
+              active={activeTab === 'assistance'}
+              onClick={() => { setActiveTab('assistance'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
           {hasFeature(planFeatures, 'analiticas') && hasModule('reports') && (
-          <button 
-            onClick={() => {
-              setActiveTab('reports');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'reports' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <BarChart3 className={`w-4 h-4 shrink-0 ${activeTab === 'reports' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && <span className="truncate">Analíticas</span>}
-          </button>
+            <SidebarItem
+              icon={BarChart3}
+              label="Analíticas"
+              collapsed={navCollapsed}
+              active={activeTab === 'reports'}
+              onClick={() => { setActiveTab('reports'); setIsMobileSidebarOpen(false); }}
+            />
           )}
 
-          {!isSidebarCollapsed ? (
-            <p className="px-2.5 pt-4 py-1.5 text-[9px] font-bold tracking-widest text-white/40 uppercase">Sistema</p>
-          ) : (
-            <div className="border-t border-nexus-navy-border my-3 mx-2" />
-          )}
+          <SidebarSection label="Sistema" collapsed={navCollapsed} />
 
-         <button 
+          <SidebarItem
+            icon={Settings}
+            label="Configuración"
+            collapsed={navCollapsed}
+            active={activeTab === 'settings'}
+            expanded={!navCollapsed ? isSettingsMenuOpen : undefined}
+            trailing={<ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isSettingsMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />}
             onClick={() => {
-              if (isSidebarCollapsed) {
+              if (navCollapsed) {
                 setActiveTab('settings');
                 setIsMobileSidebarOpen(false);
                 return;
@@ -2853,71 +2808,60 @@ const { businessSettings } = useBusinessSettings(negocioId);
               setActiveTab('settings');
               setIsSettingsMenuOpen((prev) => !prev);
             }}
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 ${
-              isSidebarCollapsed ? 'justify-center' : 'gap-2.5'
-            } ${
-              activeTab === 'settings' 
-                ? 'bg-nexus-primary text-white border-l-2 border-nexus-primary shadow-md' 
-                : 'text-white/70 hover:text-white hover:bg-nexus-navy-soft'
-            }`}
-          >
-            <Settings className={`w-4 h-4 shrink-0 ${activeTab === 'settings' ? 'text-white' : 'text-nexus-primary'}`} />
-            {!isSidebarCollapsed && (
-              <>
-                <span className="truncate flex-1 text-left">Configuración</span>
-                <ChevronDown 
-                  className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isSettingsMenuOpen ? 'rotate-180' : ''}`} 
-                />
-              </>
-            )}
-          </button>
+          />
 
-          {!isSidebarCollapsed && isSettingsMenuOpen && (
-            <div className="ml-3 pl-2.5 border-l border-nexus-navy-border space-y-0.5 py-1">
-              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp')).map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => {
-                    setActiveTab('settings');
-                    setSettingsSection(id);
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-150 ${
-                    activeTab === 'settings' && settingsSection === id
-                      ? 'bg-nexus-navy-soft text-nexus-primary'
-                      : 'text-white/40 hover:text-white hover:bg-nexus-navy-soft'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{label}</span>
-                </button>
-              ))}
+          {!navCollapsed && isSettingsMenuOpen && (
+            <div className="ml-4 pl-2 border-l border-nexus-navy-border space-y-0.5 py-1">
+              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp')).map(({ id, label, icon: Icon }) => {
+                const isCurrent = activeTab === 'settings' && settingsSection === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-current={isCurrent ? 'page' : undefined}
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setSettingsSection(id);
+                      setIsMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex h-9 items-center gap-2.5 px-2.5 rounded-lg text-sm transition-colors duration-150 cursor-pointer ${
+                      isCurrent
+                        ? 'bg-nexus-navy-soft text-white font-semibold'
+                        : 'text-white/60 hover:text-white hover:bg-nexus-navy-soft'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${isCurrent ? 'text-nexus-primary' : ''}`} aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </nav>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        
-        {}
-        <header className="sticky top-0 bg-nexus-background/95 backdrop-blur-md border-b border-nexus-border py-3.5 px-4 md:px-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 z-25">
-          <div className="flex items-center gap-3 w-full lg:w-auto">
+
+        {/* CABECERA (Fase 4). En celular: menú + título + acción principal en una
+            fila, y los controles de periodo/sucursal debajo, con áreas de 40px. */}
+        <header className="sticky top-0 bg-nexus-background/95 backdrop-blur-md border-b border-nexus-border px-3 py-3 sm:px-4 md:px-6 flex flex-col xl:flex-row xl:items-center justify-between gap-3 z-25">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 w-full xl:w-auto">
             <button
+              type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded-lg transition-all shrink-0 border border-nexus-border"
-              title="Abrir Menú"
+              className="md:hidden inline-flex h-10 w-10 items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded-lg transition-colors shrink-0 border border-nexus-border bg-nexus-surface cursor-pointer"
+              aria-label="Abrir menú"
+              title="Abrir menú"
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
-                
-              </div>
-              <h2 className="text-lg font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
-                <span className="text-nexus-text-secondary font-normal">{businessName}</span>
-                <span className="text-nexus-text-muted">/</span>
-                <span>
+            <div className="min-w-0 flex-1">
+              <p className={`text-xs text-nexus-text-secondary truncate ${headerHasToolbar ? '2xl:hidden' : 'sm:hidden'}`}>{businessName}</p>
+              <h2 className="text-base sm:text-lg font-bold text-nexus-text tracking-tight flex items-center gap-2 min-w-0">
+                <span className={`${headerHasToolbar ? 'hidden 2xl:inline' : 'hidden sm:inline'} text-nexus-text-secondary font-normal truncate shrink`}>{businessName}</span>
+                <span className={`${headerHasToolbar ? 'hidden 2xl:inline' : 'hidden sm:inline'} text-nexus-text-muted`} aria-hidden="true">/</span>
+                <span className="truncate">
                   {activeTab === 'dashboard' && 'Panel General'}
                   {activeTab === 'agenda' && `Agenda de ${t('professionals')}`}
                   {activeTab === 'barbers' && `Gestión de ${t('professionals')}`}
@@ -2932,59 +2876,78 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </span>
               </h2>
             </div>
+
+            {activeTab === 'agenda' && (
+              <span className="xl:hidden shrink-0">
+              <Button
+                size="sm"
+                icon={Plus}
+                onClick={() => {
+                  setNewReservation(prev => ({ ...prev, date: selectedDate }));
+                  setActiveModal('add-reservation');
+                }}
+              >
+                {g('appointment', 'Nuevo', 'Nueva')} {t('appointment')}
+              </Button>
+              </span>
+            )}
           </div>
 
-          {['agenda', 'dashboard', 'commissions', 'assistance', 'reports', 'automatizaciones'].includes(activeTab) && (
-            <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-              
-              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg p-0.5 shadow-inner">
-                {['dia', 'semana', 'mes', 'año'].map((view) => (
-                  <button
-                    key={view}
-                    onClick={() => setAgendaView(view)}
-                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
-                      agendaView === view
-                        ? 'bg-nexus-primary text-white shadow-md'
-                        : 'text-nexus-text-secondary hover:text-nexus-text'
-                    }`}
-                  >
-                    {view.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+          {headerHasToolbar && (
+            <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:flex-nowrap">
 
-              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg overflow-hidden shrink-0 shadow-md">
-                <button 
+              <SegmentedControl
+                ariaLabel="Periodo"
+                value={agendaView}
+                onChange={setAgendaView}
+                options={[
+                  { value: 'dia', label: 'Día' },
+                  { value: 'semana', label: 'Semana' },
+                  { value: 'mes', label: 'Mes' },
+                  { value: 'año', label: 'Año' },
+                ]}
+                className="w-full sm:w-auto shrink-0"
+              />
+
+              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg overflow-hidden h-10 flex-1 sm:flex-none min-w-0">
+                <button
+                  type="button"
                   onClick={handlePrevPeriod}
-                  className="p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-r border-nexus-border"
+                  aria-label="Periodo anterior"
+                  title="Periodo anterior"
+                  className="h-full w-10 inline-flex items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-r border-nexus-border shrink-0 cursor-pointer"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
-                
-                <div className="flex items-center px-3.5 py-1 text-xs text-nexus-text gap-2 font-mono font-bold select-none min-w-[120px] justify-center">
-                  <span>{getFormattedDateLabel(selectedDate, agendaView)}</span>
+
+                <div className="flex-1 flex items-center justify-center px-3 text-sm text-nexus-text font-semibold nx-num select-none sm:min-w-[136px] whitespace-nowrap" aria-live="polite">
+                  {getFormattedDateLabel(selectedDate, agendaView)}
                 </div>
 
-                <button 
+                <button
+                  type="button"
                   onClick={handleNextPeriod}
-                  className="p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-l border-nexus-border"
+                  aria-label="Periodo siguiente"
+                  title="Periodo siguiente"
+                  className="h-full w-10 inline-flex items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text transition-colors border-l border-nexus-border shrink-0 cursor-pointer"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-2.5 py-1 text-xs text-nexus-text gap-1.5 shrink-0 shadow-md">
-              <MapPin className="w-3.5 h-3.5 text-nexus-primary" />
-                <select 
+              <label className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg h-10 pl-2.5 pr-1 text-sm text-nexus-text gap-1.5 shrink-0 max-w-[45%] sm:max-w-none">
+                <MapPin className="w-4 h-4 text-nexus-primary shrink-0" aria-hidden="true" />
+                <span className="sr-only">Sucursal</span>
+                <select
                   value={selectedBranch || ''}
                   onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="bg-transparent border-0 outline-none text-nexus-text font-bold cursor-pointer text-xs"
+                  className="h-full min-w-0 bg-transparent border-0 outline-none text-nexus-text font-semibold cursor-pointer text-base sm:text-sm truncate"
                 >
                   {(branches || []).map(b => (
                     <option key={b?.id || b?.name} value={b?.name} className="bg-nexus-surface">{b?.name}</option>
                   ))}
                 </select>
-              </div>
+              </label>
 
               {negocioId && (
                 <a
@@ -2992,143 +2955,147 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Abrir página pública"
-                  className="flex items-center justify-center bg-nexus-surface border border-nexus-border hover:border-nexus-primary/60 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text p-1.5 rounded-lg shrink-0 shadow-md transition-all cursor-pointer"
+                  aria-label="Abrir página pública de reservas"
+                  className="inline-flex h-10 w-10 items-center justify-center bg-nexus-surface border border-nexus-border hover:border-nexus-primary/60 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded-lg shrink-0 transition-colors cursor-pointer"
                 >
-                  <Globe className="w-3.5 h-3.5" />
+                  <Globe className="w-[18px] h-[18px]" />
                 </a>
               )}
 
               {activeTab === 'agenda' && (
-                <button
-                  onClick={() => {
-                    setNewReservation(prev => ({ ...prev, date: selectedDate }));
-                    setActiveModal('add-reservation');
-                  }}
-                  className="ml-auto lg:ml-0 px-3 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md transition-all flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {g('appointment', 'Nuevo', 'Nueva')} {t('appointment')}
-                </button>
+                <span className="hidden xl:block">
+                  <Button
+                    icon={Plus}
+                    onClick={() => {
+                      setNewReservation(prev => ({ ...prev, date: selectedDate }));
+                      setActiveModal('add-reservation');
+                    }}
+                  >
+                    {g('appointment', 'Nuevo', 'Nueva')} {t('appointment')}
+                  </Button>
+                </span>
               )}
             </div>
-          )}  
+          )}
         </header>
 
-        <div className="flex-1 p-5 space-y-5">
+        <div className="flex-1 p-3 sm:p-5 space-y-4 sm:space-y-5">
           
           {/* ==========================================
               1. PESTAÑA: DASHBOARD (METRICAS FILTRADAS)
               ========================================== */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
-                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Ventas periodo</span>
-                  <h3 className="text-xl font-black text-nexus-text font-mono mt-1">{formatBs(rangeMetrics?.totalRevenue)}</h3>
+            <div className="space-y-4 sm:space-y-5">
+              {/* Indicadores del periodo (Fase 4: textos de 12px o más, números alineados). */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">Ventas del periodo</p>
+                  <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.totalRevenue)}</p>
                   {salesComparison.comparable ? (
-                    <div className={`flex items-center gap-1 mt-1 text-[10px] font-bold ${salesComparison.percent >= 0 ? 'text-nexus-primary' : 'text-nexus-error-text'}`}>
-                      {salesComparison.percent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                      <span>{salesComparison.percent >= 0 ? '+' : ''}{salesComparison.percent.toFixed(1)}% vs anterior</span>
-                    </div>
+                    <p className={`flex items-center gap-1 mt-1 text-xs font-semibold ${salesComparison.percent >= 0 ? 'text-nexus-success-text' : 'text-nexus-error-text'}`}>
+                      {salesComparison.percent >= 0 ? <TrendingUp className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <TrendingDown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
+                      <span className="nx-num">{salesComparison.percent >= 0 ? '+' : ''}{salesComparison.percent.toFixed(1)}%</span>
+                      <span className="font-normal text-nexus-text-muted truncate">vs anterior</span>
+                    </p>
                   ) : (
-                    <p className="text-[9px] text-nexus-text-muted mt-1">Sin datos comparables</p>
+                    <p className="text-xs text-nexus-text-muted mt-1">Sin datos para comparar</p>
                   )}
                 </div>
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
-                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">{t('appointments')} {g('appointment', 'Agendados', 'Agendadas')}</span>
-                  <h3 className="text-xl font-black text-nexus-text font-mono mt-1">{(rangeReservations || []).length}</h3>
-                  <p className="text-[9px] text-nexus-text-muted mt-1">Total acumuladas en rango</p>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">{t('appointments')} {g('appointment', 'agendados', 'agendadas')}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1">{(rangeReservations || []).length}</p>
+                  <p className="text-xs text-nexus-text-muted mt-1">En el periodo</p>
                 </div>
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
-                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">{t('clients')} {g('client', 'Atendidos', 'Atendidas')}</span>
-                  <h3 className="text-xl font-black text-nexus-primary font-mono mt-1">{rangeMetrics?.clientsServed}</h3>
-                  <p className="text-[9px] text-nexus-primary mt-1">Fidelización premium activa</p>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">{t('clients')} {g('client', 'atendidos', 'atendidas')}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-nexus-primary nx-num mt-1">{rangeMetrics?.clientsServed}</p>
+                  <p className="text-xs text-nexus-text-muted mt-1">En el periodo</p>
                 </div>
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-sm">
-                  <span className="text-[10px] font-bold text-nexus-text-secondary tracking-wider uppercase">Comisión Estimada</span>
-                  <h3 className="text-xl font-black text-nexus-error-text font-mono mt-1">{formatBs(rangeMetrics?.pendingCommissions)}</h3>
-                  <p className="text-[9px] text-nexus-error-text/80 mt-1">Acumulado liquidación periodo</p>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">Comisión estimada</p>
+                  <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.pendingCommissions)}</p>
+                  <p className="text-xs text-nexus-text-muted mt-1">A liquidar en el periodo</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Estimación Gráfica de Productividad ({agendaView.toUpperCase()})</h4>
-                    <span className="text-[9px] font-bold bg-nexus-primary-soft text-nexus-primary px-2.5 py-0.5 rounded border border-nexus-border">Tiempo Real</span>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+                <div className="lg:col-span-2 bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
+                  <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <h3 className="text-base font-semibold text-nexus-text">{t('appointments')} del periodo</h3>
+                    <span className="inline-flex items-center rounded-full border border-nexus-primary/20 bg-nexus-primary-soft px-2 py-0.5 text-xs font-medium text-nexus-primary">Tiempo real</span>
                   </div>
-                  <div className="h-44 w-full">
+                  <div className="h-52 sm:h-56 w-full">
                     {dashboardChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={dashboardChartData} margin={{ top: 5, right: 5, left: -5, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--nexus-border, #333)" strokeOpacity={0.25} vertical={false} />
-                          <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={agendaView === 'mes' ? 2 : 0} />
-                          <YAxis tick={{ fontSize: 9 }} width={34} domain={[0, chartYAxisConfig.max]} ticks={chartYAxisConfig.ticks} allowDecimals={false} />
+                        <AreaChart data={dashboardChartData} margin={{ top: 5, right: 8, left: -4, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--nx-border)" strokeOpacity={0.6} vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--nx-text-secondary)' }} interval={agendaView === 'mes' ? 3 : 'preserveStartEnd'} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fontSize: 12, fill: 'var(--nx-text-secondary)' }} width={34} domain={[0, chartYAxisConfig.max]} ticks={chartYAxisConfig.ticks} allowDecimals={false} tickLine={false} axisLine={false} />
                           <Tooltip content={<DashboardChartTooltip />} />
                           <Area type="monotone" dataKey="citas" stroke="var(--nx-primary)" strokeWidth={2} fill="url(#chartGrad)" />
                         </AreaChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-full w-full flex items-center justify-center text-center px-4 text-[10px] text-nexus-text-muted">
-                        No hay datos suficientes para este período
+                      <div className="h-full w-full flex items-center justify-center text-center px-4 text-sm text-nexus-text-muted">
+                        No hay datos suficientes para este periodo
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm flex flex-col">
-                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">{g('appointment', 'Próximo', 'Próxima')} {t('appointment')}</h4>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm flex flex-col min-w-0">
+                  <h3 className="text-base font-semibold text-nexus-text mb-3">{g('appointment', 'Próximo', 'Próxima')} {tl('appointment')}</h3>
                   {nextAppointment ? (
-                    <div className="flex-1 flex flex-col justify-center">
-                      <span className="text-2xl font-black text-nexus-primary font-mono">{nextAppointment.time}</span>
-                      <span className="text-sm font-bold text-nexus-text mt-2">{nextAppointment.clientName}</span>
-                      <span className="text-xs text-nexus-text-secondary mt-0.5">{nextAppointment.serviceName || t('service')}</span>
-                      <span className="text-[10px] text-nexus-text-muted mt-1">
+                    <div className="flex-1 flex flex-col justify-center min-w-0">
+                      <span className="text-3xl font-bold text-nexus-primary nx-num">{nextAppointment.time}</span>
+                      <span className="text-base font-semibold text-nexus-text mt-2 truncate">{nextAppointment.clientName}</span>
+                      <span className="text-sm text-nexus-text-secondary mt-0.5 truncate">{nextAppointment.serviceName || t('service')}</span>
+                      <span className="text-sm text-nexus-text-muted mt-1 truncate">
                         {(barbers.find(b => b?.id === (nextAppointment.professionalId || nextAppointment.barberId))?.name) || 'Sin asignar'}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex-1 flex items-center justify-center text-center text-[11px] text-nexus-text-muted">
+                    <div className="flex-1 flex items-center justify-center text-center text-sm text-nexus-text-muted py-6">
                       No hay {g('appointment', 'próximos', 'próximas')} {tl('appointments')}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
-          <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">{paymentsLabel}</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
+                  <h3 className="text-base font-semibold text-nexus-text mb-3">{paymentsLabel}</h3>
                   {paymentBreakdown.total > 0 ? (
                     <div className="space-y-2">
                       {Object.entries(paymentBreakdown.totals).map(([method, amount]) => (
-                        <div key={method} className="flex justify-between items-center text-xs">
-                          <span className="text-nexus-text-secondary">{method}</span>
-                          <span className="font-bold text-nexus-text font-mono">{formatBs(amount)}</span>
+                        <div key={method} className="flex justify-between items-center gap-3 text-sm">
+                          <span className="text-nexus-text-secondary truncate">{method}</span>
+                          <span className="font-semibold text-nexus-text nx-num shrink-0">{formatBs(amount)}</span>
                         </div>
                       ))}
-                      <div className="flex justify-between items-center text-xs pt-2 border-t border-nexus-border">
-                        <span className="font-bold text-nexus-text-secondary uppercase">Total</span>
-                        <span className="font-black text-nexus-primary font-mono">{formatBs(paymentBreakdown.total)}</span>
+                      <div className="flex justify-between items-center gap-3 text-sm pt-2 border-t border-nexus-border">
+                        <span className="font-semibold text-nexus-text">Total</span>
+                        <span className="font-bold text-nexus-primary nx-num shrink-0">{formatBs(paymentBreakdown.total)}</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[11px] text-nexus-text-muted py-4 text-center">Sin pagos registrados en este período</div>
+                    <div className="text-sm text-nexus-text-muted py-4 text-center">Sin pagos registrados en este periodo</div>
                   )}
                 </div>
 
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-5 shadow-sm">
-                  <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono mb-3">Actividad Reciente</h4>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
+                  <h3 className="text-base font-semibold text-nexus-text mb-3">Actividad reciente</h3>
                   {recentActivity.length > 0 ? (
-                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
                       {recentActivity.map(ev => (
-                        <div key={ev.id} className="text-[11px] text-nexus-text-secondary flex gap-1.5">
-                          <span className="font-mono text-nexus-text-muted shrink-0">{formatActivityTime(ev.ts)}</span>
-                          <span>· {ev.clientName} — {ev.label}</span>
-                        </div>
+                        <li key={ev.id} className="text-sm text-nexus-text-secondary flex gap-2">
+                          <span className="nx-num text-nexus-text-muted shrink-0">{formatActivityTime(ev.ts)}</span>
+                          <span className="min-w-0"><span className="font-medium text-nexus-text">{ev.clientName}</span> — {ev.label}</span>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   ) : (
-                    <div className="text-[11px] text-nexus-text-muted py-4 text-center">Sin actividad reciente</div>
+                    <div className="text-sm text-nexus-text-muted py-4 text-center">Sin actividad reciente</div>
                   )}
                 </div>
               </div>
@@ -3139,14 +3106,51 @@ const { businessSettings } = useBusinessSettings(negocioId);
               2. PESTAÑA: AGENDA DEL STAFF
               ========================================== */}
           {activeTab === 'agenda' && (
-            <div className="space-y-4">
-              
+            <div className="space-y-3 sm:space-y-4">
+
               {agendaView === 'dia' && (() => {
                 const dayColumns = (branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId);
                 const totalCols = dayColumns.length + (filterBarberId === 'all' ? 1 : 0);
-                const dayMinWidth = 60 + totalCols * 150;
+                // Escala de la cuadrícula (Fase 4): 48px por cada media hora para que
+                // una cita de 30 min muestre hora, nombre y servicio sin cortarse.
+                const SLOT_PX = 48;
+                const PX_PER_MIN = SLOT_PX / 30;
+                const GRID_START_MIN = 480;
+                const HOUR_COL_PX = 56;
+                const COL_MIN_PX = 150;
+                const dayMinWidth = HOUR_COL_PX + totalCols * COL_MIN_PX;
+                const toTop = (min) => (min - GRID_START_MIN) * PX_PER_MIN;
                 return (
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
+                <div className="space-y-3">
+                  {/* Filtro de profesional (solo vista; usa el filtro que ya existía). En
+                      celular permite ver una sola columna a pantalla completa. */}
+                  {(branchBarbers || []).length > 1 && (
+                    <div className="-mx-3 sm:mx-0 px-3 sm:px-0 overflow-x-auto scrollbar-none">
+                      <div role="radiogroup" aria-label={`Ver ${tl('professionals')}`} className="flex items-center gap-2 w-max">
+                        {[{ id: 'all', name: 'Todos' }, ...(branchBarbers || [])].map(b => {
+                          const isOn = filterBarberId === b?.id;
+                          return (
+                            <button
+                              key={b?.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={isOn}
+                              onClick={() => setFilterBarberId(b?.id)}
+                              className={`h-9 px-3.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                                isOn
+                                  ? 'bg-nexus-primary border-nexus-primary text-white shadow-sm'
+                                  : 'bg-nexus-surface border-nexus-border text-nexus-text-secondary hover:text-nexus-text hover:border-nexus-primary/40'
+                              }`}
+                            >
+                              {b?.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-sm">
                   {/* UN SOLO contenedor con scroll (horizontal y vertical).
                       Encabezado = sticky top, columna de horas = sticky left. */}
                   <div ref={agendaBoxRef} style={{ height: agendaBoxHeight ?? 560 }} className="relative overflow-auto overscroll-contain">
@@ -3154,26 +3158,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                       {/* ENCABEZADO (fijo arriba) */}
                       <div className="sticky top-0 z-30 flex border-b border-nexus-border bg-nexus-background">
-                        <div className="sticky left-0 z-40 w-[60px] shrink-0 border-r border-nexus-border bg-nexus-background flex items-center justify-center p-2.5">
-                          <Clock className="w-4 h-4 text-nexus-text-muted" />
+                        <div style={{ width: HOUR_COL_PX }} className="sticky left-0 z-40 shrink-0 border-r border-nexus-border bg-nexus-background flex items-center justify-center p-2">
+                          <Clock className="w-4 h-4 text-nexus-text-muted" aria-hidden="true" />
                         </div>
                         <div className="flex flex-1 divide-x divide-nexus-border">
                           {filterBarberId === 'all' && (
-                            <div className="flex-1 min-w-[150px] py-2 px-3 bg-nexus-primary-soft flex flex-col items-center justify-center gap-0.5 text-nexus-primary font-bold">
-                              <div className="flex items-center gap-2">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                <span className="text-[10px] tracking-wider uppercase font-black font-mono">Pendientes</span>
+                            <div style={{ minWidth: COL_MIN_PX }} className="flex-1 py-2 px-2 bg-nexus-primary-soft flex flex-col items-center justify-center gap-0.5 text-nexus-primary min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                                <span className="text-sm font-semibold">Pendientes</span>
                               </div>
-                              <span className="text-[9px] font-mono font-bold text-nexus-primary/70">{barberDayCounts['pending'] || 0} reservas</span>
+                              <span className="text-xs text-nexus-primary/80 nx-num">{barberDayCounts['pending'] || 0} reservas</span>
                             </div>
                           )}
                           {dayColumns.map(b => (
-                            <div key={b?.id} className="flex-1 min-w-[150px] py-2 px-3 flex flex-col items-center justify-center gap-0.5 bg-nexus-background">
-                              <div className="flex items-center gap-2 min-w-0">
-                              <Avatar src={b?.avatar} name={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-[9px]" />
-                                <h5 className="text-[11px] font-bold text-nexus-text truncate">{b?.name}</h5>
+                            <div key={b?.id} style={{ minWidth: COL_MIN_PX }} className="flex-1 py-2 px-2 flex flex-col items-center justify-center gap-0.5 bg-nexus-background min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 max-w-full">
+                                <Avatar src={b?.avatar} name={b?.name} className="w-7 h-7 rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-xs" />
+                                <h5 className="text-sm font-semibold text-nexus-text truncate">{b?.name}</h5>
                               </div>
-                              <span className="text-[9px] font-mono font-bold text-nexus-text-muted">{barberDayCounts[b?.id] || 0} reservas</span>
+                              <span className="text-xs text-nexus-text-muted nx-num">{barberDayCounts[b?.id] || 0} reservas</span>
                             </div>
                           ))}
                         </div>
@@ -3185,17 +3189,17 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         {currentTimeMinutes >= 480 && currentTimeMinutes <= 1320 && (
                           <div
                             className="absolute left-0 right-0 border-t-2 border-nexus-error z-10 flex items-center pointer-events-none"
-                            style={{ top: `${((currentTimeMinutes - 480) / 840) * 1120}px` }}
+                            style={{ top: `${toTop(currentTimeMinutes)}px` }}
                           >
                             <div className="w-2.5 h-2.5 rounded-full bg-nexus-error -ml-1" />
                           </div>
                         )}
 
                         {/* COLUMNA DE HORAS (fija a la izquierda) */}
-                        <div className="sticky left-0 z-20 w-[60px] shrink-0 bg-nexus-surface border-r border-nexus-border divide-y divide-nexus-border">
+                        <div style={{ width: HOUR_COL_PX }} className="sticky left-0 z-20 shrink-0 bg-nexus-surface border-r border-nexus-border">
                           {hoursRange.map(hour => (
-                            <div key={hour} className="h-10 px-1.5 flex items-start justify-end pt-1">
-                              <span className="font-mono text-[9px] text-nexus-text-muted font-bold">{formatHourLabel(hour)}</span>
+                            <div key={hour} style={{ height: SLOT_PX }} className="px-2 flex items-start justify-end pt-1 border-b border-nexus-border/60">
+                              <span className={`nx-num text-xs ${hour % 1 === 0 ? 'text-nexus-text-secondary font-semibold' : 'text-nexus-text-muted'}`}>{formatHourLabel(hour)}</span>
                             </div>
                           ))}
                         </div>
@@ -3204,12 +3208,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <div className="flex flex-1 divide-x divide-nexus-border bg-nexus-background">
 
                           {filterBarberId === 'all' && (
-                            <div className="flex-1 relative min-w-[150px] bg-nexus-surface-hover">
+                            <div style={{ minWidth: COL_MIN_PX }} className="flex-1 relative bg-nexus-surface-hover">
                               {hoursRange.map(hour => (
                                 <div
                                   key={hour}
+                                  style={{ height: SLOT_PX }}
                                   onClick={() => handleEmptySlotClick('pending', formatHourLabel(hour))}
-                                  className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
+                                  className="w-full hover:bg-nexus-primary-soft/60 cursor-pointer border-b border-nexus-border/50"
                                 />
                               ))}
 
@@ -3217,22 +3222,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                 const [h, m] = (res?.time || '12:00').split(':').map(Number);
                                 const startMin = h * 60 + m;
                                 const duration = getReservationDuration(res, services);
-                                const topPx = ((startMin - 480) / 840) * 1120;
-                                const heightPx = (duration / 840) * 1120;
+                                const topPx = toTop(startMin);
+                                const heightPx = duration * PX_PER_MIN;
 
                                 return (
-                                  <div
+                                  <button
+                                    type="button"
                                     key={res?.id}
                                     onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
                                     style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                    className="absolute left-1 right-1 px-2.5 py-0.5 rounded border border-dashed shadow-sm bg-nexus-surface-hover border-nexus-warning/60 text-nexus-warning-text hover:opacity-80 transition-all cursor-pointer flex flex-col justify-between overflow-hidden z-[5]"
+                                    title={`Pendiente · ${res?.time} · ${res?.clientName} · ${res?.serviceName}`}
+                                    className="absolute left-1 right-1 px-2 py-1 rounded-md border border-dashed shadow-sm bg-nexus-warning-bg border-nexus-warning/60 text-nexus-warning-text hover:opacity-90 transition-opacity cursor-pointer flex flex-col items-start overflow-hidden text-left z-[5]"
                                   >
-                                    <div className="min-w-0">
-                                      <p className="font-black text-[9px] tracking-wider uppercase leading-tight">PENDIENTE · {res?.time}</p>
-                                      <p className="font-bold text-[9px] truncate leading-tight">{res?.clientName} · {res?.serviceName}</p>
-                                      <p className="text-[8px] truncate leading-tight opacity-80">Hay una reserva sin {tl('professional')} {g('professional', 'asignado', 'asignada')}</p>
-                                    </div>
-                                  </div>
+                                    <span className="block w-full text-xs font-semibold leading-4 truncate">
+                                      <span className="nx-num">{res?.time}</span> · Pendiente
+                                    </span>
+                                    <span className="block w-full text-xs leading-4 truncate">{res?.clientName} · {res?.serviceName}</span>
+                                    {heightPx >= 64 && (
+                                      <span className="block w-full text-xs leading-4 truncate opacity-80">Sin {tl('professional')} {g('professional', 'asignado', 'asignada')}</span>
+                                    )}
+                                  </button>
                                 );
                               })}
                             </div>
@@ -3244,19 +3253,21 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             const barberDayAvailability = getBarberDayAvailability(barber, selectedDate);
 
                             return (
-                              <div key={barber?.id} className="flex-1 relative min-w-[150px]">
+                              <div key={barber?.id} style={{ minWidth: COL_MIN_PX }} className="flex-1 relative">
 
                                 {hoursRange.map(hour => (
                                   isHourWithinAvailability(barberDayAvailability, hour) ? (
                                     <div
                                       key={hour}
+                                      style={{ height: SLOT_PX }}
                                       onClick={() => handleEmptySlotClick(barber?.id, formatHourLabel(hour))}
-                                      className="h-10 w-full hover:bg-nexus-surface-hover cursor-pointer border-b border-nexus-border/50"
+                                      className="w-full hover:bg-nexus-primary-soft/60 cursor-pointer border-b border-nexus-border/50"
                                     />
                                   ) : (
                                     <div
                                       key={hour}
-                                      className="h-10 w-full bg-nexus-border/30 border-b border-nexus-border/50 cursor-not-allowed"
+                                      style={{ height: SLOT_PX }}
+                                      className="w-full bg-nexus-border/30 border-b border-nexus-border/50 cursor-not-allowed"
                                     />
                                   )
                                 ))}
@@ -3265,22 +3276,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                   const [h, m] = (res?.time || '12:00').split(':').map(Number);
                                   const startMin = h * 60 + m;
                                   const duration = getReservationDuration(res, services);
-                                  const topPx = ((startMin - 480) / 840) * 1120;
-                                  const heightPx = (duration / 840) * 1120;
+                                  const topPx = toTop(startMin);
+                                  const heightPx = duration * PX_PER_MIN;
 
                                   return (
-                                    <div
+                                    <button
+                                      type="button"
                                       key={res?.id}
                                       onClick={(e) => { e.stopPropagation(); handleOpenEditReservation(res); }}
                                       style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                      className={`absolute left-1 right-1 px-2.5 py-1 rounded border shadow-md flex flex-col justify-between overflow-hidden cursor-pointer transition-all z-[5] ${getStatusCardClasses(res?.status)}`}
+                                      title={`${res?.time} · ${res?.clientName} · ${res?.serviceName}`}
+                                      className={`absolute left-1 right-1 px-2 ${heightPx < 40 ? 'py-0.5 justify-center' : 'py-1'} rounded-md border shadow-sm flex flex-col items-start overflow-hidden cursor-pointer transition-opacity text-left z-[5] ${getStatusCardClasses(res?.status)}`}
                                     >
-                                      <div className="min-w-0">
-                                        <p className="font-extrabold text-[10px] truncate leading-tight">{res?.clientName}</p>
-                                        <p className="text-[9px] text-nexus-text-secondary truncate">{res?.serviceName}</p>
-                                      </div>
-                                      <span className="font-mono text-[8px] font-bold text-nexus-text-muted">{res?.time}</span>
-                                    </div>
+                                      <span className="block w-full text-xs font-semibold leading-4 truncate">
+                                        <span className="nx-num">{res?.time}</span> · {res?.clientName}
+                                        {heightPx < 40 && <span className="font-normal text-nexus-text-secondary"> · {res?.serviceName}</span>}
+                                      </span>
+                                      {heightPx >= 40 && (
+                                        <span className="block w-full text-xs leading-4 truncate text-nexus-text-secondary">{res?.serviceName}</span>
+                                      )}
+                                    </button>
                                   );
                                 })}
 
@@ -3288,31 +3303,31 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                   const startMin = timeToMin(bl?.startTime);
                                   const endMin = timeToMin(bl?.endTime);
                                   const duration = endMin - startMin;
-                                  const topPx = ((startMin - 480) / 840) * 1120;
-                                  const heightPx = (duration / 840) * 1120;
+                                  const topPx = toTop(startMin);
+                                  const heightPx = duration * PX_PER_MIN;
 
                                   return (
                                     <div
                                       key={bl?.id}
                                       style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                                      className="absolute left-1 right-1 px-2 py-1 rounded border shadow bg-nexus-error-bg border-nexus-error/30 text-nexus-error-text flex flex-col justify-between overflow-hidden cursor-default z-[5]"
+                                      className="absolute left-1 right-1 pl-2 pr-1 py-1 rounded-md border shadow-sm bg-nexus-error-bg border-nexus-error/30 text-nexus-error-text flex items-start gap-1 overflow-hidden cursor-default z-[5]"
                                     >
-                                      <div className="min-w-0">
-                                        <p className="font-extrabold text-[9px] leading-tight flex items-center gap-1">
-                                          <XCircle className="w-3 h-3 text-nexus-error shrink-0" />
-                                          BLOQUEADO
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-semibold leading-4 flex items-center gap-1 min-w-0">
+                                          <XCircle className="w-3.5 h-3.5 text-nexus-error shrink-0" aria-hidden="true" />
+                                          <span className="truncate">Bloqueado <span className="nx-num font-normal">{bl?.startTime}–{bl?.endTime}</span></span>
                                         </p>
-                                        <p className="text-[9px] truncate text-nexus-error-text/80">{bl?.reason}</p>
+                                        {bl?.reason && <p className="text-xs leading-4 truncate text-nexus-error-text/80">{bl?.reason}</p>}
                                       </div>
-                                      <div className="flex items-center justify-between text-[8px] text-nexus-text-muted mt-1">
-                                        <span>{bl?.startTime} - {bl?.endTime}</span>
-                                        <button
-                                          onClick={() => handleDeleteBlockout(bl?.id)}
-                                          className="text-nexus-error hover:opacity-80 font-bold underline cursor-pointer"
-                                        >
-                                          Eliminar
-                                        </button>
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteBlockout(bl?.id)}
+                                        aria-label={`Eliminar bloqueo de ${bl?.startTime} a ${bl?.endTime}`}
+                                        title="Eliminar bloqueo"
+                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-nexus-error hover:bg-nexus-error/10 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
                                     </div>
                                   );
                                 })}
@@ -3326,48 +3341,51 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     </div>
                   </div>
                 </div>
+                </div>
                 );
               })()}
 
 
               {agendaView === 'semana' && (
-                <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                   {getWeekDates(selectedDate).map(day => {
                     const dayRes = (branchReservations || []).filter(r => r?.date === day?.dateStr);
                     return (
-                      <div key={day?.dateStr} className="bg-nexus-surface border border-nexus-border rounded-xl p-3 flex flex-col h-72">
-                        <div className="border-b border-nexus-border pb-2 mb-2 flex justify-between items-center">
-                          <span className="text-xs font-bold text-nexus-text-secondary">{day?.dayName}</span>
-                          <span className="w-6 h-6 rounded-full bg-nexus-primary-soft flex items-center justify-center text-xs font-bold text-nexus-primary font-mono">
+                      <div key={day?.dateStr} className="bg-nexus-surface border border-nexus-border rounded-xl p-3 flex flex-col xl:h-80 min-w-0">
+                        <div className="border-b border-nexus-border pb-2 mb-2 flex justify-between items-center gap-2">
+                          <span className="text-sm font-semibold text-nexus-text">{day?.dayName}</span>
+                          <span className="min-w-7 h-7 px-1 rounded-full bg-nexus-primary-soft flex items-center justify-center text-sm font-semibold text-nexus-primary nx-num">
                             {day?.dayNum}
                           </span>
                         </div>
                         <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-none">
                           {dayRes.map(res => (
-                            <div 
-                              key={res?.id} 
+                            <button
+                              type="button"
+                              key={res?.id}
                               onClick={() => handleOpenEditReservation(res)}
-                              className="p-1.5 bg-nexus-background border border-nexus-border rounded text-[10px] cursor-pointer hover:border-nexus-primary transition-colors"
+                              className="w-full text-left px-2.5 py-2 bg-nexus-background border border-nexus-border rounded-lg cursor-pointer hover:border-nexus-primary transition-colors min-w-0"
                             >
-                              <div className="flex justify-between">
-                                <span className="font-extrabold text-nexus-text truncate max-w-[80px]">{res?.clientName}</span>
-                                <span className="text-[8px] font-mono text-nexus-primary font-bold">{res?.time}</span>
-                              </div>
-                              <p className="text-[9px] text-nexus-text-secondary truncate mt-0.5">{res?.serviceName}</p>
-                            </div>
+                              <span className="flex flex-wrap items-baseline gap-x-2 text-sm min-w-0">
+                                <span className="nx-num text-nexus-primary font-semibold shrink-0">{res?.time}</span>
+                                <span className="font-semibold text-nexus-text truncate min-w-0 max-w-full">{res?.clientName}</span>
+                              </span>
+                              <span className="block text-xs text-nexus-text-secondary truncate mt-0.5">{res?.serviceName}</span>
+                            </button>
                           ))}
                           {dayRes.length === 0 && (
-                            <p className="text-[9px] text-nexus-text-muted text-center py-8 font-semibold">Sin {tl('appointments')}</p>
+                            <p className="text-sm text-nexus-text-muted text-center py-2 xl:py-8">Sin {tl('appointments')}</p>
                           )}
                         </div>
                         <button
+                          type="button"
                           onClick={() => {
                             setNewReservation(prev => ({ ...prev, date: day?.dateStr }));
                             setActiveModal('add-reservation');
                           }}
-                          className="w-full py-1 mt-2 border border-dashed border-nexus-border hover:border-nexus-primary/50 rounded text-[9px] font-bold text-nexus-text-secondary hover:text-nexus-text transition-all flex items-center justify-center gap-1 cursor-pointer"
+                          className="w-full h-9 mt-2 border border-dashed border-nexus-border hover:border-nexus-primary/50 rounded-lg text-sm font-medium text-nexus-text-secondary hover:text-nexus-text transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          <Plus className="w-3 h-3" /> Agregar {t('appointment')}
+                          <Plus className="w-4 h-4" aria-hidden="true" /> Agregar {tl('appointment')}
                         </button>
                       </div>
                     );
@@ -3376,42 +3394,41 @@ const { businessSettings } = useBusinessSettings(negocioId);
               )}
 
               {agendaView === 'mes' && (
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4">
-                  <div className="grid grid-cols-7 gap-1.5 text-center mb-2">
-                    {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, idx) => (
-                      <span key={idx} className="text-xs font-bold text-nexus-text-muted py-1">{d}</span>
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-2 sm:p-4">
+                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center mb-1.5">
+                    {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
+                      <span key={d} className="text-xs font-semibold text-nexus-text-muted py-1">
+                        <span className="sm:hidden">{d.charAt(0)}</span>
+                        <span className="hidden sm:inline">{d}</span>
+                      </span>
                     ))}
                   </div>
-                  <div className="grid grid-cols-7 gap-1.5">
+                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                     {getMonthDays(selectedDate).map((day, idx) => {
                       const dayRes = day?.isCurrentMonth ? (branchReservations || []).filter(r => r?.date === day?.dateStr) : [];
+                      if (!day?.isCurrentMonth) return <div key={idx} className="h-14 sm:h-20" aria-hidden="true" />;
+                      const isSelected = day?.dateStr === selectedDate;
 
                       return (
-                        <div 
-                          key={idx} 
+                        <button
+                          type="button"
+                          key={idx}
                           onClick={() => {
-                            if (day?.isCurrentMonth) {
-                              setSelectedDate(day?.dateStr);
-                              setAgendaView('dia');
-                            }
+                            setSelectedDate(day?.dateStr);
+                            setAgendaView('dia');
                           }}
-                          className={`h-16 rounded-lg p-1.5 flex flex-col justify-between border ${
-                            day?.isCurrentMonth 
-                              ? 'bg-nexus-background border-nexus-border hover:border-nexus-primary cursor-pointer' 
-                              : 'bg-transparent border-transparent pointer-events-none'
+                          aria-label={`${day?.dayNum}: ${dayRes.length} ${tl('appointments')}`}
+                          className={`h-14 sm:h-20 rounded-lg p-1.5 flex flex-col justify-between border text-left cursor-pointer transition-colors ${
+                            isSelected ? 'border-nexus-primary bg-nexus-primary-soft/50' : 'bg-nexus-background border-nexus-border hover:border-nexus-primary'
                           }`}
                         >
-                          {day?.isCurrentMonth && (
-                            <>
-                              <span className="text-[10px] font-extrabold text-nexus-text-secondary font-mono">{day?.dayNum}</span>
-                              {dayRes.length > 0 && (
-                                <span className="text-[9px] bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/20 px-1 rounded self-end font-bold font-mono">
-                                  {dayRes.length} C
-                                </span>
-                              )}
-                            </>
+                          <span className="text-xs sm:text-sm font-semibold text-nexus-text-secondary nx-num">{day?.dayNum}</span>
+                          {dayRes.length > 0 && (
+                            <span className="self-end min-w-6 h-5 sm:h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-nexus-primary text-white text-xs font-semibold nx-num">
+                              {dayRes.length}
+                            </span>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -3419,7 +3436,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
               )}
 
              {agendaView === 'año' && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, idx) => {
                     const yearVal = parseDate(selectedDate).getFullYear();
                     const monthId = (idx + 1).toString().padStart(2, '0');
@@ -3427,17 +3444,15 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       ? (yearMonthCounts?.[idx] ?? 0)
                       : (branchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`)).length;
                     return (
-                      <div key={m} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 text-center hover:border-nexus-primary/40 transition-colors cursor-pointer" onClick={() => {
+                      <button type="button" key={m} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 text-center hover:border-nexus-primary/50 transition-colors cursor-pointer" onClick={() => {
                         const targetDate = `${yearVal}-${monthId}-01`;
                         setSelectedDate(targetDate);
                         setAgendaView('mes');
                       }}>
-                        <h4 className="text-xs font-black text-nexus-text uppercase mb-2 tracking-wider font-mono">{m}</h4>
-                        <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl inline-block mt-1">
-                          <span className="text-base font-black text-nexus-primary font-mono block">{monthCount}</span>
-                          <span className="text-[8px] text-nexus-text-muted uppercase tracking-widest block mt-0.5 font-mono font-bold">Reservas</span>
-                        </div>
-                      </div>
+                        <span className="block text-sm font-semibold text-nexus-text">{m}</span>
+                        <span className="block text-2xl font-bold text-nexus-primary nx-num mt-2">{monthCount}</span>
+                        <span className="block text-xs text-nexus-text-muted mt-0.5">Reservas</span>
+                      </button>
                     );
                   })}
                 </div>
@@ -3447,23 +3462,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
           {/* ==========================================
               3. PESTAÑA: LISTADO DE STAFF PROFESIONAL
+              (Fase 4: tabla en escritorio y tarjetas en celular, mismos datos y acciones)
               ========================================== */}
           {activeTab === 'barbers' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <div className="relative w-full sm:w-72">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="w-4 h-4 text-nexus-text-muted" />
-                  </span>
-                  <input 
-                    type="text" 
-                    placeholder={`Buscar ${tl('professional')} por nombre o sucursal...`} 
-                    value={searchBarberQuery}
-                    onChange={(e) => setSearchBarberQuery(e.target.value)}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-                  />
-                </div>
-                <button
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <SearchField
+                  value={searchBarberQuery}
+                  onChange={(e) => setSearchBarberQuery(e.target.value)}
+                  placeholder={`Buscar ${tl('professional')} por nombre o sucursal...`}
+                />
+                <Button
+                  icon={Plus}
+                  className="w-full sm:w-auto"
                   onClick={() => {
                     const staffLimit = getFeatureLimit(planFeatures, 'profesionales');
                     if (staffLimit !== null && barbers.length >= staffLimit) {
@@ -3474,75 +3485,48 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     setEditingBarberId(null);
                     setActiveModal('add-barber');
                   }}
-                  className="w-full sm:w-auto px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
-                  <Plus className="w-4 h-4" />
                   Registrar {t('professional')}
-                </button>
+                </Button>
               </div>
 
-              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
-                        <th className="p-4">Foto</th>
-                        <th className="p-4">Nombre Completo</th>
-                        <th className="p-4">Usuario Comercial</th>
-                        <th className="p-4">Sucursal</th>
-                        <th className="p-4">PIN</th>
-                        <th className="p-4 text-center">Estado</th>
-                        <th className="p-4 text-right">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-nexus-border">
-                      {filteredBarbersList.map(b => (
-                        <tr key={b?.id} className="hover:bg-nexus-surface-hover transition-colors">
-                          <td className="p-4">
-                          <Avatar src={b?.avatar} name={b?.name} className="w-10 h-10 rounded-xl object-cover border-2 border-nexus-border shadow" textClassName="text-xs" />
-                          </td>
-                          <td className="p-4 font-bold text-nexus-text text-xs">{b?.name}</td>
-                          <td className="p-4 font-mono text-nexus-text-secondary">@{b?.username}</td>
-                          <td className="p-4 font-semibold text-nexus-text">{b?.branch}</td>
-                          <td className="p-4 font-mono font-black text-nexus-primary tracking-widest font-bold">{b?.pin}</td>
-                          <td className="p-4 text-center">
-                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase font-mono border font-bold ${
-                              b?.active 
-                                ? 'bg-nexus-success-bg text-nexus-success-text border-nexus-success/25' 
-                                : 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25'
-                            }`}>
-                              {b?.active ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="inline-flex gap-2">
-                              <button 
-                                onClick={() => handleEditBarber(b)}
-                                className="p-1.5 hover:bg-nexus-primary-soft text-nexus-primary rounded-lg transition-colors cursor-pointer"
-                                title="Editar Perfil"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteBarber(b?.id)}
-                                className="p-1.5 hover:bg-nexus-error-bg text-nexus-error-text rounded-lg transition-colors cursor-pointer"
-                                title="Eliminar Perfil"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredBarbersList.length === 0 && (
-                        <tr>
-                          <td colSpan="7" className="p-8 text-center text-nexus-text-muted">No se encontraron {tl('professionals')} {g('professional', 'registrados', 'registradas')}.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <ResponsiveTable
+                rows={filteredBarbersList}
+                rowKey={(b) => b?.id}
+                breakpoint="lg"
+                empty={(
+                  <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                    <EmptyState icon={Users} title={`No se encontraron ${tl('professionals')} ${g('professional', 'registrados', 'registradas')}.`} />
+                  </div>
+                )}
+                columns={[
+                  {
+                    key: 'name',
+                    header: 'Nombre completo',
+                    primary: true,
+                    render: (b) => (
+                      <span className="flex items-center gap-3 min-w-0">
+                        <Avatar src={b?.avatar} name={b?.name} className="w-10 h-10 rounded-xl object-cover border border-nexus-border shrink-0" textClassName="text-xs" />
+                        <span className="font-semibold text-nexus-text truncate">{b?.name}</span>
+                      </span>
+                    ),
+                  },
+                  { key: 'username', header: 'Usuario', render: (b) => <span className="text-nexus-text-secondary">@{b?.username}</span> },
+                  { key: 'branch', header: 'Sucursal', render: (b) => b?.branch || '—' },
+                  { key: 'pin', header: 'PIN', render: (b) => <span className="nx-num font-semibold tracking-widest text-nexus-primary">{b?.pin || '—'}</span> },
+                  {
+                    key: 'active',
+                    header: 'Estado',
+                    render: (b) => <Badge tone={b?.active ? 'success' : 'danger'}>{b?.active ? 'Activo' : 'Inactivo'}</Badge>,
+                  },
+                ]}
+                actions={(b) => (
+                  <>
+                    <IconButton icon={Edit3} tone="primary" label={`Editar a ${b?.name}`} onClick={() => handleEditBarber(b)} />
+                    <IconButton icon={Trash2} tone="danger" label={`Eliminar a ${b?.name}`} onClick={() => handleDeleteBarber(b?.id)} />
+                  </>
+                )}
+              />
             </div>
           )}
 
@@ -3551,48 +3535,43 @@ const { businessSettings } = useBusinessSettings(negocioId);
               ========================================== */}
           {activeTab === 'services' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">{t('services')} Disponibles</h4>
-                <button
-                  onClick={openNewServiceModal}
-                  className="px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
-                >
-                  <Plus className="w-4 h-4" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 className="text-base font-semibold text-nexus-text">
+                  {t('services')} disponibles <span className="font-normal text-nexus-text-muted nx-num">({(services || []).length})</span>
+                </h3>
+                <Button icon={Plus} className="w-full sm:w-auto" onClick={openNewServiceModal}>
                   Agregar {t('service')}
-                </button>
+                </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {(services || []).map(s => (
-                  <div key={s?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 flex flex-col justify-between shadow-lg relative group overflow-hidden">
-                    <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <h5 className="font-bold text-nexus-text text-sm">{s?.name}</h5>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleEditService(s)}
-                            title={`Editar ${tl('service')}`}
-                            className="p-1 hover:bg-nexus-surface-hover text-nexus-text-secondary rounded transition-colors cursor-pointer"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteService(s?.id)}
-                            className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+              {(services || []).length === 0 ? (
+                <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                  <EmptyState icon={ServiceIcon} title={`Aún no hay ${tl('services')}`} description={`Agrega ${g('service', 'tu primer', 'tu primera')} ${tl('service')} para empezar a recibir reservas.`} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                  {(services || []).map(s => (
+                    <div key={s?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 flex flex-col justify-between shadow-sm min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0 pt-1">
+                          <h4 className="font-semibold text-nexus-text text-base leading-snug break-words">{s?.name}</h4>
+                          <p className="text-sm text-nexus-text-secondary mt-1">
+                            Duración: <span className="nx-num">{s?.duration} min</span>
+                          </p>
+                        </div>
+                        <div className="flex items-center -mr-2 -mt-1 shrink-0">
+                          <IconButton icon={Edit3} tone="primary" label={`Editar ${tl('service')} ${s?.name}`} onClick={() => handleEditService(s)} />
+                          <IconButton icon={Trash2} tone="danger" label={`Eliminar ${tl('service')} ${s?.name}`} onClick={() => handleDeleteService(s?.id)} />
                         </div>
                       </div>
-                      <p className="text-nexus-text-muted text-xs mb-3 font-mono">Duración: {s?.duration} minutos</p>
+                      <div className="flex justify-between items-center gap-3 border-t border-nexus-border pt-3 mt-4">
+                        <span className="text-sm text-nexus-text-secondary">Precio general</span>
+                        <span className="text-nexus-primary nx-num font-bold text-base">{formatServicePrice(s)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center border-t border-nexus-border pt-3 mt-1">
-                      <span className="text-xs font-bold text-nexus-text-secondary font-bold">Precio General</span>
-                      <span className="text-nexus-primary font-mono font-extrabold text-sm">{formatServicePrice(s)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -3601,49 +3580,42 @@ const { businessSettings } = useBusinessSettings(negocioId);
               ========================================== */}
           {activeTab === 'clients' && (
             <div className="space-y-4">
-              <div className="bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <div className="relative w-full sm:w-72">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="w-4 h-4 text-nexus-text-muted" />
-                  </span>
-                  <input 
-                    type="text" 
-                    placeholder={`Buscar ${tl('client')} por nombre o teléfono...`} 
-                    value={searchClientQuery}
-                    onChange={(e) => setSearchClientQuery(e.target.value)}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none focus:border-nexus-primary"
-                  />
-                </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <SearchField
+                  value={searchClientQuery}
+                  onChange={(e) => setSearchClientQuery(e.target.value)}
+                  placeholder={`Buscar ${tl('client')} por nombre o teléfono...`}
+                />
+                <p className="text-sm text-nexus-text-secondary nx-num">{filteredClientsList.length} {tl('clients')}</p>
               </div>
 
-              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
-                      <th className="p-4">Nombre Completo</th>
-                      <th className="p-4">Teléfono</th>
-                      <th className="p-4 text-center">Visitas</th>
-                      <th className="p-4">Última Visita</th>
-                      <th className="p-4">{t('service')} {g('service', 'Favorito', 'Favorita')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-nexus-border">
-                    {filteredClientsList.map(c => (
-                      <tr key={c?.id} onClick={() => setSelectedClientId(c?.id)} title={`Ver ficha ${g('client', 'del', 'de la')} ${tl('client')}`} className="hover:bg-nexus-surface-hover transition-colors cursor-pointer">
-                        <td className="p-4 font-bold text-nexus-text text-xs">{c?.name}</td>
-                        <td className="p-4 font-mono text-nexus-text-secondary">{c?.phone}</td>
-                        <td className="p-4 text-center">
-                          <span className="px-2.5 py-0.5 rounded-full bg-nexus-primary-soft text-nexus-primary font-bold font-mono">
-                            {c?.visits}
-                          </span>
-                        </td>
-                        <td className="p-4 font-mono text-nexus-text-muted">{c?.lastVisit}</td>
-                        <td className="p-4 text-nexus-text-secondary">{c?.favoriteService}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResponsiveTable
+                rows={filteredClientsList}
+                rowKey={(c) => c?.id}
+                onRowClick={(c) => setSelectedClientId(c?.id)}
+                empty={(
+                  <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                    <EmptyState icon={UserCheck} title={`No se encontraron ${tl('clients')}`} />
+                  </div>
+                )}
+                columns={[
+                  {
+                    key: 'name',
+                    header: 'Nombre completo',
+                    primary: true,
+                    render: (c) => <span className="font-semibold text-nexus-text">{c?.name}</span>,
+                  },
+                  { key: 'phone', header: 'Teléfono', render: (c) => <span className="nx-num text-nexus-text-secondary">{c?.phone}</span> },
+                  {
+                    key: 'visits',
+                    header: 'Visitas',
+                    align: 'center',
+                    render: (c) => <span className="inline-flex min-w-7 justify-center rounded-full bg-nexus-primary-soft px-2 py-0.5 text-sm font-semibold text-nexus-primary nx-num">{c?.visits}</span>,
+                  },
+                  { key: 'lastVisit', header: 'Última visita', render: (c) => <span className="nx-num text-nexus-text-secondary">{c?.lastVisit || '—'}</span> },
+                  { key: 'favoriteService', header: `${t('service')} ${g('service', 'favorito', 'favorita')}`, render: (c) => <span className="text-nexus-text-secondary">{c?.favoriteService || '—'}</span> },
+                ]}
+              />
             </div>
           )}
 
@@ -3652,20 +3624,15 @@ const { businessSettings } = useBusinessSettings(negocioId);
               ========================================== */}
           {activeTab === 'branches' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <div className="relative w-full sm:w-72">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="w-4 h-4 text-nexus-text-muted" />
-                  </span>
-                  <input 
-                    type="text" 
-                    placeholder="Buscar sucursal por dirección..." 
-                    value={searchBranchQuery}
-                    onChange={(e) => setSearchBranchQuery(e.target.value)}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-xs text-nexus-text outline-none"
-                  />
-                </div>
-                <button
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <SearchField
+                  value={searchBranchQuery}
+                  onChange={(e) => setSearchBranchQuery(e.target.value)}
+                  placeholder="Buscar sucursal por dirección..."
+                />
+                <Button
+                  icon={Plus}
+                  className="w-full sm:w-auto"
                   onClick={() => {
                     const sucursalesLimit = getFeatureLimit(planFeatures, 'sucursales');
                     if (sucursalesLimit !== null && branches.length >= sucursalesLimit) {
@@ -3677,44 +3644,43 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     setLocationSearch('');
                     setActiveModal('add-branch');
                   }}
-                  className="w-full sm:w-auto px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold"
                 >
-                  <Plus className="w-4 h-4" />
-                  Nueva Sucursal
-                </button>
+                  Nueva sucursal
+                </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredBranchesList.map(b => (
-                  <div key={b?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-5 flex flex-col justify-between shadow-lg relative overflow-hidden">
-                    <div>
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-sm font-extrabold text-nexus-text tracking-tight">{b?.name}</h4>
-                        <div className="flex gap-1">
-                          <button 
-                            onClick={() => handleEditBranch(b)}
-                            className="p-1 hover:bg-nexus-primary-soft text-nexus-primary rounded transition-colors cursor-pointer"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteBranch(b?.id)}
-                            className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+              {filteredBranchesList.length === 0 ? (
+                <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                  <EmptyState icon={Building2} title="No se encontraron sucursales" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                  {filteredBranchesList.map(b => (
+                    <div key={b?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 flex flex-col justify-between shadow-sm min-w-0">
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="text-base font-semibold text-nexus-text pt-1.5 break-words min-w-0">{b?.name}</h4>
+                          <div className="flex -mr-2 -mt-0.5 shrink-0">
+                            <IconButton icon={Edit3} tone="primary" label={`Editar sucursal ${b?.name}`} onClick={() => handleEditBranch(b)} />
+                            <IconButton icon={Trash2} tone="danger" label={`Eliminar sucursal ${b?.name}`} onClick={() => handleDeleteBranch(b?.id)} />
+                          </div>
                         </div>
+                        {b?.phone && <p className="text-sm text-nexus-text-secondary nx-num mb-1">{b?.phone}</p>}
+                        {b?.address && (
+                          <p className="text-sm text-nexus-text-secondary leading-relaxed mb-4 flex gap-1.5">
+                            <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-nexus-text-muted" aria-hidden="true" />
+                            <span className="min-w-0">{b?.address}</span>
+                          </p>
+                        )}
                       </div>
-                      <p className="text-xs text-nexus-text-secondary font-mono mb-2">{b?.phone}</p>
-                      <p className="text-xs text-nexus-text-muted leading-relaxed mb-4">{b?.address}</p>
+                      <div className="border-t border-nexus-border pt-3 flex justify-between items-center gap-3 text-xs text-nexus-text-muted">
+                        <span>Coordenadas</span>
+                        <span className="nx-num">{typeof b?.lat === 'number' && typeof b?.lng === 'number' ? `${b.lat.toFixed(3)}, ${b.lng.toFixed(3)}` : '—'}</span>
+                      </div>
                     </div>
-                    <div className="border-t border-nexus-border pt-3 flex justify-between items-center text-[10px] text-nexus-text-muted font-mono font-bold">
-                      <span>Coordenadas</span>
-                      <span>{b?.lat?.toFixed(3)}, {b?.lng?.toFixed(3)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -4375,92 +4341,76 @@ const { businessSettings } = useBusinessSettings(negocioId);
               ========================================== */}
           {activeTab === 'commissions' && (
             <div className="space-y-4">
-              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
-                      <th className="p-4">{t('professional')}</th>
-                      <th className="p-4 text-right">{t('services')}</th>
-                      <th className="p-4 text-right">Comisión Total</th>
-                      <th className="p-4 text-right">Pagada</th>
-                      <th className="p-4 text-right">Pendiente</th>
-                      <th className="p-4 text-right">Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-nexus-border">
-                    {barberCommissionsList.map(barb => (
-                      <tr key={barb?.id} className="hover:bg-nexus-surface-hover transition-colors">
-                        <td className="p-4 flex items-center gap-2.5">
-                        <Avatar src={barb?.avatar} name={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" textClassName="text-[10px]" />
-                          <span className="font-bold text-nexus-text">{barb?.name}</span>
-                        </td>
-                        <td className="p-4 text-right font-mono text-nexus-text-secondary">{barb?.serviciosCount}</td>
-                        <td className="p-4 text-right font-mono font-black text-nexus-primary text-sm font-bold">{formatBs(barb?.comisionTotal)}</td>
-                        <td className="p-4 text-right font-mono font-bold text-nexus-success-text">{formatBs(barb?.comisionPagada)}</td>
-                        <td className="p-4 text-right font-mono font-bold text-nexus-error-text">{formatBs(barb?.comisionPendiente)}</td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => setCommissionDetailBarberId(barb?.id)}
-                              className="px-3 py-1.5 rounded-lg bg-nexus-background border border-nexus-border text-nexus-text-secondary text-[10px] font-bold uppercase tracking-wide hover:bg-nexus-surface-hover transition-colors"
-                            >
-                              Ver Detalle
-                            </button>
-                            <button
-                              onClick={() => handleLiquidarComisiones(barb)}
-                              disabled={!(barb?.comisionPendiente > 0)}
-                              className="px-3 py-1.5 rounded-lg bg-nexus-primary text-white text-[10px] font-bold uppercase tracking-wide hover:bg-nexus-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              Liquidar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {barberCommissionsList.length === 0 && (
-                      <tr>
-                        <td colSpan="6" className="p-8 text-center text-nexus-text-muted">Sin {tl('professionals')} {g('professional', 'asignados', 'asignadas')} en esta sucursal.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {/* Fase 4: tabla en escritorio y tarjetas en celular; mismas cifras y acciones.
+                  "Liquidar" se bloquea mientras guarda para no liquidar dos veces. */}
+              <ResponsiveTable
+                rows={barberCommissionsList}
+                rowKey={(b) => b?.id}
+                breakpoint="lg"
+                mobileActions="bottom"
+                empty={(
+                  <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                    <EmptyState icon={DollarSign} title={`Sin ${tl('professionals')} ${g('professional', 'asignados', 'asignadas')} en esta sucursal.`} />
+                  </div>
+                )}
+                columns={[
+                  {
+                    key: 'name',
+                    header: t('professional'),
+                    primary: true,
+                    render: (barb) => (
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Avatar src={barb?.avatar} name={barb?.name} className="w-9 h-9 rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-xs" />
+                        <span className="font-semibold text-nexus-text truncate">{barb?.name}</span>
+                      </span>
+                    ),
+                  },
+                  { key: 'serviciosCount', header: t('services'), align: 'right', render: (barb) => <span className="nx-num text-nexus-text-secondary">{barb?.serviciosCount}</span> },
+                  { key: 'comisionTotal', header: 'Comisión total', align: 'right', render: (barb) => <span className="nx-num font-bold text-nexus-primary">{formatBs(barb?.comisionTotal)}</span> },
+                  { key: 'comisionPagada', header: 'Pagada', align: 'right', render: (barb) => <span className="nx-num font-semibold text-nexus-success-text">{formatBs(barb?.comisionPagada)}</span> },
+                  { key: 'comisionPendiente', header: 'Pendiente', align: 'right', render: (barb) => <span className="nx-num font-semibold text-nexus-error-text">{formatBs(barb?.comisionPendiente)}</span> },
+                ]}
+                actions={(barb) => (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={() => setCommissionDetailBarberId(barb?.id)}>
+                      Ver detalle
+                    </Button>
+                    <Button size="sm" disabled={!(barb?.comisionPendiente > 0)} onClick={() => handleLiquidarComisiones(barb)}>
+                      Liquidar
+                    </Button>
+                  </>
+                )}
+              />
 
               {commissionDetailBarberId && (() => {
                 const detailBarber = barberCommissionsList.find(b => b?.id === commissionDetailBarberId);
                 if (!detailBarber) return null;
                 return (
-                  <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-lg p-5 relative shadow-xl max-h-[80vh] flex flex-col">
-                      <button
-                        onClick={() => setCommissionDetailBarberId(null)}
-                        className="absolute top-3 right-3 text-nexus-text-muted hover:text-nexus-text"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                      <h3 className="text-base font-bold text-nexus-text mb-1">Detalle de Comisiones</h3>
-                      <p className="text-xs text-nexus-text-secondary mb-4">{detailBarber?.name}</p>
-                      <div className="overflow-y-auto space-y-2 pr-1">
-                        {(detailBarber?.detalle || []).map(item => (
-                          <div key={item.id} className="flex items-center justify-between bg-nexus-background border border-nexus-border rounded-lg p-3">
-                            <div>
-                              <p className="text-xs font-bold text-nexus-text">{item.serviceName}</p>
-                              <p className="text-[10px] text-nexus-text-secondary font-mono">{item.date}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs font-mono font-black text-nexus-primary">{formatBs(item.amount)}</p>
-                              <span className={`text-[9px] font-bold uppercase tracking-wide ${item.paid ? 'text-nexus-success-text' : 'text-nexus-error-text'}`}>
-                                {item.paid ? 'Pagada' : 'Pendiente'}
-                              </span>
-                            </div>
+                  <Modal
+                    open
+                    onClose={() => setCommissionDetailBarberId(null)}
+                    title="Detalle de comisiones"
+                    description={detailBarber?.name}
+                    size="md"
+                  >
+                    <div className="space-y-2">
+                      {(detailBarber?.detalle || []).map(item => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 bg-nexus-background border border-nexus-border rounded-lg p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-nexus-text truncate">{item.serviceName}</p>
+                            <p className="text-xs text-nexus-text-secondary nx-num">{item.date}</p>
                           </div>
-                        ))}
-                        {(detailBarber?.detalle || []).length === 0 && (
-                          <p className="text-center text-nexus-text-muted text-xs py-6">Sin {tl('services')} {g('service', 'completados', 'completadas')} en este periodo.</p>
-                        )}
-                      </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm nx-num font-bold text-nexus-primary">{formatBs(item.amount)}</p>
+                            <Badge tone={item.paid ? 'success' : 'danger'}>{item.paid ? 'Pagada' : 'Pendiente'}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                      {(detailBarber?.detalle || []).length === 0 && (
+                        <p className="text-center text-nexus-text-muted text-sm py-6">Sin {tl('services')} {g('service', 'completados', 'completadas')} en este periodo.</p>
+                      )}
                     </div>
-                  </div>
+                  </Modal>
                 );
               })()}
             </div>
@@ -4651,19 +4601,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
       {/* 3. MODAL EXCLUSIVO: BLOQUEAR HORARIO ADMINISTRATIVO */}
       {activeModal === 'add-blockout' && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-sm p-5 relative shadow-xl">
-            <h3 className="text-base font-bold text-nexus-error-text mb-1 font-mono">Bloquear Horario Administrativo</h3>
-            <p className="text-[10px] text-nexus-text-secondary mb-4">Evita que se agenden reservas en este rango de tiempo.</p>
+        <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div role="dialog" aria-modal="true" className="max-h-[92dvh] overflow-y-auto bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 relative shadow-xl">
+            <h3 className="text-base font-bold text-nexus-error-text mb-1 nx-num">Bloquear Horario Administrativo</h3>
+            <p className="text-xs text-nexus-text-secondary mb-4">Evita que se agenden reservas en este rango de tiempo.</p>
 
             <form onSubmit={handleCreateBlockout} className="space-y-3.5">
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 font-sans">{t('professional')} *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1 font-sans">{t('professional')} *</label>
                 <select 
                   required
                   value={blockoutForm.barberId}
                   onChange={(e) => setBlockoutForm(prev => ({ ...prev, barberId: e.target.value }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none px-3 h-10 text-base sm:text-sm"
                 >
                   <option value="">Seleccione {t('professional')}...</option>
                   {(branchBarbers || []).filter(b => b?.active).map(b => (
@@ -4673,37 +4623,37 @@ const { businessSettings } = useBusinessSettings(negocioId);
               </div>
 
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Motivo / Razón del Bloqueo *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Motivo / Razón del Bloqueo *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="Ej. Limpieza, Almuerzo, Reunión"
                   value={blockoutForm.reason}
                   onChange={(e) => setBlockoutForm(prev => ({ ...prev, reason: e.target.value }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none px-3 h-10 text-base sm:text-sm"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora Inicio *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Hora Inicio *</label>
                   <input 
                     type="time" 
                     required
                     value={blockoutForm.startTime}
                     onChange={(e) => setBlockoutForm(prev => ({ ...prev, startTime: e.target.value }))}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none nx-num px-3 h-10 text-base sm:text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Hora Fin *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Hora Fin *</label>
                   <input 
                     type="time" 
                     required
                     value={blockoutForm.endTime}
                     onChange={(e) => setBlockoutForm(prev => ({ ...prev, endTime: e.target.value }))}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2 text-xs text-nexus-text outline-none font-mono"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none nx-num px-3 h-10 text-base sm:text-sm"
                   />
                 </div>
               </div>
@@ -4712,13 +4662,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <button 
                   type="button" 
                   onClick={() => setActiveModal(null)}
-                  className="px-3.5 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4  bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-sm font-semibold rounded-lg hover:bg-nexus-surface-hover cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-3.5 py-1.5 bg-nexus-error text-white text-xs font-bold rounded-lg hover:opacity-90 cursor-pointer"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4  bg-nexus-error text-white text-sm font-bold rounded-lg hover:opacity-90 cursor-pointer"
                 >
                   Bloquear Horario
                 </button>
@@ -4730,27 +4680,27 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
       {/* 4. MODAL CONTEXTUAL: ACCIONES AL CLICAR ESPACIO VACÍO */}
       {activeModal === 'slot-actions' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-xs p-5 relative shadow-xl text-center">
+        <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div role="dialog" aria-modal="true" className="max-h-[92dvh] overflow-y-auto bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xs p-5 relative shadow-xl text-center">
             <h4 className="text-sm font-bold text-nexus-text mb-1">Gestión de Horario</h4>
-            <p className="text-[10px] text-nexus-text-secondary font-mono mb-4">Bloque: {clickedSlot?.time} ({selectedDate})</p>
+            <p className="text-xs text-nexus-text-secondary nx-num mb-4">Bloque: {clickedSlot?.time} ({selectedDate})</p>
 
             <div className="space-y-2">
               <button 
                 onClick={startResFromSlot}
-                className="w-full py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
+                className="w-full h-10 inline-flex items-center justify-center bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg transition-all cursor-pointer"
               >
                 Crear nueva reserva
               </button>
               <button 
                 onClick={startBlockoutFromSlot}
-                className="w-full py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-error-text text-xs font-bold rounded-lg transition-all cursor-pointer"
+                className="w-full h-10 inline-flex items-center justify-center bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-error-text text-sm font-bold rounded-lg transition-all cursor-pointer"
               >
                 Bloquear este espacio
               </button>
               <button 
                 onClick={() => setActiveModal(null)}
-                className="w-full py-1.5 text-nexus-text-muted hover:text-nexus-text-secondary text-[10px] font-bold cursor-pointer"
+                className="w-full h-10 text-nexus-text-secondary hover:text-nexus-text text-sm font-semibold cursor-pointer"
               >
                 Cancelar
               </button>
@@ -4763,8 +4713,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
           5. MODAL MULTI-STEP: AGREGAR / EDITAR PROFESIONAL
           ========================================== */}
       {activeModal === 'add-barber' && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-4xl p-0 relative shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-4xl p-0 relative shadow-xl overflow-hidden flex flex-col max-h-[92dvh]">
             
             <div className="bg-nexus-background border-b border-nexus-border px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
               <div>
@@ -4772,23 +4722,23 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <UserPlus className="w-5 h-5 text-nexus-primary" />
                   {editingBarberId ? `Editar Perfil ${g('professional', 'del', 'de la')} ${t('professional')}` : `Registrar ${g('professional', 'Nuevo', 'Nueva')} ${t('professional')}`}
                 </h3>
-                <p className="text-[10px] text-nexus-text-secondary">Complete los pasos para configurar el perfil {g('professional', 'del', 'de la')} {tl('professional')}.</p>
+                <p className="text-xs text-nexus-text-secondary">Complete los pasos para configurar el perfil {g('professional', 'del', 'de la')} {tl('professional')}.</p>
               </div>
 
-              <div className="flex items-center gap-2.5 font-mono text-[11px] self-stretch md:self-auto justify-between md:justify-start">
+              <div className="grid grid-cols-3 gap-1.5 text-xs sm:text-sm w-full md:flex md:items-center md:gap-2.5 md:w-auto">
                 <button 
                   type="button"
                   onClick={() => setBarberStep(1)}
-                  className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                  className={`h-9 px-2.5 sm:px-3 rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 min-w-0 whitespace-nowrap ${
                     barberStep === 1 
                       ? 'bg-nexus-primary text-white shadow-md' 
                       : 'bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
-                  <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">1</span>
+                  <span className="w-5 h-5 shrink-0 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold">1</span>
                   Básico
                 </button>
-                <div className="w-6 h-[1.5px] bg-nexus-border hidden sm:block" />
+                <div className="w-6 h-[1.5px] bg-nexus-border hidden md:block" />
                 <button 
                   type="button"
                   onClick={() => {
@@ -4796,16 +4746,16 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       setBarberStep(2);
                     }
                   }}
-                  className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                  className={`h-9 px-2.5 sm:px-3 rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 min-w-0 whitespace-nowrap ${
                     barberStep === 2 
                       ? 'bg-nexus-primary text-white shadow-md' 
                       : 'bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
-                  <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">2</span>
+                  <span className="w-5 h-5 shrink-0 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold">2</span>
                   {t('services')}
                 </button>
-                <div className="w-6 h-[1.5px] bg-nexus-border hidden sm:block" />
+                <div className="w-6 h-[1.5px] bg-nexus-border hidden md:block" />
                 <button 
                   type="button"
                   onClick={() => {
@@ -4813,13 +4763,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       setBarberStep(3);
                     }
                   }}
-                  className={`px-3 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
+                  className={`h-9 px-2.5 sm:px-3 rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 min-w-0 whitespace-nowrap ${
                     barberStep === 3 
                       ? 'bg-nexus-primary text-white shadow-md' 
                       : 'bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
-                  <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[9px] font-black">3</span>
+                  <span className="w-5 h-5 shrink-0 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold">3</span>
                   Disponibilidad
                 </button>
               </div>
@@ -4843,7 +4793,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       accept="image/*"
                       className="hidden"
                     />
-                    <span className="text-[10px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold block mb-1">Fotografía {g('professional', 'del', 'de la')} {t('professional')}</span>
+                    <span className="text-xs text-nexus-text-secondary  block mb-1">Fotografía {g('professional', 'del', 'de la')} {t('professional')}</span>
                     <div className="relative">
                     <Avatar
                         src={newBarber.avatar}
@@ -4856,7 +4806,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <Upload className="w-6 h-6 text-white" />
                       </div>
                     </div>
-                    <div className="text-[11px] text-nexus-text-secondary mt-2">
+                    <div className="text-xs text-nexus-text-secondary mt-2">
                       <span className="text-nexus-primary font-bold block mb-1">Subir Archivo</span>
                       Suelte su imagen aquí o haga clic para buscar.
                     </div>
@@ -4865,49 +4815,49 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <div className="md:col-span-2 space-y-4">
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Nombre *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre *</label>
                         <input 
                           type="text" 
                           required
                           placeholder="Ej. Sofía"
                           value={newBarber.firstName}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, firstName: e.target.value }))}
-                          className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Apellido *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Apellido *</label>
                         <input 
                           type="text" 
                           required
                           placeholder="Ej. Méndez"
                           value={newBarber.lastName}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, lastName: e.target.value }))}
-                          className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Nombre de Usuario Comercial</label>
-                        <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text-secondary font-mono font-bold select-none">
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre de Usuario Comercial</label>
+                        <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg h-10 px-3 text-sm text-nexus-text-secondary font-semibold select-none">
                           <span>@</span>
                           <input 
                             type="text"
                             readOnly
                             value={newBarber.username}
                             placeholder="sofia.mendez"
-                            className="bg-transparent border-none outline-none text-nexus-primary ml-1 w-full font-bold"
+                            className="bg-transparent border-none outline-none text-nexus-primary ml-1 w-full font-semibold text-sm"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Sucursal Activa *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Sucursal Activa *</label>
                         <select 
                           value={newBarber.branch}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, branch: e.target.value }))}
-                          className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                         >
                           {(branches || []).map(b => (
                             <option key={b?.id} value={b?.name}>{b?.name}</option>
@@ -4918,7 +4868,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">PIN de Asistencia Biométrica</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">PIN de Asistencia Biométrica</label>
                         <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg overflow-hidden pr-1.5">
                           <input 
                             type="text"
@@ -4929,12 +4879,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               const val = e.target.value.replace(/[^0-9]/g, '');
                               setNewBarber(prev => ({ ...prev, pin: val }));
                             }}
-                            className="w-full bg-transparent border-none p-2.5 text-xs text-nexus-text outline-none font-mono font-bold tracking-widest"
+                            className="w-full bg-transparent border-none text-nexus-text outline-none nx-num font-bold tracking-widest px-3 h-10 text-base sm:text-sm"
                           />
                           <button 
                             type="button"
                             onClick={handleRegeneratePin}
-                            className="p-1.5 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded transition-colors"
+                            className="inline-flex h-9 w-9 items-center justify-center hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded-md transition-colors cursor-pointer"
                             title="Regenerar PIN Aleatorio"
                           >
                             <RefreshCw className="w-3.5 h-3.5 text-nexus-primary" />
@@ -4942,12 +4892,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Estado de Incorporación</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Estado de Incorporación</label>
                         <div className="flex items-center gap-2 mt-2">
                           <button 
                             type="button"
                             onClick={() => setNewBarber(prev => ({ ...prev, active: !prev.active }))}
-                            className="p-1 hover:bg-nexus-surface-hover rounded-md transition-colors"
+                            className="inline-flex h-9 w-9 items-center justify-center hover:bg-nexus-surface-hover rounded-md transition-colors cursor-pointer"
                           >
                             {newBarber.active ? (
                               <ToggleRight className="w-8 h-8 text-nexus-primary" />
@@ -4955,7 +4905,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               <ToggleLeft className="w-8 h-8 text-nexus-text-muted" />
                             )}
                           </button>
-                          <span className="text-[11px] font-bold text-nexus-text font-mono">
+                          <span className="text-xs font-bold text-nexus-text nx-num">
                             {newBarber.active ? 'Habilitado para trabajar' : 'Suspendido / No activo'}
                           </span>
                         </div>
@@ -4964,7 +4914,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                     <div className="grid grid-cols-2 gap-3.5 pt-2 border-t border-nexus-border">
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Contraseña de Portal *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Contraseña de Portal *</label>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <Lock className="w-3.5 h-3.5 text-nexus-text-muted" />
@@ -4975,7 +4925,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             placeholder="••••••••"
                             value={newBarber.password}
                             onChange={(e) => setNewBarber(prev => ({ ...prev, password: e.target.value }))}
-                            className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono"
+                            className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 text-nexus-text outline-none focus:border-nexus-primary nx-num h-10 text-base sm:text-sm"
                           />
                           <button
                             type="button"
@@ -4987,7 +4937,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1">Confirmar Contraseña *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Confirmar Contraseña *</label>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <KeyRound className="w-3.5 h-3.5 text-nexus-text-muted" />
@@ -4998,7 +4948,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             placeholder="••••••••"
                             value={newBarber.confirmPassword}
                             onChange={(e) => setNewBarber(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                            className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono"
+                            className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 text-nexus-text outline-none focus:border-nexus-primary nx-num h-10 text-base sm:text-sm"
                           />
                           <button
                             type="button"
@@ -5019,11 +4969,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   
                   <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 flex flex-col h-[380px] shadow-sm">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-[11px] font-black uppercase text-nexus-primary tracking-wider font-mono font-bold">{t('services')} {g('service', 'Seleccionados', 'Seleccionadas')} ({newBarber.services.length})</h4>
+                      <h4 className="text-xs font-semibold text-nexus-primary ">{t('services')} {g('service', 'Seleccionados', 'Seleccionadas')} ({newBarber.services.length})</h4>
                       <button 
                         type="button" 
                         onClick={() => setNewBarber(prev => ({ ...prev, services: [] }))}
-                        className="text-[10px] text-nexus-error-text font-bold hover:underline"
+                        className="text-xs py-2 text-nexus-error-text font-bold hover:underline"
                       >
                         Limpiar Selección
                       </button>
@@ -5038,8 +4988,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           <div key={assigned.serviceId} className="bg-nexus-surface border border-nexus-border rounded-xl p-3 space-y-2">
                             <div className="flex justify-between items-start">
                               <div>
-                                <h5 className="text-[11px] font-bold text-nexus-text leading-tight">{original.name}</h5>
-                                <p className="text-[9px] text-nexus-text-muted font-mono">Precio: {original.price} Bs</p>
+                                <h5 className="text-xs font-bold text-nexus-text leading-tight">{original.name}</h5>
+                                <p className="text-xs text-nexus-text-muted nx-num">Precio: {original.price} Bs</p>
                               </div>
                               <button
                                 type="button"
@@ -5049,7 +4999,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                     services: prev.services.filter(s => s.serviceId !== assigned.serviceId)
                                   }));
                                 }}
-                                className="p-1 hover:bg-nexus-error-bg text-nexus-error-text rounded-lg"
+                                className="inline-flex h-9 w-9 items-center justify-center hover:bg-nexus-error-bg text-nexus-error-text rounded-lg cursor-pointer"
                                 title={`Quitar ${t('service')}`}
                               >
                                 <XCircle className="w-4 h-4" />
@@ -5057,7 +5007,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             </div>
 
                             <div className="pt-2 border-t border-nexus-border flex items-center justify-between">
-                              <span className="text-[10px] text-nexus-text-secondary font-bold font-mono">Personalizar Comisión</span>
+                              <span className="text-xs text-nexus-text-secondary font-bold nx-num">Personalizar Comisión</span>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5070,7 +5020,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                     )
                                   }));
                                 }}
-                                className="text-[10px] font-extrabold text-nexus-primary hover:underline"
+                                className="text-xs py-2 font-extrabold text-nexus-primary hover:underline"
                               >
                                 {assigned.commissionEnabled ? 'ACTIVADA' : 'DESACTIVADA'}
                               </button>
@@ -5079,7 +5029,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             {assigned.commissionEnabled && (
                               <div className="grid grid-cols-2 gap-2 pt-1.5 animate-fadeIn">
                                 <div>
-                                  <label className="text-[8px] text-nexus-text-muted font-bold uppercase tracking-widest font-mono">Tipo</label>
+                                  <label className="text-xs text-nexus-text-muted font-bold nx-num">Tipo</label>
                                   <select
                                     value={assigned.type}
                                     onChange={(e) => {
@@ -5092,14 +5042,14 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                         )
                                       }));
                                     }}
-                                    className="w-full bg-nexus-background border border-nexus-border rounded-md p-1.5 text-[10px] text-nexus-text"
+                                    className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text px-3 h-10 text-base sm:text-sm"
                                   >
                                     <option value="%">Porcentaje %</option>
                                     <option value="Bs">Monto Fijo (Bs)</option>
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="text-[8px] text-nexus-text-muted font-bold uppercase tracking-widest font-mono">Valor Comisión</label>
+                                  <label className="text-xs text-nexus-text-muted font-bold nx-num">Valor Comisión</label>
                                   <input 
                                     type="number"
                                     value={assigned.value}
@@ -5113,7 +5063,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                         )
                                       }));
                                     }}
-                                    className="w-full bg-nexus-background border border-nexus-border rounded-md p-1.5 text-[10px] text-nexus-text font-mono"
+                                    className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text nx-num px-3 h-10 text-base sm:text-sm"
                                   />
                                 </div>
                               </div>
@@ -5124,8 +5074,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       {newBarber.services.length === 0 && (
                         <div className="text-center text-nexus-text-muted py-16">
                           <ServiceIcon className="w-8 h-8 mx-auto mb-2 opacity-35" />
-                          <p className="text-[10px] font-bold">No hay {tl('services')} {g('service', 'seleccionados', 'seleccionadas')}</p>
-                          <p className="text-[9px] text-nexus-text-muted">Agrégar de la lista de disponibles a la derecha.</p>
+                          <p className="text-xs font-bold">No hay {tl('services')} {g('service', 'seleccionados', 'seleccionadas')}</p>
+                          <p className="text-xs text-nexus-text-muted">Agrégar de la lista de disponibles a la derecha.</p>
                         </div>
                       )}
                     </div>
@@ -5134,7 +5084,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 flex flex-col h-[380px] shadow-sm">
                     <div className="space-y-3.5 mb-3">
                       <div className="flex justify-between items-center">
-                        <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">{t('services')} Disponibles</h4>
+                        <h4 className="text-xs font-semibold text-nexus-text-secondary ">{t('services')} Disponibles</h4>
                         <button 
                           type="button"
                           onClick={() => {
@@ -5144,7 +5094,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               .map(s => ({ serviceId: s.id, commissionEnabled: false, type: '%', value: 40 }));
                             setNewBarber(prev => ({ ...prev, services: [...prev.services, ...toAdd] }));
                           }}
-                          className="text-[10px] text-nexus-primary font-bold hover:underline cursor-pointer"
+                          className="text-xs py-2 text-nexus-primary font-bold hover:underline cursor-pointer"
                         >
                           Seleccionar Todos
                         </button>
@@ -5159,7 +5109,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           placeholder={`Buscar ${tl('service')}...`} 
                           value={serviceSearch}
                           onChange={(e) => setServiceSearch(e.target.value)}
-                          className="w-full bg-nexus-surface border border-nexus-border rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-nexus-text outline-none"
+                          className="w-full bg-nexus-surface border border-nexus-border rounded-lg pl-8 pr-3 text-nexus-text outline-none h-10 text-base sm:text-sm"
                         />
                       </div>
 
@@ -5169,7 +5119,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             key={tab}
                             type="button"
                             onClick={() => setServiceTab(tab)}
-                            className={`flex-1 py-1 text-[9px] font-bold rounded-md transition-all cursor-pointer ${
+                            className={`flex-1 h-9 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                               serviceTab === tab ? 'bg-nexus-primary text-white shadow-md' : 'text-nexus-text-secondary hover:text-nexus-text'
                             }`}
                           >
@@ -5219,10 +5169,10 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               </span>
                               <div>
                                 <p className="font-bold text-nexus-text">{s.name}</p>
-                                <p className="text-[9px] text-nexus-text-muted font-mono">{s.duration} min — {s.price} Bs</p>
+                                <p className="text-xs text-nexus-text-muted nx-num">{s.duration} min — {s.price} Bs</p>
                               </div>
                             </div>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold font-mono ${
+                            <span className={`text-xs px-1.5 py-0.5 rounded-md font-bold nx-num ${
                               isSelected ? 'bg-nexus-primary text-white' : 'bg-nexus-surface-hover text-nexus-text-secondary'
                             }`}>
                               {isSelected ? 'Agregado' : 'Añadir'}
@@ -5241,109 +5191,103 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Configuración de Horarios Laborales</h4>
-                      <p className="text-[9px] text-nexus-text-muted">Ajuste la disponibilidad semanal que se mostrará en los turnos de la agenda.</p>
+                      <h4 className="text-xs font-semibold text-nexus-text-secondary ">Configuración de Horarios Laborales</h4>
+                      <p className="text-xs text-nexus-text-muted">Ajuste la disponibilidad semanal que se mostrará en los turnos de la agenda.</p>
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-lg border border-nexus-border bg-nexus-surface">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-nexus-border bg-nexus-background text-[9px] text-nexus-text-secondary uppercase tracking-widest font-mono font-bold">
-                          <th className="py-2.5 px-4">Día de la semana</th>
-                          <th className="py-2.5 px-4 text-center">Estado</th>
-                          <th className="py-2.5 px-4 text-center">Hora de Inicio</th>
-                          <th className="py-2.5 px-4 text-center">Hora de Finalización</th>
-                          <th className="py-2.5 px-4 text-right">Acciones de Plantilla</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-nexus-border">
-                        {newBarber.availability.map((av, idx) => {
-                          const isRest = av.status === 'Descanso';
-                          return (
-                            <tr key={av.day} className="hover:bg-nexus-surface-hover transition-colors">
-                              <td className="py-2 px-4 font-bold text-nexus-text">
-                                {av.day}
-                              </td>
-                              <td className="py-2 px-4 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setNewBarber(prev => ({
-                                      ...prev,
-                                      availability: prev.availability.map((d, i) => 
-                                        i === idx 
-                                          ? { ...d, status: d.status === 'Disponible' ? 'Descanso' : 'Disponible' } 
-                                          : d
-                                      )
-                                    }));
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[9px] font-extrabold font-mono tracking-wider transition-colors border cursor-pointer font-bold ${
-                                    isRest 
-                                      ? 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25 hover:opacity-80' 
-                                      : 'bg-nexus-primary-soft text-nexus-primary border-nexus-primary/25 hover:opacity-80'
-                                  }`}
-                                >
-                                  {av.status.toUpperCase()}
-                                </button>
-                              </td>
-                              <td className="py-2 px-4 text-center">
-                                <input 
-                                  type="time"
-                                  disabled={isRest}
-                                  value={av.start}
-                                  onChange={(e) => {
-                                    setNewBarber(prev => ({
-                                      ...prev,
-                                      availability: prev.availability.map((d, i) => 
-                                        i === idx ? { ...d, start: e.target.value } : d
-                                      )
-                                    }));
-                                  }}
-                                  className={`bg-nexus-surface border border-nexus-border rounded px-2 py-1 text-[11px] outline-none text-nexus-text font-mono text-center transition-opacity ${
-                                    isRest ? 'opacity-40 pointer-events-none' : ''
-                                  }`}
-                                />
-                              </td>
-                              <td className="py-2 px-4 text-center">
-                                <input 
-                                  type="time"
-                                  disabled={isRest}
-                                  value={av.end}
-                                  onChange={(e) => {
-                                    setNewBarber(prev => ({
-                                      ...prev,
-                                      availability: prev.availability.map((d, i) => 
-                                        i === idx ? { ...d, end: e.target.value } : d
-                                      )
-                                    }));
-                                  }}
-                                  className={`bg-nexus-surface border border-nexus-border rounded px-2 py-1 text-[11px] outline-none text-nexus-text font-mono text-center transition-opacity ${
-                                    isRest ? 'opacity-40 pointer-events-none' : ''
-                                  }`}
-                                />
-                              </td>
-                              <td className="py-2 px-4 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyAvailabilityToAll(idx)}
-                                  className="px-2 py-1 bg-nexus-surface border border-nexus-border hover:border-nexus-primary rounded text-[9px] font-bold text-nexus-text-secondary transition-colors inline-flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Copy className="w-3 h-3 text-nexus-primary" /> Copiar horarios a todos
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      </table>
+                  {/* Fase 4: en escritorio, filas tipo tabla; en celular, cada día en su propio bloque
+                      con los mismos controles (estado, inicio, fin y copiar a todos). */}
+                  <div className="rounded-lg border border-nexus-border bg-nexus-surface divide-y divide-nexus-border">
+                    <div className="hidden md:grid grid-cols-[1fr_8rem_8rem_8rem_10rem] items-center gap-3 px-4 py-2.5 bg-nexus-background rounded-t-lg text-xs font-semibold text-nexus-text-secondary">
+                      <span>Día de la semana</span>
+                      <span className="text-center">Estado</span>
+                      <span className="text-center">Hora de inicio</span>
+                      <span className="text-center">Hora de finalización</span>
+                      <span className="text-right">Plantilla</span>
+                    </div>
+                    {newBarber.availability.map((av, idx) => {
+                      const isRest = av.status === 'Descanso';
+                      const timeCls = `h-10 w-full rounded-lg border border-nexus-border bg-nexus-surface px-2 text-base sm:text-sm text-nexus-text nx-num text-center outline-none focus:border-nexus-primary transition-opacity ${isRest ? 'opacity-40 pointer-events-none' : ''}`;
+                      return (
+                        <div key={av.day} className="grid grid-cols-2 md:grid-cols-[1fr_8rem_8rem_8rem_10rem] items-center gap-x-3 gap-y-2 px-3 md:px-4 py-3 md:py-2 hover:bg-nexus-surface-hover transition-colors">
+                          <span className="text-sm font-semibold text-nexus-text">{av.day}</span>
+                          <div className="justify-self-end md:justify-self-center">
+                            <button
+                              type="button"
+                              aria-pressed={!isRest}
+                              onClick={() => {
+                                setNewBarber(prev => ({
+                                  ...prev,
+                                  availability: prev.availability.map((d, i) => 
+                                    i === idx 
+                                      ? { ...d, status: d.status === 'Disponible' ? 'Descanso' : 'Disponible' } 
+                                      : d
+                                  )
+                                }));
+                              }}
+                              className={`h-9 px-3 rounded-md text-sm font-semibold transition-colors border cursor-pointer whitespace-nowrap ${
+                                isRest 
+                                  ? 'bg-nexus-error-bg text-nexus-error-text border-nexus-error/25 hover:opacity-80' 
+                                  : 'bg-nexus-primary-soft text-nexus-primary border-nexus-primary/25 hover:opacity-80'
+                              }`}
+                            >
+                              {av.status}
+                            </button>
+                          </div>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs text-nexus-text-muted md:sr-only">Inicio</span>
+                            <input 
+                              type="time"
+                              disabled={isRest}
+                              value={av.start}
+                              onChange={(e) => {
+                                setNewBarber(prev => ({
+                                  ...prev,
+                                  availability: prev.availability.map((d, i) => 
+                                    i === idx ? { ...d, start: e.target.value } : d
+                                  )
+                                }));
+                              }}
+                              className={timeCls}
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs text-nexus-text-muted md:sr-only">Fin</span>
+                            <input 
+                              type="time"
+                              disabled={isRest}
+                              value={av.end}
+                              onChange={(e) => {
+                                setNewBarber(prev => ({
+                                  ...prev,
+                                  availability: prev.availability.map((d, i) => 
+                                    i === idx ? { ...d, end: e.target.value } : d
+                                  )
+                                }));
+                              }}
+                              className={timeCls}
+                            />
+                          </label>
+                          <div className="col-span-2 md:col-span-1 md:justify-self-end">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyAvailabilityToAll(idx)}
+                              className="h-9 w-full md:w-auto px-3 bg-nexus-surface border border-nexus-border hover:border-nexus-primary rounded-md text-sm font-medium text-nexus-text-secondary transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                            >
+                              <Copy className="w-4 h-4 text-nexus-primary" aria-hidden="true" /> Copiar a todos
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {hasFeature(planFeatures, 'permisosProfesional') && (
                   <div className="pt-4 border-t border-nexus-border space-y-3">
                     <div>
-                      <h4 className="text-[11px] font-black uppercase text-nexus-text-secondary tracking-wider font-mono font-bold">Permisos {g('professional', 'del', 'de la')} {t('professional')}</h4>
-                      <p className="text-[9px] text-nexus-text-muted">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
+                      <h4 className="text-xs font-semibold text-nexus-text-secondary ">Permisos {g('professional', 'del', 'de la')} {t('professional')}</h4>
+                      <p className="text-xs text-nexus-text-muted">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {getStaffPermissionOptions(businessProfile).map(opt => {
@@ -5359,7 +5303,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                 permissions: { ...normalizeStaffPermissions(prev.permissions), [opt.key]: e.target.checked }
                               }))}
                             />
-                            <span className="text-[11px] leading-snug">
+                            <span className="text-xs leading-snug">
                               <strong className="text-nexus-text block">{opt.label}</strong>
                               <span className="text-nexus-text-muted">{opt.hint}</span>
                             </span>
@@ -5382,7 +5326,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   setEditingBarberId(null);
                   resetBarberForm();
                 }}
-                className="px-4 py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-bold rounded-lg text-sm transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
@@ -5392,7 +5336,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <button 
                     type="button"
                     onClick={() => setBarberStep(prev => prev - 1)}
-                    className="px-4 py-2 bg-nexus-surface hover:bg-nexus-surface-hover border border-nexus-border text-nexus-text-secondary font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface hover:bg-nexus-surface-hover border border-nexus-border text-nexus-text-secondary font-bold rounded-lg text-sm transition-colors cursor-pointer"
                   >
                     Anterior
                   </button>
@@ -5402,7 +5346,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <button 
                     type="button"
                     onClick={handleNextStep}
-                    className="px-4 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer font-bold"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-lg text-sm shadow-md transition-colors cursor-pointer font-bold"
                   >
                     Siguiente paso
                   </button>
@@ -5410,7 +5354,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   <button 
                     type="button"
                     onClick={handleSaveBarber}
-                    className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-xs shadow-md transition-all cursor-pointer font-bold"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md transition-all cursor-pointer font-bold"
                   >
                     {editingBarberId ? 'Guardar Cambios' : `Crear ${t('professional')}`}
                   </button>
@@ -5426,34 +5370,34 @@ const { businessSettings } = useBusinessSettings(negocioId);
           6. MODAL: AGREGAR / EDITAR SUCURSALES
           ========================================== */}
       {activeModal === 'add-branch' && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-lg p-6 relative shadow-xl max-h-full overflow-y-auto">
+        <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg p-5 sm:p-6 relative shadow-xl max-h-[92dvh] overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <Building2 className="w-5 h-5 text-nexus-primary" />
               {editingBranchId ? 'Editar Sucursal' : 'Crear Nueva Sucursal'}
             </h3>
-            <p className="text-[10px] text-nexus-text-secondary mb-4">Complete la información física y de contacto comercial.</p>
+            <p className="text-xs text-nexus-text-secondary mb-4">Complete la información física y de contacto comercial.</p>
 
             <form onSubmit={handleCreateBranch} className="space-y-4">
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Nombre de la Sucursal *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre de la Sucursal *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="Ej. Equipetrol Premium"
                   value={newBranch.name}
                   onChange={(e) => setNewBranch(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Teléfono de Sucursal</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Teléfono de Sucursal</label>
                 <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg px-2.5 gap-2">
                   {detectedBranchCountry && (
                     <div className="flex items-center gap-1 shrink-0 text-xs">
                       <span>{detectedBranchCountry?.flag}</span>
-                      <span className="text-[9px] font-mono text-nexus-text-secondary font-bold">{detectedBranchCountry?.code}</span>
+                      <span className="text-xs nx-num text-nexus-text-secondary font-bold">{detectedBranchCountry?.code}</span>
                     </div>
                   )}
                   <input 
@@ -5464,42 +5408,42 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       setNewBranch(prev => ({ ...prev, phone: val }));
                     }}
                     placeholder="+591 71234567"
-                    className="w-full bg-transparent border-0 py-2.5 text-xs text-nexus-text outline-none"
+                    className="w-full bg-transparent border-0 text-nexus-text outline-none px-3 h-10 text-base sm:text-sm"
                   />
                 </div>
                 {detectedBranchCountry && (
-                  <span className="text-[8px] text-nexus-primary font-bold mt-1 block">
+                  <span className="text-xs text-nexus-primary font-bold mt-1 block">
                     Ubicación del prefijo comercial detectado ({detectedBranchCountry?.country})
                   </span>
                 )}
               </div>
 
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Horario de Atención</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Horario de Atención</label>
                 <input 
                   type="text" 
                   placeholder="Ej. Lunes a Sábado, 09:00 - 20:00"
                   value={newBranch.schedule}
                   onChange={(e) => setNewBranch(prev => ({ ...prev, schedule: e.target.value }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Enlace de Google Maps (opcional)</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Enlace de Google Maps (opcional)</label>
                 <input
                   type="text"
                   inputMode="url"
                   placeholder="https://maps.app.goo.gl/..."
                   value={newBranch.mapsUrl || ''}
                   onChange={(e) => setNewBranch(prev => ({ ...prev, mapsUrl: e.target.value }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
-                <p className="text-[9px] text-nexus-text-muted mt-1">En Google Maps: Compartir → Copiar enlace. Si lo dejas vacío se usa la dirección/ubicación del mapa.</p>
+                <p className="text-xs text-nexus-text-muted mt-1">En Google Maps: Compartir → Copiar enlace. Si lo dejas vacío se usa la dirección/ubicación del mapa.</p>
               </div>
 
               <div className="relative">
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Ubicación / Dirección Física *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Ubicación / Dirección Física *</label>
                 <div className="relative flex items-center">
                   <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
                     <MapPin className="w-4 h-4 text-nexus-error" />
@@ -5515,7 +5459,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       setShowLocationList(true);
                     }}
                     onFocus={() => setShowLocationList(true)}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-8 pr-2.5 py-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-8 pr-2.5 text-nexus-text outline-none focus:border-nexus-primary h-10 text-base sm:text-sm"
                   />
                 </div>
 
@@ -5538,13 +5482,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       >
                         <MapPin className="w-3.5 h-3.5 text-nexus-error shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-bold text-nexus-text text-[11px] truncate">{l?.name}</p>
-                          <p className="text-[9px] text-nexus-text-muted truncate">{l?.address}</p>
+                          <p className="font-bold text-nexus-text text-xs truncate">{l?.name}</p>
+                          <p className="text-xs text-nexus-text-muted truncate">{l?.address}</p>
                         </div>
                       </div>
                     ))}
                     {filteredSimulatedLocations.length === 0 && (
-                      <p className="p-3 text-[10px] text-nexus-text-muted text-center">No hay sugerencias con esa dirección. Intente otra calle.</p>
+                      <p className="p-3 text-xs text-nexus-text-muted text-center">No hay sugerencias con esa dirección. Intente otra calle.</p>
                     )}
                   </div>
                 )}
@@ -5552,14 +5496,14 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-[9px] text-nexus-text-muted font-bold uppercase tracking-widest">Mapa Interactivo de Coordenadas</label>
-                  <span className="text-[8px] text-nexus-primary font-mono">Zoom, arrastra el pin o haz clic para reubicar</span>
+                  <label className="text-xs text-nexus-text-muted font-bold">Mapa Interactivo de Coordenadas</label>
+                  <span className="text-xs text-nexus-primary nx-num">Zoom, arrastra el pin o haz clic para reubicar</span>
                 </div>
                 
                 <div className="relative h-48 w-full rounded-xl overflow-hidden border border-nexus-border bg-nexus-background z-10">
                   <div ref={mapContainerRef} className="w-full h-full text-black" />
                   
-                  <div className="absolute bottom-2 left-2 bg-nexus-surface/90 border border-nexus-border px-2 py-1 rounded text-[8px] text-nexus-text-secondary font-mono z-25 flex gap-2 select-none pointer-events-none">
+                  <div className="absolute bottom-2 left-2 bg-nexus-surface/90 border border-nexus-border px-2 py-1 rounded text-xs text-nexus-text-secondary nx-num z-25 flex gap-2 select-none pointer-events-none">
                     <span>Lat: {newBranch?.lat?.toFixed(5)}</span>
                     <span>Lng: {newBranch?.lng?.toFixed(5)}</span>
                   </div>
@@ -5574,13 +5518,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     setNewBranch({ name: '', phone: '', address: '', schedule: '', lat: -17.7732, lng: -63.1821, createdDate: '' });
                     setLocationSearch('');
                   }} 
-                  className="px-4 py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary text-sm font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
                   {editingBranchId ? 'Guardar Cambios' : 'Crear Sucursal'}
                 </button>
@@ -5605,30 +5549,30 @@ const { businessSettings } = useBusinessSettings(negocioId);
         />
       )}
       {activeModal === 'add-service' && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-md p-6 relative shadow-xl max-h-full overflow-y-auto">
+        <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 sm:p-6 relative shadow-xl max-h-[92dvh] overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <ServiceIcon className="w-5 h-5 text-nexus-primary" />
               {editingServiceId ? `Editar ${t('service')}` : `Crear ${g('service', 'Nuevo', 'Nueva')} ${t('service')}`}
             </h3>
-            <p className="text-[10px] text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal {g('service', 'del', 'de la')} {tl('service')}.</p>
+            <p className="text-xs text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal {g('service', 'del', 'de la')} {tl('service')}.</p>
             
             <form onSubmit={handleCreateService} className="space-y-4">
               <div>
-                <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Nombre {g('service', 'del', 'de la')} {t('service')} *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre {g('service', 'del', 'de la')} {t('service')} *</label>
                 <input 
                   type="text" 
                   required
                   placeholder="Ej. Sesión GallyFlow Express"
                   value={newService.name}
                   onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">{newService.priceVariable ? 'Precio mínimo *' : 'Precio *'}</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">{newService.priceVariable ? 'Precio mínimo *' : 'Precio *'}</label>
                   <div className="relative">
                     <input 
                       type="number" 
@@ -5636,19 +5580,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       placeholder="100"
                       value={newService.price}
                       onChange={(e) => setNewService(prev => ({ ...prev, price: e.target.value }))}
-                      className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-3 pr-8 p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-mono font-bold"
+                      className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-3 pr-8 text-nexus-text outline-none focus:border-nexus-primary nx-num font-bold h-10 text-base sm:text-sm"
                     />
                     <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-nexus-text-muted select-none font-bold">Bs</span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-nexus-text-secondary font-bold block mb-1 uppercase tracking-wider">Tiempo de Duración *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Tiempo de Duración *</label>
                   <select 
                     required
                     value={newService.duration}
                     onChange={(e) => setNewService(prev => ({ ...prev, duration: e.target.value }))}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-lg p-2.5 text-xs text-nexus-text outline-none focus:border-nexus-primary font-bold font-sans"
+                    className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary font-bold font-sans px-3 h-10 text-base sm:text-sm"
                   >
                     <option value="15">15 min</option>
                     <option value="30">30 min</option>
@@ -5668,28 +5612,28 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   checked={!!newService.priceVariable}
                   onChange={(e) => setNewService(prev => ({ ...prev, priceVariable: e.target.checked }))}
                 />
-                <span className="text-[11px] text-nexus-text-secondary leading-snug">
+                <span className="text-xs text-nexus-text-secondary leading-snug">
                   <strong className="text-nexus-text">Precio variable.</strong> El precio ingresado es el mínimo y se mostrará como
-                  {' '}<span className="font-mono text-nexus-primary">Desde Bs {newService.price || 'XX'}</span>.
+                  {' '}<span className="nx-num text-nexus-primary">Desde Bs {newService.price || 'XX'}</span>.
                 </span>
               </label>
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-[10px] text-nexus-text-secondary font-bold uppercase tracking-wider">Disponibilidad por Días *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold">Disponibilidad por Días *</label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setNewService(prev => ({ ...prev, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] }))}
-                      className="text-[9px] text-nexus-primary hover:underline font-bold cursor-pointer"
+                      className="text-xs py-2 text-nexus-primary hover:underline font-bold cursor-pointer"
                     >
                       Todos
                     </button>
-                    <span className="text-nexus-text-muted text-[9px] font-bold">|</span>
+                    <span className="text-nexus-text-muted text-xs font-bold">|</span>
                     <button
                       type="button"
                       onClick={() => setNewService(prev => ({ ...prev, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'] }))}
-                      className="text-[9px] text-nexus-primary hover:underline font-bold cursor-pointer"
+                      className="text-xs py-2 text-nexus-primary hover:underline font-bold cursor-pointer"
                     >
                       Lun-Sáb
                     </button>
@@ -5731,13 +5675,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <button 
                   type="button" 
                   onClick={() => setActiveModal(null)} 
-                  className="px-4 py-2 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary text-sm font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
                   {editingServiceId ? 'Guardar Cambios' : `Crear ${t('service')}`}
                 </button>
