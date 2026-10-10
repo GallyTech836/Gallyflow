@@ -24,9 +24,10 @@ import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons'
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
+import { checkWorkingHours } from '../shared/appointments/workingHours';
 import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { formatServicePrice } from '../shared/servicePricing/servicePricing';
-import { getStaffPermissionOptions, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
+import { getStaffPermissionOptions, getEditPartOptions, getEditMode, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
@@ -192,7 +193,7 @@ const [saleForm, setSaleForm] = useState({
     },
     {
       id: 'p3',
-      name: 'Shampoo Purificante GallyFlow',
+      name: 'Shampoo Purificante',
       category: 'Limpieza',
       stock: 0,
       minStock: 5,
@@ -349,12 +350,12 @@ const [saleForm, setSaleForm] = useState({
   // Pantallas que muestran los controles de periodo y sucursal en la cabecera.
   const headerHasToolbar = ['agenda', 'dashboard', 'commissions', 'assistance', 'reports', 'automatizaciones'].includes(activeTab);
 
-  const [businessName, setBusinessName] = useState('GallyFlow');
+  const [businessName, setBusinessName] = useState('Mi negocio');
   const [isEditingBusinessName, setIsEditingBusinessName] = useState(false);
 
   // Carga el nombre real del negocio desde Firestore (heroConfig.businessName,
   // el mismo campo que usa la Pantalla de Bienvenida) — antes se quedaba fijo
-  // en "GallyFlow" para todos los negocios, sin importar cuál fuera.
+  // en un nombre fijo para todos los negocios, sin importar cuál fuera.
   useEffect(() => {
     if (!negocioId) return;
     const ref = doc(db, 'negocios', negocioId);
@@ -1642,6 +1643,23 @@ const { businessSettings } = useBusinessSettings(negocioId);
     return { isValid: true };
   };
 
+  // Fase 4/5: fuera del horario del negocio o del profesional se pide confirmar
+  // "Agendar en sobrehorario". Devuelve true si está en horario o si se confirmó.
+  const confirmOutsideHours = async ({ date, time, duration, professionalId }) => {
+    const professional = professionalId && professionalId !== 'pending' ? barbers.find(b => b?.id === professionalId) : null;
+    const res = checkWorkingHours({ date, time, duration, businessSchedule: businessSettings?.schedule, professional, terms: businessProfile });
+    if (res.ok) return true;
+    return confirmAction({
+      title: 'Está fuera del horario',
+      subject: res.message,
+      message: `¿Quieres agendar ${g('appointment', 'este', 'esta')} ${tl('appointment')} igual, en sobrehorario?`,
+      irreversible: false,
+      tone: 'primary',
+      confirmLabel: 'Agendar en sobrehorario',
+      cancelLabel: 'Volver',
+    });
+  };
+
   const handleCreateReservation = async (e) => {
     if (e) e.preventDefault();
     const serviceObj = services.find(s => s.id === newReservation.serviceId);
@@ -1656,6 +1674,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       triggerToast(check.message, 'error');
       return;
     }
+    if (!(await confirmOutsideHours({ date: newReservation.date, time: newReservation.time, duration, professionalId: targetProfessionalId }))) return;
 
     const phoneId = (newReservation.phone || 'sin-telefono').replace(/[^0-9]/g, '') || 'sin-telefono';
     let clientObj = clients.find(c => c.name.toLowerCase() === newReservation.clientName.toLowerCase());
@@ -1773,6 +1792,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     const endTimeStr = minToTime(timeToMin(draft.time) + totalDuration);
     const check = await checkConflicts(null, targetProfessionalId, draft.date, draft.time, endTimeStr, false, false);
     if (!check.isValid) { triggerToast(check.message, 'error'); return; }
+    if (!(await confirmOutsideHours({ date: draft.date, time: draft.time, duration: totalDuration, professionalId: targetProfessionalId }))) return;
 
     const phoneId = (draft.phone || 'sin-telefono').replace(/[^0-9]/g, '') || 'sin-telefono';
     let clientObj = clients.find(c => c.name.toLowerCase() === draft.clientName.toLowerCase());
@@ -1846,7 +1866,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
   const handleOpenEditReservation = (res) => {
     const services = res.services && res.services.length > 0 ? res.services : getServicesFromCita(res);
-    setEditingReservation({ ...res, services, _originalProfessionalId: res.professionalId || res.barberId || 'pending' });
+    setEditingReservation({
+      ...res,
+      services,
+      _originalProfessionalId: res.professionalId || res.barberId || 'pending',
+      // Para saber si cambió el horario al guardar (solo entonces se revisa el horario laboral).
+      _originalSlot: { date: res.date, time: res.time, duration: getReservationDuration(res, services), professionalId: res.professionalId || res.barberId || 'pending' },
+    });
     setActiveModal('edit-reservation');
   };
 
@@ -1863,6 +1889,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
       triggerToast(check.message, 'error');
       return;
     }
+    // Horario laboral: solo si cambió la fecha, la hora, la duración o el profesional
+    // (así una cita que ya estaba en sobrehorario se puede editar sin avisos).
+    const orig = editingReservation._originalSlot;
+    const slotChanged = !orig || orig.date !== editingReservation.date || orig.time !== editingReservation.time
+      || Number(orig.duration) !== duration || orig.professionalId !== targetProfessionalId;
+    if (slotChanged && !(await confirmOutsideHours({ date: editingReservation.date, time: editingReservation.time, duration, professionalId: targetProfessionalId }))) return;
   
     const assignedBarber = barbers.find(b => b.id === targetProfessionalId);
     const currentServices = editingReservation.services && editingReservation.services.length > 0
@@ -2659,9 +2691,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
             />
             <div className="min-w-0">
               <h1 className="text-sm font-bold tracking-wide text-white truncate">
-                GallyFlow
+                Nexus
               </h1>
-              <p className="text-xs text-white/50 truncate">Multi-Business SaaS</p>
+              <p className="text-xs text-white/50 truncate">{businessName || 'Panel del negocio'}</p>
             </div>
           </div>
 
@@ -3122,6 +3154,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 const COL_MIN_PX = 150;
                 const dayMinWidth = HOUR_COL_PX + totalCols * COL_MIN_PX;
                 const toTop = (min) => (min - GRID_START_MIN) * PX_PER_MIN;
+                const showNowLine = selectedDate === formatDate(new Date()) && currentTimeMinutes >= 480 && currentTimeMinutes <= 1320;
                 return (
                 <div className="space-y-3">
                   {/* Filtro de profesional (solo vista; usa el filtro que ya existía). En
@@ -3188,13 +3221,14 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       {/* CUERPO */}
                       <div className="relative flex">
 
-                        {currentTimeMinutes >= 480 && currentTimeMinutes <= 1320 && (
+                        {/* Línea de la hora actual (Fase 4): solo en el día de hoy, por encima
+                            de las citas; la hora se muestra en la columna de horas. */}
+                        {showNowLine && (
                           <div
-                            className="absolute left-0 right-0 border-t-2 border-nexus-error z-10 flex items-center pointer-events-none"
+                            className="absolute left-0 right-0 border-t-2 border-nexus-error z-[15] pointer-events-none"
                             style={{ top: `${toTop(currentTimeMinutes)}px` }}
-                          >
-                            <div className="w-2.5 h-2.5 rounded-full bg-nexus-error -ml-1" />
-                          </div>
+                            aria-hidden="true"
+                          />
                         )}
 
                         {/* COLUMNA DE HORAS (fija a la izquierda) */}
@@ -3204,6 +3238,15 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               <span className={`nx-num text-xs ${hour % 1 === 0 ? 'text-nexus-text-secondary font-semibold' : 'text-nexus-text-muted'}`}>{formatHourLabel(hour)}</span>
                             </div>
                           ))}
+                          {showNowLine && (
+                            <span
+                              className="absolute right-0.5 -translate-y-1/2 rounded-full bg-nexus-error px-1.5 py-0.5 text-xs font-bold text-white nx-num shadow-sm"
+                              style={{ top: `${toTop(currentTimeMinutes)}px` }}
+                              title="Hora actual"
+                            >
+                              {minToTime(currentTimeMinutes)}
+                            </span>
+                          )}
                         </div>
 
                         {/* COLUMNAS (mismo ancho que el encabezado, se mueven juntas) */}
@@ -3689,33 +3732,33 @@ const { businessSettings } = useBusinessSettings(negocioId);
           {activeTab === 'inventory' && (
             <div className="space-y-6 animate-fadeIn">
               {/* Navegación de pestañas internas */}
-              <div className="flex border-b border-[#1E2442] gap-6">
+              <div className="flex border-b border-nexus-border gap-6">
                 <button
                   type="button"
                   onClick={() => setInventoryTab('stock')}
-                  className={`pb-3 text-xs font-extrabold tracking-wider uppercase transition-all relative ${
+                  className={`h-10 px-1 text-sm font-semibold transition-colors relative cursor-pointer ${
                     inventoryTab === 'stock'
-                      ? 'text-indigo-400'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'text-nexus-primary'
+                      : 'text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
                   Stock
                   {inventoryTab === 'stock' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-nexus-primary rounded-full" />
                   )}
                 </button>
                 <button
                   type="button"
                   onClick={() => setInventoryTab('ventas')}
-                  className={`pb-3 text-xs font-extrabold tracking-wider uppercase transition-all relative ${
+                  className={`h-10 px-1 text-sm font-semibold transition-colors relative cursor-pointer ${
                     inventoryTab === 'ventas'
-                      ? 'text-indigo-400'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'text-nexus-primary'
+                      : 'text-nexus-text-secondary hover:text-nexus-text'
                   }`}
                 >
                   Ventas
                   {inventoryTab === 'ventas' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-nexus-primary rounded-full" />
                   )}
                 </button>
               </div>
@@ -3725,62 +3768,62 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <div className="space-y-6 animate-fadeIn">
                   {/* Tarjetas Resumen */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg flex items-center justify-between">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Productos Totales</span>
-                        <h3 className="text-xl font-black text-white font-mono mt-1">42</h3>
+                        <span className="text-xs font-bold text-nexus-text-muted">Productos Totales</span>
+                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">42</h3>
                       </div>
-                      <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <div className="w-9 h-9 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary">
                         <Package className="w-5 h-5" />
                       </div>
                     </div>
 
-                    <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg flex items-center justify-between">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Stock Total</span>
-                        <h3 className="text-xl font-black text-white font-mono mt-1">284 <span className="text-xs text-slate-500 font-normal">uds</span></h3>
+                        <span className="text-xs font-bold text-nexus-text-muted">Stock Total</span>
+                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">284 <span className="text-xs text-nexus-text-muted font-normal">uds</span></h3>
                       </div>
-                      <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <div className="w-9 h-9 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary">
                         <Sliders className="w-5 h-5" />
                       </div>
                     </div>
 
-                    <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg flex items-center justify-between">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Bajo Stock</span>
-                        <h3 className="text-xl font-black text-amber-400 font-mono mt-1">5</h3>
+                        <span className="text-xs font-bold text-nexus-text-muted">Bajo Stock</span>
+                        <h3 className="text-xl font-black text-nexus-warning-text nx-num mt-1">5</h3>
                       </div>
-                      <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                      <div className="w-9 h-9 rounded-lg bg-nexus-warning-bg border border-nexus-warning/30 flex items-center justify-center text-nexus-warning-text">
                         <AlertCircle className="w-5 h-5" />
                       </div>
                     </div>
 
-                    <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg flex items-center justify-between">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Agotados</span>
-                        <h3 className="text-xl font-black text-rose-400 font-mono mt-1">2</h3>
+                        <span className="text-xs font-bold text-nexus-text-muted">Agotados</span>
+                        <h3 className="text-xl font-black text-nexus-error-text nx-num mt-1">2</h3>
                       </div>
-                      <div className="w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                      <div className="w-9 h-9 rounded-lg bg-nexus-error-bg border border-nexus-error/25 flex items-center justify-center text-nexus-error-text">
                         <XCircle className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Barra Superior */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0C0E17] p-4 border border-[#1B2136] rounded-xl">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
                     <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                       <div className="relative w-full sm:w-64">
                         <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Search className="w-4 h-4 text-slate-500" />
+                          <Search className="w-4 h-4 text-nexus-text-muted" />
                         </span>
                         <input 
                           type="text" 
                           placeholder="Buscar producto..." 
-                          className="w-full bg-[#131728] border border-[#232B4C] rounded-lg pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                          className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 text-nexus-text outline-none focus:border-nexus-primary h-10 text-base sm:text-sm"
                         />
                       </div>
                       <select 
-                        className="bg-[#131728] border border-[#232B4C] rounded-lg px-3 py-2 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
+                        className="bg-nexus-background border border-nexus-border rounded-lg px-3 text-nexus-text outline-none focus:border-nexus-primary cursor-pointer h-10 text-base sm:text-sm"
                       >
                         <option value="all">Todas las categorías</option>
                         <option value="capilar">Cuidado Capilar</option>
@@ -3793,7 +3836,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     <button
                       type="button"
                       onClick={() => setShowNewProductPanel(true)}
-                      className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all"
+                      className="w-full sm:w-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all"
                     >
                       <Plus className="w-4 h-4" />
                       Nuevo Producto
@@ -3802,17 +3845,17 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                   {/* Modal de Nuevo Producto (Centrado y Simple) */}
                   {showNewProductPanel && (
-                    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                      <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-xl p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin animate-fadeIn">
-                        <div className="border-b border-[#1A1F36] pb-3 flex justify-between items-center mb-4">
+                    <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                      <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-xl p-6 relative shadow-2xl max-h-[92dvh] overflow-y-auto scrollbar-thin animate-fadeIn">
+                        <div className="border-b border-nexus-border pb-3 flex justify-between items-center mb-4">
                           <div>
-                            <h4 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Nuevo Producto</h4>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Registre las especificaciones y niveles de stock mínimo.</p>
+                            <h4 className="text-sm font-bold text-nexus-text uppercase tracking-wider nx-num">Nuevo Producto</h4>
+                            <p className="text-xs text-nexus-text-secondary mt-0.5">Registre las especificaciones y niveles de stock mínimo.</p>
                           </div>
                           <button
                             type="button"
                             onClick={() => setShowNewProductPanel(false)}
-                            className="text-slate-400 hover:text-white"
+                            className="text-nexus-text-secondary hover:text-nexus-text"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -3821,26 +3864,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <div className="space-y-4">
                           {/* Sección: Información Básica */}
                           <div className="space-y-3">
-                            <h5 className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono border-b border-[#1E2442] pb-1">Información Básica</h5>
+                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Información Básica</h5>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Nombre del producto *</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre del producto *</label>
                                 <input 
                                   type="text" 
                                   placeholder="Ej. Gel Modelador Premium"
                                   value={newProductForm.name}
                                   onChange={(e) => setNewProductForm({...newProductForm, name: e.target.value})}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Categoría *</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Categoría *</label>
                                 <div className="flex gap-2">
                                   <select 
                                     value={newProductForm.category}
                                     onChange={(e) => setNewProductForm({...newProductForm, category: e.target.value})}
-                                    className="flex-1 bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
+                                    className="flex-1 bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
                                   >
                                     <option value="capilar">Cuidado Capilar</option>
                                     <option value="fijacion">Fijación</option>
@@ -3850,7 +3893,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                   <button
                                     type="button"
                                     onClick={() => triggerToast("Función para crear categoría en desarrollo", "info")}
-                                    className="px-2.5 bg-indigo-950 hover:bg-indigo-900 border border-indigo-500/20 rounded-lg text-[10px] font-bold text-indigo-400 whitespace-nowrap transition-colors"
+                                    className="px-2.5 bg-nexus-primary-soft hover:bg-nexus-primary-soft border border-nexus-primary/20 rounded-lg text-xs font-bold text-nexus-primary whitespace-nowrap transition-colors"
                                   >
                                     Nueva
                                   </button>
@@ -3860,21 +3903,21 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">SKU (Código interno)</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">SKU (Código interno)</label>
                                 <input 
                                   type="text" 
-                                  placeholder="Ej. GALLY-CAP-01"
+                                  placeholder="Ej. CAP-001"
                                   value={newProductForm.sku}
                                   onChange={(e) => setNewProductForm({...newProductForm, sku: e.target.value})}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Tipo de producto</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Tipo de producto</label>
                                 <select 
                                   value={newProductForm.type}
                                   onChange={(e) => setNewProductForm({...newProductForm, type: e.target.value})}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
                                 >
                                   <option value="venta">Producto para venta</option>
                                   <option value="insumo">Insumo interno</option>
@@ -3884,68 +3927,68 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             </div>
 
                             <div>
-                              <label className="text-[10px] text-slate-400 font-bold block mb-1">Descripción</label>
+                              <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Descripción</label>
                               <textarea 
                                 rows="2"
                                 placeholder="Escriba los detalles o componentes del producto..."
                                 value={newProductForm.description}
                                 onChange={(e) => setNewProductForm({...newProductForm, description: e.target.value})}
-                                className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 resize-none"
+                                className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary resize-none"
                               />
                             </div>
                           </div>
 
                           {/* Sección: Inventario */}
                           <div className="space-y-3 pt-1">
-                            <h5 className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono border-b border-[#1E2442] pb-1">Inventario & Precios</h5>
+                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Inventario & Precios</h5>
                             
                             <div className="grid grid-cols-3 gap-3">
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Precio Venta (Bs)</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Precio Venta (Bs)</label>
                                 <input 
                                   type="number" 
                                   placeholder="120"
                                   value={newProductForm.price}
                                   onChange={(e) => setNewProductForm({...newProductForm, price: Number(e.target.value)})}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Stock inicial</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Stock inicial</label>
                                 <input 
                                   type="number" 
                                   placeholder="0"
                                   value={newProductForm.stock}
                                   onChange={(e) => setNewProductForm({...newProductForm, stock: Number(e.target.value)})}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Stock mínimo</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Stock mínimo</label>
                                 <input 
                                   type="number" 
                                   placeholder="5"
                                   value={newProductForm.minStock}
                                   onChange={(e) => setNewProductForm({...newProductForm, minStock: Number(e.target.value)})}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
                                 />
                               </div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex justify-end gap-2.5 pt-4 mt-5 border-t border-[#1E2442]/50">
+                        <div className="flex justify-end gap-2.5 pt-4 mt-5 border-t border-nexus-border">
                           <button 
                             type="button" 
                             onClick={() => setShowNewProductPanel(false)} 
-                            className="px-4 py-2 bg-[#1A1F36] border border-[#232B4A] text-slate-300 text-xs font-semibold rounded-lg hover:bg-[#252B4E] transition-colors cursor-pointer"
+                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface-hover border border-nexus-border text-nexus-text text-sm font-semibold rounded-lg hover:bg-nexus-surface-hover transition-colors cursor-pointer"
                           >
                             Cancelar
                           </button>
                           <button 
                             type="button" 
                             onClick={handleSaveProduct}
-                            className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                           >
                             Guardar
                           </button>
@@ -3954,69 +3997,45 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     </div>
                   )}
 
-                  {/* Tabla de Productos */}
-                  <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-xl">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
-                            <th className="p-4">Imagen</th>
-                            <th className="p-4">Producto</th>
-                            <th className="p-4">Categoría</th>
-                            <th className="p-4">Stock</th>
-                            <th className="p-4 text-right">Precio Venta</th>
-                            <th className="p-4 text-center">Estado</th>
-                            <th className="p-4 text-right">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1B2136]/40">
-                          {products.map(product => (
-                            <tr key={product.id} className="hover:bg-[#12162B]/35 transition-colors">
-                              <td className="p-4">
-                                <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover border border-[#1E2442] shadow" />
-                              </td>
-                              <td className="p-4 font-bold text-white text-xs">{product.name}</td>
-                              <td className="p-4 text-slate-300">{product.category}</td>
-                              <td className="p-4 font-mono font-bold text-slate-200">{product.stock} uds</td>
-                              <td className="p-4 text-right font-mono font-bold text-indigo-400">{product.price} Bs</td>
-                              <td className="p-4 text-center">
-                                <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase font-mono border font-bold ${
-                                  product.status === 'Disponible' 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' 
-                                    : product.status === 'Bajo Stock'
-                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/25 animate-pulse'
-                                    : 'bg-rose-500/10 text-rose-400 border-rose-500/25'
-                                }`}>
-                                  {product.status}
-                                </span>
-                              </td>
-                              <td className="p-4 text-right">
-                                <div className="inline-flex gap-2">
-                                  <button 
-                                    type="button"
-                                    onClick={() => triggerToast('Edición en construcción', 'success')}
-                                    className="p-1.5 hover:bg-indigo-500/10 text-indigo-400 rounded-lg transition-colors cursor-pointer"
-                                  >
-                                    <Edit3 className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      setProducts(products.filter(p => p.id !== product.id));
-                                      triggerToast('¡Producto eliminado!');
-                                    }}
-                                    className="p-1.5 hover:bg-rose-500/10 text-rose-400 rounded-lg transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  {/* Tabla de Productos (Fase 4: tabla en escritorio y tarjetas en celular) */}
+                  <ResponsiveTable
+                    rows={products}
+                    rowKey={(product) => product.id}
+                    breakpoint="lg"
+                    columns={[
+                      {
+                        key: 'name',
+                        header: 'Producto',
+                        primary: true,
+                        render: (product) => (
+                          <span className="flex items-center gap-3 min-w-0">
+                            <img src={product.image} alt="" className="w-10 h-10 rounded-lg object-cover border border-nexus-border shrink-0 bg-nexus-background" />
+                            <span className="font-semibold text-nexus-text">{product.name}</span>
+                          </span>
+                        ),
+                      },
+                      { key: 'category', header: 'Categoría', render: (product) => product.category },
+                      { key: 'stock', header: 'Stock', render: (product) => <span className="nx-num font-semibold">{product.stock} uds</span> },
+                      { key: 'price', header: 'Precio venta', align: 'right', render: (product) => <span className="nx-num font-semibold text-nexus-primary">{product.price} Bs</span> },
+                      { key: 'status', header: 'Estado', render: (product) => <Badge tone={((st) => (st === 'Disponible' || st === 'Pagado' ? 'success' : st === 'Bajo Stock' || st === 'Pendiente' ? 'warning' : 'danger'))(product.status)}>{product.status}</Badge> },
+                    ]}
+                    actions={(product) => (
+                      <>
+                        <IconButton icon={Edit3} tone="primary" label={`Editar ${product.name}`} onClick={() => triggerToast('Edición en construcción', 'success')} />
+                        <IconButton
+                          icon={Trash2}
+                          tone="danger"
+                          label={`Eliminar ${product.name}`}
+                          onClick={async () => {
+                            const ok = await confirmAction({ title: '¿Eliminar este producto?', subject: product.name });
+                            if (!ok) return;
+                            setProducts(products.filter(p => p.id !== product.id));
+                            triggerToast('¡Producto eliminado!');
+                          }}
+                        />
+                      </>
+                    )}
+                  />
                 </div>
               )}
 
@@ -4026,21 +4045,21 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                   {/* Tarjetas Resumen e Ingresos */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-center">
-                    <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg flex items-center justify-between">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Ventas del día</span>
-                        <h3 className="text-xl font-black text-white font-mono mt-1">{todaySalesMetrics.count}</h3>
+                        <span className="text-xs font-bold text-nexus-text-muted">Ventas del día</span>
+                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">{todaySalesMetrics.count}</h3>
                       </div>
-                      <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <div className="w-9 h-9 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary">
                         <Package className="w-5 h-5" />
                       </div>
                     </div>
-                    <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl p-4 shadow-lg flex items-center justify-between">
+                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">Ingresos del día</span>
-                        <h3 className="text-xl font-black text-white font-mono mt-1">{todaySalesMetrics.totalIncome} Bs</h3>
+                        <span className="text-xs font-bold text-nexus-text-muted">Ingresos del día</span>
+                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">{todaySalesMetrics.totalIncome} Bs</h3>
                       </div>
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                      <div className="w-9 h-9 rounded-lg bg-nexus-success-bg border border-nexus-success/25 flex items-center justify-center text-nexus-success-text">
                         <DollarSign className="w-5 h-5" />
                       </div>
                     </div>
@@ -4048,7 +4067,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                       <button
                         type="button"
                         onClick={() => setShowSaleModal(true)}
-                        className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-extrabold rounded-lg text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all"
+                        className="w-full sm:w-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all"
                       >
                         <Plus className="w-4 h-4" />
                         Nueva Venta
@@ -4058,16 +4077,16 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                   {/* Modal Nueva Venta */}
                   {showSaleModal && (
-                    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                      <div className="bg-[#0C0E17] border border-[#232A4C] rounded-2xl w-full max-w-2xl p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin animate-fadeIn">
+                    <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                      <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-2xl p-6 relative shadow-2xl max-h-[92dvh] overflow-y-auto scrollbar-thin animate-fadeIn">
 
                         {/* Cabecera */}
-                        <div className="border-b border-[#1A1F36] pb-3 flex justify-between items-center mb-5">
+                        <div className="border-b border-nexus-border pb-3 flex justify-between items-center mb-5">
                           <div>
-                            <h4 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Nueva Venta</h4>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Registra los productos vendidos y el método de pago.</p>
+                            <h4 className="text-sm font-bold text-nexus-text uppercase tracking-wider nx-num">Nueva Venta</h4>
+                            <p className="text-xs text-nexus-text-secondary mt-0.5">Registra los productos vendidos y el método de pago.</p>
                           </div>
-                          <button type="button" onClick={() => setShowSaleModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                          <button type="button" onClick={() => setShowSaleModal(false)} className="text-nexus-text-secondary hover:text-nexus-text transition-colors">
                             <X className="w-4 h-4" />
                           </button>
                         </div>
@@ -4076,23 +4095,23 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                           {/* ── Sección 1: Datos generales ── */}
                           <div className="space-y-3">
-                            <h5 className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono border-b border-[#1E2442] pb-1">Datos Generales</h5>
+                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Datos Generales</h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">Fecha *</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Fecha *</label>
                                 <input
                                   type="date"
                                   value={saleForm.date}
                                   onChange={e => setSaleForm(p => ({ ...p, date: e.target.value }))}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1">{t('client')} (opcional)</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">{t('client')} (opcional)</label>
                                 <select
                                   value={saleForm.clientName}
                                   onChange={e => setSaleForm(p => ({ ...p, clientName: e.target.value }))}
-                                  className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
+                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
                                 >
                                   <option value="">{t('client')} general</option>
                                   {clients.map(c => (
@@ -4105,26 +4124,26 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                           {/* ── Sección 2: Productos ── */}
                           <div className="space-y-3">
-                            <h5 className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono border-b border-[#1E2442] pb-1">Productos</h5>
+                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Productos</h5>
 
                             <div className="space-y-2">
                               {/* Encabezado columnas */}
                               <div className="grid grid-cols-12 gap-2 px-1">
-                                <span className="col-span-5 text-[9px] text-slate-500 font-bold uppercase tracking-wider">Producto</span>
-                                <span className="col-span-2 text-[9px] text-slate-500 font-bold uppercase tracking-wider">Cantidad</span>
-                                <span className="col-span-2 text-[9px] text-slate-500 font-bold uppercase tracking-wider">Precio</span>
-                                <span className="col-span-2 text-[9px] text-slate-500 font-bold uppercase tracking-wider">Subtotal</span>
+                                <span className="col-span-5 text-xs text-nexus-text-muted font-bold">Producto</span>
+                                <span className="col-span-2 text-xs text-nexus-text-muted font-bold">Cantidad</span>
+                                <span className="col-span-2 text-xs text-nexus-text-muted font-bold">Precio</span>
+                                <span className="col-span-2 text-xs text-nexus-text-muted font-bold">Subtotal</span>
                                 <span className="col-span-1" />
                               </div>
 
                               {saleForm.items.map((item, index) => (
-                                <div key={index} className="grid grid-cols-12 gap-2 items-center bg-[#0E111E] border border-[#1E2442] rounded-lg p-2">
+                                <div key={index} className="grid grid-cols-12 gap-2 items-center bg-nexus-surface border border-nexus-border rounded-lg p-2">
                                   {/* Selector producto */}
                                   <div className="col-span-5">
                                     <select
                                       value={item.productId}
                                       onChange={e => updateSaleItem(index, 'productId', e.target.value)}
-                                      className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2 text-xs text-slate-300 outline-none focus:border-indigo-500 cursor-pointer"
+                                      className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
                                     >
                                       <option value="">— Seleccionar —</option>
                                       {products.filter(p => p.stock > 0).map(p => (
@@ -4139,7 +4158,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                       min="1"
                                       value={item.qty}
                                       onChange={e => updateSaleItem(index, 'qty', e.target.value)}
-                                      className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 font-mono text-center"
+                                      className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num text-center px-3 h-10 text-base sm:text-sm"
                                     />
                                   </div>
                                   {/* Precio (solo lectura) */}
@@ -4148,7 +4167,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                       type="text"
                                       readOnly
                                       value={item.price ? `${item.price} Bs` : '—'}
-                                      className="w-full bg-[#0C0E17] border border-[#1B2136] rounded-lg p-2 text-xs text-slate-400 font-mono text-center cursor-default"
+                                      className="w-full bg-nexus-surface border border-nexus-border rounded-lg text-nexus-text-secondary nx-num text-center cursor-default px-3 h-10 text-base sm:text-sm"
                                     />
                                   </div>
                                   {/* Subtotal (solo lectura) */}
@@ -4157,7 +4176,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                       type="text"
                                       readOnly
                                       value={item.subtotal ? `${item.subtotal} Bs` : '—'}
-                                      className="w-full bg-[#0C0E17] border border-[#1B2136] rounded-lg p-2 text-xs text-emerald-400 font-mono font-bold text-center cursor-default"
+                                      className="w-full bg-nexus-surface border border-nexus-border rounded-lg text-nexus-success-text nx-num font-bold text-center cursor-default px-3 h-10 text-base sm:text-sm"
                                     />
                                   </div>
                                   {/* Eliminar fila */}
@@ -4166,7 +4185,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                                       type="button"
                                       onClick={() => removeSaleItem(index)}
                                       disabled={saleForm.items.length === 1}
-                                      className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                      className="text-nexus-text-muted hover:text-nexus-error-text transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                     >
                                       <X className="w-3.5 h-3.5" />
                                     </button>
@@ -4178,37 +4197,37 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             <button
                               type="button"
                               onClick={addSaleItem}
-                              className="flex items-center gap-1.5 text-[10px] text-indigo-400 hover:text-indigo-300 font-bold transition-colors"
+                              className="flex items-center gap-1.5 text-xs text-nexus-primary hover:text-nexus-primary-hover font-bold transition-colors"
                             >
                               <Plus className="w-3.5 h-3.5" /> Agregar producto
                             </button>
 
                             {/* Total */}
-                            <div className="flex justify-end pt-2 border-t border-[#1E2442]/50">
-                              <div className="bg-[#131728] border border-[#232B4C] rounded-xl px-5 py-3 flex items-center gap-4">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total venta</span>
-                                <span className="text-xl font-black text-emerald-400 font-mono">{saleTotal} Bs</span>
+                            <div className="flex justify-end pt-2 border-t border-nexus-border">
+                              <div className="bg-nexus-background border border-nexus-border rounded-xl px-5 py-3 flex items-center gap-4">
+                                <span className="text-xs text-nexus-text-secondary font-bold">Total venta</span>
+                                <span className="text-xl font-black text-nexus-success-text nx-num">{saleTotal} Bs</span>
                               </div>
                             </div>
                           </div>
 
                           {/* ── Sección 3: Pago y estado ── */}
                           <div className="space-y-3">
-                            <h5 className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono border-b border-[#1E2442] pb-1">Pago & Estado</h5>
+                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Pago & Estado</h5>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {/* Método de pago */}
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1.5">Método de pago *</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1.5">Método de pago *</label>
                                 <div className="grid grid-cols-2 gap-2">
                                   {['Efectivo', 'Tarjeta', 'QR/Transferencia', 'Pendiente'].map(m => (
                                     <button
                                       key={m}
                                       type="button"
                                       onClick={() => setSaleForm(p => ({ ...p, paymentMethod: m }))}
-                                      className={`px-3 py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                                      className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${
                                         saleForm.paymentMethod === m
-                                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                                          : 'bg-[#131728] border-[#232B4C] text-slate-400 hover:border-indigo-500/50'
+                                          ? 'bg-nexus-primary-soft border-nexus-primary text-nexus-primary'
+                                          : 'bg-nexus-background border-nexus-border text-nexus-text-secondary hover:border-nexus-primary/50'
                                       }`}
                                     >
                                       {m}
@@ -4218,21 +4237,21 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               </div>
                               {/* Estado */}
                               <div>
-                                <label className="text-[10px] text-slate-400 font-bold block mb-1.5">Estado de la venta *</label>
+                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1.5">Estado de la venta *</label>
                                 <div className="grid grid-cols-3 gap-2">
                                   {[
-                                    { label: 'Pagado',   color: 'emerald' },
-                                    { label: 'Pendiente', color: 'amber' },
-                                    { label: 'Anulado',  color: 'red' },
+                                    { label: 'Pagado',   color: 'bg-nexus-success-bg border-nexus-success/40 text-nexus-success-text' },
+                                    { label: 'Pendiente', color: 'bg-nexus-warning-bg border-nexus-warning/40 text-nexus-warning-text' },
+                                    { label: 'Anulado',  color: 'bg-nexus-error-bg border-nexus-error/40 text-nexus-error-text' },
                                   ].map(({ label, color }) => (
                                     <button
                                       key={label}
                                       type="button"
                                       onClick={() => setSaleForm(p => ({ ...p, status: label }))}
-                                      className={`px-3 py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                                      className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${
                                         saleForm.status === label
-                                          ? `bg-${color}-500/15 border-${color}-500/50 text-${color}-400`
-                                          : 'bg-[#131728] border-[#232B4C] text-slate-400 hover:border-slate-500'
+                                          ? color
+                                          : 'bg-nexus-background border-nexus-border text-nexus-text-secondary hover:border-nexus-primary/50'
                                       }`}
                                     >
                                       {label}
@@ -4245,31 +4264,31 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                           {/* ── Sección 4: Observaciones ── */}
                           <div className="space-y-3">
-                            <h5 className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider font-mono border-b border-[#1E2442] pb-1">Observaciones</h5>
+                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Observaciones</h5>
                             <textarea
                               rows="2"
                               placeholder="Notas internas sobre la venta (opcional)..."
                               value={saleForm.notes}
                               onChange={e => setSaleForm(p => ({ ...p, notes: e.target.value }))}
-                              className="w-full bg-[#131728] border border-[#232B4C] rounded-lg p-2.5 text-xs text-white outline-none focus:border-indigo-500 resize-none"
+                              className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary resize-none"
                             />
                           </div>
 
                         </div>
 
                         {/* Botones */}
-                        <div className="flex justify-end gap-2.5 pt-4 mt-5 border-t border-[#1E2442]/50">
+                        <div className="flex justify-end gap-2.5 pt-4 mt-5 border-t border-nexus-border">
                           <button
                             type="button"
                             onClick={() => setShowSaleModal(false)}
-                            className="px-4 py-2 bg-[#1A1F36] border border-[#232B4A] text-slate-300 text-xs font-semibold rounded-lg hover:bg-[#252B4E] transition-colors cursor-pointer"
+                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface-hover border border-nexus-border text-nexus-text text-sm font-semibold rounded-lg hover:bg-nexus-surface-hover transition-colors cursor-pointer"
                           >
                             Cancelar
                           </button>
                           <button
                             type="button"
                             onClick={handleSaveSale}
-                            className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white text-xs font-bold rounded-lg shadow-md transition-all cursor-pointer"
+                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer"
                           >
                             Registrar venta
                           </button>
@@ -4279,58 +4298,35 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     </div>
                   )}
 
-                  {/* Tabla de Ventas */}
-                  <div className="bg-[#0C0E17] border border-[#1B2136] rounded-xl overflow-hidden shadow-xl">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-[#1B2136] bg-[#0E111E] text-slate-400 uppercase tracking-wider font-mono text-[10px] font-bold">
-                            <th className="p-4">Fecha</th>
-                            <th className="p-4">{t('client')}</th>
-                            <th className="p-4">Productos</th>
-                            <th className="p-4">Total</th>
-                            <th className="p-4">Método de Pago</th>
-                            <th className="p-4 text-center">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1B2136]/40">
-                          {sales.length === 0 ? (
-                            <tr>
-                              <td colSpan="6" className="p-12 text-center text-slate-500 font-medium">
-                                <div className="flex flex-col items-center justify-center space-y-2">
-                                  <TrendingUp className="w-8 h-8 text-slate-600 opacity-40" />
-                                  <span className="text-xs">No existen ventas registradas</span>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : (
-                            sales.map(sale => (
-                              <tr key={sale.id} className="hover:bg-[#12162B]/35 transition-colors">
-                                <td className="p-4 text-slate-300 font-mono">{sale.date}</td>
-                                <td className="p-4 text-white font-semibold">{sale.clientName}</td>
-                                <td className="p-4 text-slate-300">
-                                  {sale.items.map((it, i) => (
-                                    <span key={i} className="block">{it.productName} ×{it.qty}</span>
-                                  ))}
-                                </td>
-                                <td className="p-4 text-emerald-400 font-black font-mono">{sale.total} Bs</td>
-                                <td className="p-4 text-slate-300">{sale.paymentMethod}</td>
-                                <td className="p-4 text-center">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                    sale.status === 'Pagado' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                    sale.status === 'Pendiente' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                    'bg-red-500/10 text-red-400 border border-red-500/20'
-                                  }`}>
-                                    {sale.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  {/* Tabla de Ventas (Fase 4: tabla en escritorio y tarjetas en celular) */}
+                  <ResponsiveTable
+                    rows={sales}
+                    rowKey={(sale) => sale.id}
+                    breakpoint="lg"
+                    empty={(
+                      <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                        <EmptyState icon={TrendingUp} title="No existen ventas registradas" />
+                      </div>
+                    )}
+                    columns={[
+                      { key: 'clientName', header: t('client'), primary: true, render: (sale) => <span className="font-semibold text-nexus-text">{sale.clientName}</span> },
+                      { key: 'date', header: 'Fecha', render: (sale) => <span className="nx-num">{sale.date}</span> },
+                      {
+                        key: 'items',
+                        header: 'Productos',
+                        render: (sale) => (
+                          <span className="block whitespace-normal">
+                            {sale.items.map((it, i) => (
+                              <span key={i} className="block">{it.productName} ×{it.qty}</span>
+                            ))}
+                          </span>
+                        ),
+                      },
+                      { key: 'total', header: 'Total', render: (sale) => <span className="nx-num font-bold text-nexus-success-text">{sale.total} Bs</span> },
+                      { key: 'paymentMethod', header: 'Método de pago', render: (sale) => sale.paymentMethod },
+                      { key: 'status', header: 'Estado', render: (sale) => <Badge tone={((st) => (st === 'Disponible' || st === 'Pagado' ? 'success' : st === 'Bajo Stock' || st === 'Pendiente' ? 'warning' : 'danger'))(sale.status)}>{sale.status}</Badge> },
+                    ]}
+                  />
 
                 </div>
               )}
@@ -4424,56 +4420,49 @@ const { businessSettings } = useBusinessSettings(negocioId);
           {activeTab === 'assistance' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <h4 className="text-xs font-bold text-nexus-text uppercase tracking-wider font-mono">Control Biométrico de Asistencias</h4>
+                <h3 className="text-base font-semibold text-nexus-text">Control biométrico de asistencias</h3>
                 <button
                   onClick={() => setActiveModal('assistance')}
-                  className="px-4 py-2 bg-nexus-primary text-white font-extrabold rounded-lg text-xs shadow-md cursor-pointer font-bold"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary text-white font-extrabold rounded-lg text-sm shadow-md cursor-pointer font-bold"
                 >
                   Marcar PIN Asistencia
                 </button>
               </div>
 
-              <div className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden shadow-lg">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-nexus-border bg-nexus-background text-nexus-text-secondary uppercase tracking-wider font-mono text-[10px] font-bold">
-                      <th className="p-4">{t('professional')}</th>
-                      <th className="p-4 text-center">Asistido</th>
-                      <th className="p-4 text-center">Retrasos</th>
-                      <th className="p-4 text-center">A Tiempo</th>
-                      <th className="p-4 text-center">Faltas</th>
-                      <th className="p-4 text-right">Hoy (Entrada / Salida)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-nexus-border">
-                    {attendanceSummaryList.map(barb => (
-                      <tr key={barb?.id} className="hover:bg-nexus-surface-hover transition-colors">
-                        <td className="p-4 flex items-center gap-2.5">
-                        <Avatar src={barb?.avatar} name={barb?.name} className="w-8 h-8 rounded-full object-cover border border-nexus-border" textClassName="text-[10px]" />
-                          <span className="font-bold text-nexus-text">{barb?.name}</span>
-                        </td>
-                        <td className="p-4 text-center font-mono font-bold text-nexus-text">{barb?.attended} días</td>
-                        <td className="p-4 text-center font-mono text-nexus-error-text font-bold">{barb?.delayed} días</td>
-                        <td className="p-4 text-center font-mono text-nexus-primary font-bold">{barb?.ontime} días</td>
-                        <td className="p-4 text-center font-mono text-nexus-text-muted">{barb?.absent} días</td>
-                        <td className="p-4 text-right font-mono text-xs">
-                          {barb?.attendance?.in ? (
-                            <span className="text-nexus-primary font-bold">{barb?.attendance?.in}</span>
-                          ) : (
-                            <span className="text-nexus-text-muted">--:--</span>
-                          )}
-                          <span className="text-nexus-text-muted mx-1.5">/</span>
-                          {barb?.attendance?.out ? (
-                            <span className="text-nexus-primary font-bold">{barb?.attendance?.out}</span>
-                          ) : (
-                            <span className="text-nexus-text-muted">--:--</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResponsiveTable
+                rows={attendanceSummaryList}
+                rowKey={(barb) => barb?.id}
+                breakpoint="lg"
+                columns={[
+                  {
+                    key: 'name',
+                    header: t('professional'),
+                    primary: true,
+                    render: (barb) => (
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Avatar src={barb?.avatar} name={barb?.name} className="w-9 h-9 rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-xs" />
+                        <span className="font-semibold text-nexus-text">{barb?.name}</span>
+                      </span>
+                    ),
+                  },
+                  { key: 'attended', header: 'Asistido', align: 'center', render: (barb) => <span className="nx-num font-semibold">{barb?.attended} días</span> },
+                  { key: 'delayed', header: 'Retrasos', align: 'center', render: (barb) => <span className="nx-num font-semibold text-nexus-error-text">{barb?.delayed} días</span> },
+                  { key: 'ontime', header: 'A tiempo', align: 'center', render: (barb) => <span className="nx-num font-semibold text-nexus-primary">{barb?.ontime} días</span> },
+                  { key: 'absent', header: 'Faltas', align: 'center', render: (barb) => <span className="nx-num text-nexus-text-secondary">{barb?.absent} días</span> },
+                  {
+                    key: 'today',
+                    header: 'Hoy (entrada / salida)',
+                    align: 'right',
+                    render: (barb) => (
+                      <span className="nx-num">
+                        <span className={barb?.attendance?.in ? 'text-nexus-primary font-semibold' : 'text-nexus-text-muted'}>{barb?.attendance?.in || '--:--'}</span>
+                        <span className="text-nexus-text-muted mx-1.5">/</span>
+                        <span className={barb?.attendance?.out ? 'text-nexus-primary font-semibold' : 'text-nexus-text-muted'}>{barb?.attendance?.out || '--:--'}</span>
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             </div>
           )}
 
@@ -5285,36 +5274,71 @@ const { businessSettings } = useBusinessSettings(negocioId);
                     })}
                   </div>
 
-                  {hasFeature(planFeatures, 'permisosProfesional') && (
+                  {hasFeature(planFeatures, 'permisosProfesional') && (() => {
+                    // Permisos del profesional. "Editar citas" tiene 3 opciones:
+                    // Todo / Nada / Personalizado (con casillas).
+                    const perms = normalizeStaffPermissions(newBarber.permissions);
+                    const editMode = getEditMode(perms);
+                    const setPerms = (patch) => setNewBarber(prev => ({
+                      ...prev,
+                      permissions: { ...normalizeStaffPermissions(prev.permissions), ...patch }
+                    }));
+                    const setEditMode = (mode) => setPerms(
+                      mode === 'none' ? { editAppointments: false }
+                        : mode === 'all' ? { editAppointments: true, editMode: 'all' }
+                        : { editAppointments: true, editMode: 'custom' }
+                    );
+                    const renderPermCheck = (opt, checked, onToggle) => (
+                      <label key={opt.key} className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${checked ? 'bg-nexus-primary-soft border-nexus-primary/30' : 'bg-nexus-surface border-nexus-border'}`}>
+                        <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-nexus-primary" checked={checked} onChange={(e) => onToggle(e.target.checked)} />
+                        <span className="text-sm leading-snug">
+                          <strong className="text-nexus-text block font-semibold">{opt.label}</strong>
+                          <span className="text-xs text-nexus-text-secondary">{opt.hint}</span>
+                        </span>
+                      </label>
+                    );
+                    return (
                   <div className="pt-4 border-t border-nexus-border space-y-3">
                     <div>
-                      <h4 className="text-xs font-semibold text-nexus-text-secondary ">Permisos {g('professional', 'del', 'de la')} {t('professional')}</h4>
-                      <p className="text-xs text-nexus-text-muted">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
+                      <h4 className="text-sm font-semibold text-nexus-text">Permisos {g('professional', 'del', 'de la')} {t('professional')}</h4>
+                      <p className="text-xs text-nexus-text-secondary">Define qué puede hacer en su panel. Se aplica al volver a abrir su sesión.</p>
                     </div>
+
+                    <div className="rounded-lg border border-nexus-border bg-nexus-surface p-3 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-nexus-text">Editar {tl('appointments')}</p>
+                          <p className="text-xs text-nexus-text-secondary">Qué puede cambiar en sus {tl('appointments')}.</p>
+                        </div>
+                        <SegmentedControl
+                          ariaLabel={`Editar ${tl('appointments')}`}
+                          value={editMode}
+                          onChange={setEditMode}
+                          options={[
+                            { value: 'all', label: 'Todo' },
+                            { value: 'none', label: 'Nada' },
+                            { value: 'custom', label: 'Personalizado' },
+                          ]}
+                          className="w-full sm:w-auto shrink-0"
+                        />
+                      </div>
+                      {editMode === 'custom' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {getEditPartOptions(businessProfile).map(opt => (
+                            renderPermCheck(opt, perms[opt.key], (v) => setPerms({ [opt.key]: v }))
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {getStaffPermissionOptions(businessProfile).map(opt => {
-                        const enabled = normalizeStaffPermissions(newBarber.permissions)[opt.key];
-                        return (
-                          <label key={opt.key} className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${enabled ? 'bg-nexus-primary-soft border-nexus-primary/30' : 'bg-nexus-surface border-nexus-border'}`}>
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={enabled}
-                              onChange={(e) => setNewBarber(prev => ({
-                                ...prev,
-                                permissions: { ...normalizeStaffPermissions(prev.permissions), [opt.key]: e.target.checked }
-                              }))}
-                            />
-                            <span className="text-xs leading-snug">
-                              <strong className="text-nexus-text block">{opt.label}</strong>
-                              <span className="text-nexus-text-muted">{opt.hint}</span>
-                            </span>
-                          </label>
-                        );
-                      })}
+                      {getStaffPermissionOptions(businessProfile).filter(opt => opt.key !== 'editAppointments').map(opt => (
+                        renderPermCheck(opt, perms[opt.key], (v) => setPerms({ [opt.key]: v }))
+                      ))}
                     </div>
                   </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
@@ -5565,7 +5589,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <input 
                   type="text" 
                   required
-                  placeholder="Ej. Sesión GallyFlow Express"
+                  placeholder="Ej. Sesión Express"
                   value={newService.name}
                   onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
@@ -5673,7 +5697,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-nexus-surface flex justify-end gap-2.5 pt-3 pb-1 border-t border-nexus-border">
+              <div className="sticky -bottom-5 sm:-bottom-6 z-20 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 px-5 sm:px-6 pt-3 pb-5 sm:pb-6 bg-nexus-surface flex justify-end gap-2.5 border-t border-nexus-border">
                 <button 
                   type="button" 
                   onClick={() => setActiveModal(null)} 
@@ -5696,10 +5720,10 @@ const { businessSettings } = useBusinessSettings(negocioId);
       {/* 8. MODAL: ASISTENCIA BIOMÉTRICO */}
       {/* 8. MODAL: ASISTENCIA BIOMÉTRICO */}
       {activeModal === 'assistance' && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-2xl w-full max-w-sm p-5 relative shadow-xl">
+        <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-5 relative shadow-xl">
             <h3 className="text-base font-bold text-nexus-text mb-1">Biométrico de Asistencia</h3>
-            <p className="text-[11px] text-nexus-text-secondary mb-4">Ingresa tu PIN personal para autorizar el marcaje de hoy.</p>
+            <p className="text-xs text-nexus-text-secondary mb-4">Ingresa tu PIN personal para autorizar el marcaje de hoy.</p>
             <form onSubmit={handleRegisterAttendance} className="space-y-3.5">
               <div className="grid grid-cols-2 gap-1.5 p-1 bg-nexus-background rounded-lg border border-nexus-border mb-3">
                 <button type="button" onClick={() => setAssistType('in')} className={`py-1 rounded text-xs font-bold transition-all cursor-pointer ${assistType === 'in' ? 'bg-nexus-primary-soft text-nexus-primary' : 'text-nexus-text-secondary'}`}>Entrada</button>
@@ -5713,11 +5737,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 required 
                 value={assistPin} 
                 onChange={(e) => setAssistPin(e.target.value)} 
-                className="w-full bg-nexus-background border border-nexus-border text-center tracking-widest text-lg rounded-lg p-2.5 text-nexus-text outline-none font-mono" 
+                className="w-full bg-nexus-background border border-nexus-border text-center tracking-widest text-lg rounded-lg text-nexus-text outline-none nx-num px-3 h-10 text-base sm:text-sm" 
               />
               <div className="flex justify-end gap-2.5 pt-2">
-                <button type="button" onClick={() => { setActiveModal(null); setAssistPin(''); }} className="px-3.5 py-1.5 bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-xs font-semibold rounded-lg font-mono font-bold cursor-pointer">Cerrar</button>
-                <button type="submit" className="px-3.5 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-xs font-bold rounded-lg font-mono font-bold cursor-pointer">Registrar</button>
+                <button type="button" onClick={() => { setActiveModal(null); setAssistPin(''); }} className="inline-flex h-10 items-center justify-center gap-1.5 px-4  bg-nexus-surface border border-nexus-border text-nexus-text-secondary text-sm font-semibold rounded-lg nx-num font-bold cursor-pointer">Cerrar</button>
+                <button type="submit" className="inline-flex h-10 items-center justify-center gap-1.5 px-4  bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg nx-num font-bold cursor-pointer">Registrar</button>
               </div>
             </form>
           </div>

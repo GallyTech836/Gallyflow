@@ -81,7 +81,7 @@ export default function BusinessHeroSettings({ negocioId }) {
             value={form.businessName}
             onChange={(e) => update('businessName', e.target.value)}
             className={inputClass}
-            placeholder="GallyFlow"
+            placeholder="Nombre de tu negocio"
           />
         </SectionCard>
 

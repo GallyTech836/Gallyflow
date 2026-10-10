@@ -123,7 +123,7 @@ export default function App({ negocioSlug } = {}) {
 
   // Título de pestaña dinámico: usa el nombre real del negocio en cuanto
   // heroConfig carga (multi-negocio, sin nombres hardcodeados). Antes de
-  // eso, o si el negocio no existe, se mantiene el "GallyFlow" por
+  // eso, o si el negocio no existe, se mantiene el "Nexus" por
   // defecto de index.html.
   useEffect(() => {
     if (heroConfig?.businessName) {
@@ -784,7 +784,8 @@ export default function App({ negocioSlug } = {}) {
                 if (step === 1 || (isPersonalLink && step === 3)) setStep(0);
                 else setStep(step - 1);
               }}
-              className="p-1.5 rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary hover:text-nexus-text transition-colors"
+              aria-label="Volver"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary hover:text-nexus-text transition-colors cursor-pointer"
             >
               <ChevronLeft size={16} />
             </button>
@@ -802,7 +803,7 @@ export default function App({ negocioSlug } = {}) {
                 />
               ))}
             </div>
-            <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold font-mono">Paso {step - stepOffset}/{5 - stepOffset}</span>
+            <span className="text-xs text-nexus-text-secondary font-bold nx-num">Paso {step - stepOffset}/{5 - stepOffset}</span>
           </div>
         )}
         
@@ -810,8 +811,8 @@ export default function App({ negocioSlug } = {}) {
           {renderStep()}
         </div>
 
-        <div className="text-center pt-8 pb-2 text-[10px] text-nexus-text-muted tracking-widest font-bold">
-          POTENCIADO POR <span className="text-nexus-primary">GALLYFLOW</span>
+        <div className="text-center pt-8 pb-2 text-xs text-nexus-text-muted">
+          Potenciado por <span className="text-nexus-primary font-semibold">Nexus</span>
         </div>
       </main>
       <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 max-w-xs">
@@ -829,7 +830,7 @@ export default function App({ negocioSlug } = {}) {
             ) : (
               <CheckCircle className="w-4 h-4 text-nexus-success shrink-0" />
             )}
-            <p className="text-[11px] font-bold">{t?.message}</p>
+            <p className="text-xs font-bold">{t?.message}</p>
           </div>
         ))}
       </div>
@@ -883,10 +884,10 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
               <div className="text-left flex-1">
                 <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
                 {b.address && (
-                  <p className="text-nexus-text-secondary text-[11px] mt-0.5">{b.address}</p>
+                  <p className="text-nexus-text-secondary text-xs mt-0.5">{b.address}</p>
                 )}
                 {b.schedule && (
-                  <p className="text-nexus-primary text-[10px] font-bold mt-1 flex items-center gap-1">
+                  <p className="text-nexus-primary text-xs font-bold mt-1 flex items-center gap-1">
                     <Clock3 size={10} /> {b.schedule}
                   </p>
                 )}
@@ -933,7 +934,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
               }`}
             >
               {isTodayTuesday && s.promoPrice && (
-                <div className="absolute top-2.5 right-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/30 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider">
+                <div className="absolute top-2.5 right-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
                   Promo Hoy
                 </div>
               )}
@@ -941,7 +942,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
               <div className="flex justify-between items-start">
                 <div className="space-y-0.5 pr-8">
                   <h3 className={`font-bold text-sm ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</h3>
-                  <p className="text-nexus-text-secondary text-[10px] leading-relaxed line-clamp-2">{s.description}</p>
+                  <p className="text-nexus-text-secondary text-xs leading-relaxed line-clamp-2">{s.description}</p>
                 </div>
                 {isSelected ? (
                   <div className="w-5 h-5 rounded-full bg-nexus-primary flex items-center justify-center text-white">
@@ -953,14 +954,14 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
               </div>
 
               <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-nexus-border">
-                <span className="text-[10px] text-nexus-text-muted flex items-center gap-1">
+                <span className="text-xs text-nexus-text-muted flex items-center gap-1">
                   <Clock size={10} /> {s.duration}
                 </span>
                 <div>
                   {isTodayTuesday && s.promoPrice ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-nexus-text-muted line-through">{s.price} Bs</span>
-                      <span className="text-xs font-black text-nexus-success-text">{s.promoPrice} Bs</span>
+                      <span className="text-xs text-nexus-text-muted line-through">{s.price} Bs</span>
+                      <span className="text-xs font-bold text-nexus-success-text">{s.promoPrice} Bs</span>
                     </div>
                   ) : (
                     <span className="text-xs font-bold text-nexus-text">{formatServicePrice(s)}</span>
@@ -977,18 +978,18 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
     <div className="pt-6 border-t border-nexus-border mt-6">
       <div className="flex justify-between items-center mb-5 px-1">
         <div>
-          <span className="text-nexus-text-secondary text-[10px] font-bold uppercase tracking-wider block">{terms.t('services')} {terms.g('service', 'Seleccionados', 'Seleccionadas')}</span>
+          <span className="text-nexus-text-secondary text-xs font-bold block">{terms.t('services')} {terms.g('service', 'Seleccionados', 'Seleccionadas')}</span>
           <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
         </div>
         <div className="text-right">
-          <span className="text-nexus-text-muted text-[9px] uppercase block tracking-wider font-semibold">Total Estimado</span>
-          <span className="text-xl font-black text-nexus-text">{formatAmount(total, hasVariable)}</span>
+          <span className="text-nexus-text-muted text-xs block font-semibold">Total Estimado</span>
+          <span className="text-xl font-bold text-nexus-text">{formatAmount(total, hasVariable)}</span>
         </div>
       </div>
       <button 
         disabled={selected.length === 0}
         onClick={onNext}
-        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
         <span>Continuar {terms.t('appointment')}</span>
         <ChevronRight size={16} />
@@ -1027,11 +1028,11 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
             
             <div className="flex-1 text-left">
               <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
-              <p className="text-nexus-text-secondary text-[11px] mt-0.5">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
+              <p className="text-nexus-text-secondary text-xs mt-0.5">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
               {!b.isPending && (
                 <div className="flex items-center gap-1 mt-1">
                   <Star size={10} className="text-amber-400 fill-amber-400" />
-                  <span className="text-[9px] text-nexus-text-secondary font-semibold">5.0 (Excelente)</span>
+                  <span className="text-xs text-nexus-text-secondary font-semibold">5.0 (Excelente)</span>
                 </div>
               )}
             </div>
@@ -1053,7 +1054,7 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
       <button 
         disabled={!selected}
         onClick={onNext}
-        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
         <span>Siguiente Paso</span>
         <ChevronRight size={16} />
@@ -1118,21 +1119,25 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
             <span className="text-xs font-bold text-nexus-text capitalize">{monthLabel}</span>
             <div className="flex gap-2">
               <button 
+                type="button"
                 onClick={handlePrevMonth} 
-                className="p-1 rounded bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary transition-colors"
+                aria-label="Mes anterior"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary transition-colors cursor-pointer"
               >
-                <ChevronLeft size={14} />
+                <ChevronLeft size={18} />
               </button>
               <button 
+                type="button"
                 onClick={handleNextMonth} 
-                className="p-1 rounded bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary transition-colors"
+                aria-label="Mes siguiente"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary transition-colors cursor-pointer"
               >
-                <ChevronRight size={14} />
+                <ChevronRight size={18} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 text-center text-[9px] font-bold text-nexus-text-muted uppercase tracking-wider mb-2">
+          <div className="grid grid-cols-7 text-center text-xs font-bold text-nexus-text-muted mb-2">
             <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
           </div>
 
@@ -1171,13 +1176,13 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         {date ? (
           hours.length > 0 ? (
             <div className="space-y-2">
-              <span className="text-[10px] uppercase tracking-wider text-nexus-text-secondary font-bold block">Horas Disponibles</span>
+              <span className="text-xs text-nexus-text-secondary font-bold block">Horas Disponibles</span>
               <div className="grid grid-cols-4 gap-2">
                 {hours.map((h) => (
                   <button 
                     key={h}
                     onClick={() => setHour(h)}
-                    className={`py-2.5 rounded-xl font-bold text-xs transition-all border ${
+                    className={`py-2.5 rounded-xl font-bold text-sm transition-all border ${
                       hour === h 
                         ? 'bg-nexus-primary border-nexus-primary text-white shadow-md' 
                         : 'bg-nexus-surface border-nexus-border text-nexus-text-secondary hover:border-nexus-primary/40'
@@ -1201,7 +1206,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         <button 
           disabled={!date || !hour}
           onClick={onNext}
-          className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+          className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
         >
           <span>Siguiente Paso</span>
           <ChevronRight size={16} />
@@ -1235,7 +1240,7 @@ const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
             </div>
             <div className="text-left">
               <h3 className="font-bold text-sm text-nexus-text">{m.name}</h3>
-              <p className="text-nexus-text-secondary text-[10px] uppercase tracking-wider">{m.desc}</p>
+              <p className="text-nexus-text-secondary text-xs">{m.desc}</p>
             </div>
           </div>
         ))}
@@ -1247,7 +1252,7 @@ const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
       <button 
         disabled={!method}
         onClick={onNext}
-        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
         <span>Detalles Finales</span>
         <ChevronRight size={16} />
@@ -1278,7 +1283,7 @@ const ConfirmStep = ({
       
       <form onSubmit={onConfirm} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-[10px] uppercase tracking-wider text-nexus-primary font-bold block">Nombre Completo *</label>
+          <label className="text-xs text-nexus-primary font-bold block">Nombre Completo *</label>
           <input 
             type="text" 
             required
@@ -1290,7 +1295,7 @@ const ConfirmStep = ({
         </div>
 
         <div className="space-y-1.5">
-        <label className="text-[10px] uppercase tracking-wider text-nexus-primary font-bold block">Teléfono / Celular *</label>
+        <label className="text-xs text-nexus-primary font-bold block">Teléfono / Celular *</label>
           <input 
             type="tel" 
             required
@@ -1319,7 +1324,7 @@ const ConfirmStep = ({
           
           <div className="flex justify-between pt-1">
             <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-            <span className="text-base font-black text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
+            <span className="text-base font-bold text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
           </div>
         </div>
       </form>
@@ -1332,7 +1337,7 @@ const ConfirmStep = ({
       <button 
         disabled={!name.trim() || loading}
         onClick={onConfirm}
-        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-sm sm:text-base uppercase tracking-widest rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 flex items-center justify-center gap-3 shadow-md hover:shadow-lg active:scale-[0.97] transform hover:-translate-y-0.5"
+        className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 flex items-center justify-center gap-3 shadow-md hover:shadow-lg active:scale-[0.97] transform hover:-translate-y-0.5"
       >
         {loading ? (
           <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1409,7 +1414,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           {typeof total === 'number' && (
             <div className="flex justify-between pt-1">
               <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-              <span className="text-base font-black text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
+              <span className="text-base font-bold text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
             </div>
           )}
         </div>
@@ -1419,7 +1424,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
 
 {branch && (buildDirectionsUrl(branch) || buildWhatsAppUrl(branch.phone)) && (
         <div className="w-full space-y-2">
-          <p className="text-[11px] text-nexus-text-secondary">
+          <p className="text-xs text-nexus-text-secondary">
             ¿Cómo llegar o tienes dudas? Escríbenos.
           </p>
           <div className="flex items-stretch gap-2">
@@ -1439,7 +1444,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
       <div className="w-full">
         <button
           onClick={onReset}
-          className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-black uppercase text-xs sm:text-sm tracking-widest rounded-2xl transition-all active:scale-[0.97]"
+          className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-xs sm:text-sm rounded-2xl transition-all active:scale-[0.97]"
         >
           Volver al Inicio
         </button>

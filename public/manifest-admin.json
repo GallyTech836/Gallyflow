@@ -1,6 +1,6 @@
 {
-    "name": "GallyFlow Admin",
-    "short_name": "GF Admin",
+    "name": "Nexus Admin",
+    "short_name": "Nexus Admin",
     "start_url": "/admin",
     "scope": "/admin",
     "display": "standalone",

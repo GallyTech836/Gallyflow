@@ -57,7 +57,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
         <div className="w-10 h-[3px] mx-auto rounded-full bg-nexus-primary" />
         <p
           className={`text-nexus-text-secondary ${
-            compact ? 'text-[11px]' : 'text-sm sm:text-base'
+            compact ? 'text-xs' : 'text-sm sm:text-base'
           } max-w-xs mx-auto leading-relaxed`}
         >
           {slogan}
@@ -78,7 +78,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
                 {Number(rating).toFixed(1)}
               </span>
               {!compact && (
-                <span className="text-[10px] text-nexus-text-muted uppercase tracking-wider ml-0.5">Calificación</span>
+                <span className="text-xs text-nexus-text-muted ml-0.5">Calificación</span>
               )}
             </div>
           )}
@@ -104,8 +104,8 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
             type="button"
             onClick={onReservar}
             className={`w-full ${
-              compact ? 'py-3 text-xs' : 'py-5 sm:py-5.5 text-sm sm:text-base'
-            } px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black uppercase tracking-widest rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-[0.97] flex items-center justify-center gap-3 transform hover:-translate-y-0.5`}
+              compact ? 'py-3 text-sm' : 'py-5 sm:py-5.5 text-sm sm:text-base'
+            } px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-[0.97] flex items-center justify-center gap-3 transform hover:-translate-y-0.5`}
           >
             <span>{ctaLabel}</span>
             <ChevronRight size={compact ? 14 : 18} className="text-white/70 animate-pulse" />
@@ -113,8 +113,8 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
         ) : (
           <div
             className={`w-full ${
-              compact ? 'py-3 text-xs' : 'py-5 text-sm'
-            } px-8 bg-nexus-primary text-white font-black uppercase tracking-widest rounded-2xl shadow-md flex items-center justify-center gap-3 select-none pointer-events-none`}
+              compact ? 'py-3 text-sm' : 'py-5 text-sm'
+            } px-8 bg-nexus-primary text-white font-bold rounded-2xl shadow-md flex items-center justify-center gap-3 select-none pointer-events-none`}
           >
             <span>{ctaLabel}</span>
             <ChevronRight size={compact ? 14 : 18} className="text-white/70" />

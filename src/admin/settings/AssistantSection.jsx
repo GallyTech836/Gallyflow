@@ -108,7 +108,7 @@ export default function AssistantSection({ negocioId }) {
               <>
                 <p className="font-bold text-nexus-text">Sin número conectado</p>
                 <p className="text-nexus-text-muted">
-                  Contacta a soporte de GallyFlow para conectar el WhatsApp de tu negocio.
+                  Contacta a soporte de Nexus para conectar el WhatsApp de tu negocio.
                 </p>
               </>
             )}

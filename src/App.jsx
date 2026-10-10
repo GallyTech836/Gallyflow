@@ -16,10 +16,10 @@ function App() {
   useManifestByRoute();
 
   // Título de pestaña por app: BarberApp usa el suyo propio, el resto
-  // conserva el título por defecto definido en index.html ("GallyFlow").
+  // conserva el título por defecto definido en index.html ("Nexus").
   useEffect(() => {
     if (path.startsWith('/barber')) {
-      document.title = 'GallyFlow Staff';
+      document.title = 'Nexus Staff';
     }
   }, [path]);
 

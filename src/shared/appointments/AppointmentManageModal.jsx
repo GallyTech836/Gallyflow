@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { Trash2, ChevronDown } from 'lucide-react';
-import { canEditField, canHardDelete, getAllowedNextStates } from './permissions';
+import { canEditField, canHardDelete, getAllowedNextStates, canAdjustDuration } from './permissions';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
 import { getLabel } from './statusModel';
 import { formatServicePrice } from '../servicePricing/servicePricing';
@@ -50,7 +50,8 @@ export default function AppointmentManageModal({
   const canEdit = (field) => canEditField(role, field, staffPermissions);
   const allowDelete = canHardDelete(role, staffPermissions);
   const nextStates = getAllowedNextStates(role, appointment.status, staffPermissions);
-  const anyEditable = ['clientName', 'status', 'notes', 'time', 'serviceId'].some(canEdit);
+  const anyEditable = ['clientName', 'status', 'notes', 'time', 'serviceId', 'duration'].some(canEdit);
+  const canAdjust = canAdjustDuration(role, staffPermissions);
 
   const isRealPhone = (p) => !!p && !['n/a', 'no especificado'].includes(String(p).trim().toLowerCase());
   const linkedClient = (clients || []).find(c => c?.id === appointment.clientId);
@@ -397,7 +398,7 @@ export default function AppointmentManageModal({
                   {endTimeLabel && <span className="font-normal text-nexus-text-secondary"> · termina a las <span className="nx-num">{endTimeLabel}</span></span>}
                 </p>
               </div>
-              {canEdit('duration') && (
+              {canAdjust && (
                 <button
                   type="button"
                   onClick={() => setShowDuration(v => !v)}
@@ -408,7 +409,7 @@ export default function AppointmentManageModal({
                 </button>
               )}
             </div>
-            {showDuration && canEdit('duration') && (
+            {showDuration && canAdjust && (
               <div className="mt-3 space-y-2 border-t border-nexus-border pt-3">
                 {currentServices.map(cs => (
                   <div key={cs.serviceId} className="flex items-center justify-between gap-3">

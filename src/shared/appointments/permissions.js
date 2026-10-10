@@ -4,7 +4,7 @@
 // apoyadas en las transiciones definidas en statusModel.js.
 
 import { getNextStates } from './statusModel';
-import { normalizeStaffPermissions } from '../staffPermissions/staffPermissionsModel';
+import { normalizeStaffPermissions, getEditMode, canEditPart } from '../staffPermissions/staffPermissionsModel';
 
 export const ROLES = {
   ADMIN: 'admin',
@@ -61,7 +61,32 @@ export function getEffectiveFieldPermissions(role, staffPermissions = null) {
   if (!sp.editAppointments) {
     return Object.keys(base).reduce((acc, k) => ({ ...acc, [k]: false }), {});
   }
-  return { ...base, clientName: sp.changeAppointmentClient, clientId: sp.changeAppointmentClient, clientPhone: sp.changeAppointmentClient };
+  const fields = { ...base, clientName: sp.changeAppointmentClient, clientId: sp.changeAppointmentClient, clientPhone: sp.changeAppointmentClient };
+  if (getEditMode(sp) !== 'custom') return fields;
+  // "Editar citas" personalizado: cada parte según su casilla. Los campos que
+  // se recalculan juntos (servicios -> precio y duración) se habilitan juntos.
+  const can = (part) => canEditPart(sp, part);
+  return {
+    ...fields,
+    time: can('editTime'),
+    serviceId: can('editServices'),
+    serviceName: can('editServices'),
+    services: can('editServices') || can('editDuration') || can('editFinish'),
+    duration: can('editServices') || can('editDuration'),
+    price: can('editServices') || can('editFinish'),
+    status: can('editFinish'),
+    paymentMethod: can('editFinish'),
+    notes: can('editNotes'),
+  };
+}
+
+/**
+ * ¿Puede usar "Ajustar la duración"? Admin siempre; el profesional según su
+ * permiso (en "Todo" sí; en "Personalizado", solo con esa casilla).
+ */
+export function canAdjustDuration(role, staffPermissions = null) {
+  if (role !== ROLES.BARBER || !staffPermissions) return canEditField(role, 'duration', staffPermissions);
+  return canEditPart(staffPermissions, 'editDuration');
 }
 
 // Permisos de acciones que no son edición de campos.
@@ -100,7 +125,7 @@ export function canCancel(role) {
  * statusModel con cualquier restricción adicional del rol.
  */
 export function getAllowedNextStates(role, currentStatus, staffPermissions = null) {
-  if (role === ROLES.BARBER && staffPermissions && !normalizeStaffPermissions(staffPermissions).editAppointments) return [];
+  if (role === ROLES.BARBER && staffPermissions && !canEditPart(staffPermissions, 'editFinish')) return [];
   const baseNextStates = getNextStates(currentStatus);
   const perms = ACTION_PERMISSIONS[role];
   if (!perms) return [];

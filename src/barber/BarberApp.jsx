@@ -17,7 +17,10 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import AppointmentStatusBadge from '../shared/appointments/AppointmentStatusBadge';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { getEffectiveFieldPermissions } from '../shared/appointments/permissions';
-import { normalizeStaffPermissions, DEFAULT_STAFF_PERMISSIONS } from '../shared/staffPermissions/staffPermissionsModel';
+import { normalizeStaffPermissions, DEFAULT_STAFF_PERMISSIONS, canEditPart } from '../shared/staffPermissions/staffPermissionsModel';
+import { checkWorkingHours } from '../shared/appointments/workingHours';
+import { useConfirm, Modal, Button, Field, Input, SegmentedControl } from '../shared/ui';
+import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import PersonalBookingLink from '../shared/booking/PersonalBookingLink';
 import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
@@ -247,6 +250,15 @@ export default function App() {
   // Tipo de negocio -> terminología (businessProfileModel).
   const businessProfile = useBusinessProfile(negocioId);
   const { t, tl, g } = businessProfile;
+  // Confirmación "Agendar en sobrehorario" (Fase 4/5).
+  const [confirmAction, confirmDialog] = useConfirm();
+  // Hora actual (para la línea roja de la agenda Día). Se actualiza cada minuto.
+  const [nowMinutes, setNowMinutes] = useState(() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); });
+  useEffect(() => {
+    const id = setInterval(() => { const n = new Date(); setNowMinutes(n.getHours() * 60 + n.getMinutes()); }, 60000);
+    return () => clearInterval(id);
+  }, []);
+  const todayLocalStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; })();
   useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const { servicios: services } = useServicios(negocioId);
@@ -653,7 +665,7 @@ const fetchByDate = async (subcollection, date) => {
   };
 
   const updateStatus = async (apptId, nextStatus, paymentMethod) => {
-    if (!staffPerms.editAppointments) { triggerToast('No tienes permiso para editar citas.', 'error'); return; }
+    if (!canEditPart(staffPerms, 'editFinish')) { triggerToast(`No tienes permiso para cambiar el estado de ${g('appointment', 'los', 'las')} ${tl('appointments')}.`, 'error'); return; }
     try {
       const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
       const payload = { status: nextStatus, updatedAt: new Date().toISOString() };
@@ -691,6 +703,10 @@ const fetchByDate = async (subcollection, date) => {
     }
     // Cita original (antes de editar) para decir qué cambió en la notificación.
     const before = appointments.find(a => a.id === managingAppt.id);
+    // Horario laboral (Fase 4/5): solo si cambió la hora o la duración.
+    const timeChanged = 'time' in payload && payload.time !== before?.time;
+    const durationChanged = 'duration' in payload && (Number(payload.duration) || 0) !== (Number(before?.duration) || 0);
+    if ((timeChanged || durationChanged) && !(await confirmOutsideHours({ date: managingAppt.date, time: managingAppt.time, duration: Number(managingAppt.duration) || 30 }))) return;
     const changes = describeAppointmentChanges(before, { ...before, ...payload }, { terms: businessProfile });
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, updatedAt: new Date().toISOString() });
@@ -707,6 +723,26 @@ const fetchByDate = async (subcollection, date) => {
       triggerToast('Error al actualizar la cita: ' + err.message, 'error');
     }
     setManagingAppt(null);
+  };
+
+  // Fase 4/5: fuera del horario del negocio o del profesional. Con el permiso
+  // "Agendar en sobrehorario" se puede confirmar; sin él, no se guarda.
+  const confirmOutsideHours = async ({ date, time, duration }) => {
+    const res = checkWorkingHours({ date, time, duration, businessSchedule: businessSettings?.schedule, professional: activeBarber, terms: businessProfile });
+    if (res.ok) return true;
+    if (!staffPerms.overtimeAppointments) {
+      triggerToast(`${res.message} No tienes permiso para agendar fuera del horario.`, 'error');
+      return false;
+    }
+    return confirmAction({
+      title: 'Está fuera del horario',
+      subject: res.message,
+      message: `¿Quieres agendar ${g('appointment', 'este', 'esta')} ${tl('appointment')} igual, en sobrehorario?`,
+      irreversible: false,
+      tone: 'primary',
+      confirmLabel: 'Agendar en sobrehorario',
+      cancelLabel: 'Volver',
+    });
   };
 
   const handleBarberCreateReservation = async (draft) => {
@@ -732,6 +768,7 @@ const fetchByDate = async (subcollection, date) => {
       triggerToast(`Horario ocupado por bloqueo administrativo: ${blockConflict.reason}`, 'error');
       return;
     }
+    if (!(await confirmOutsideHours({ date: draft.date, time: draft.time, duration: Number(draft.duration) || 30 }))) return;
 
     // Guarda o actualiza el cliente (mismo criterio que Admin): si venía de la
     // lista (draft.clientId) solo suma una visita; si es nuevo, lo crea.
@@ -910,23 +947,6 @@ const fetchByDate = async (subcollection, date) => {
       return true;
     }).sort((a, b) => a.time.localeCompare(b.time));
   }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays]);
-
-  // --- HORAS VISIBLES EN LA GRILLA DEL DÍA SEGÚN LA DISPONIBILIDAD DEL PROFESIONAL ---
-  const visibleHorariosGrid = useMemo(() => {
-    const date = new Date(selectedDate + "T00:00:00");
-    const dayName = DIAS_SEMANA_NOMBRES[(date.getDay() + 6) % 7];
-    const dayAvailability = (activeBarber?.availability || []).find(a => a?.day === dayName);
-
-    if (!dayAvailability || dayAvailability.status !== "Disponible") return [];
-
-    const [startH] = (dayAvailability.start || "00:00").split(":").map(Number);
-    const [endH] = (dayAvailability.end || "00:00").split(":").map(Number);
-
-    return HORARIOS_GRID.filter(hourSlot => {
-      const hourNum = parseInt(hourSlot.split(":")[0], 10);
-      return hourNum >= startH && hourNum < endH;
-    });
-  }, [activeBarber, selectedDate]);
 
   // --- DISTRIBUCIÓN MENSUAL SIMPLE PARA VISTA ANUAL ---
   const annualMonthlyDistribution = useMemo(() => {
@@ -1107,17 +1127,19 @@ const fetchByDate = async (subcollection, date) => {
   const renderUnifiedSelector = (showAlternator = false) => {
     return (
       <div className="flex flex-row items-center justify-between gap-3 flex-wrap">
-        <div className="relative flex items-center justify-center w-full">
+        <div className="flex items-center justify-center gap-2 w-full">
           {/* Selector de fecha con flechas estilizadas */}
-          <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-xl px-2 py-1 justify-between shrink-0">
+          <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-xl h-11 px-1 justify-between min-w-0">
             <button 
+              type="button"
               onClick={() => handleDateChange(-1)} 
-              className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-primary transition-all"
+              aria-label="Periodo anterior"
+              className="h-9 w-9 inline-flex items-center justify-center hover:bg-nexus-surface-hover rounded-lg text-nexus-primary transition-colors cursor-pointer"
             >
-              <Icons.ChevronLeft className="w-4 h-4" />
+              <Icons.ChevronLeft className="w-5 h-5" />
             </button>
             
-            <span className="text-xs font-bold tracking-wide text-nexus-text px-4 min-w-[120px] text-center whitespace-nowrap">
+            <span className="text-sm font-semibold text-nexus-text px-3 min-w-[132px] text-center whitespace-nowrap nx-num" aria-live="polite">
               {selectedRange === "Año" ? (
                 new Date(selectedDate + "T00:00:00").getFullYear()
               ) : selectedRange === "Mes" ? (
@@ -1126,36 +1148,38 @@ const fetchByDate = async (subcollection, date) => {
                 (() => {
                   const start = new Date(currentWeekDays[0] + "T00:00:00");
                   const end = new Date(currentWeekDays[6] + "T00:00:00");
-                  const startDay = String(start.getDate()).padStart(2, '0');
                   const startMonth = MESES_NOMBRES[start.getMonth()].slice(0, 3);
-                  const endDay = String(end.getDate()).padStart(2, '0');
                   const endMonth = MESES_NOMBRES[end.getMonth()].slice(0, 3);
-                  const year = start.getFullYear();
-                  return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}`;
+                  if (start.getFullYear() !== end.getFullYear()) return `${start.getDate()} ${startMonth} ${start.getFullYear()} – ${end.getDate()} ${endMonth} ${end.getFullYear()}`;
+                  if (startMonth !== endMonth) return `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth} ${end.getFullYear()}`;
+                  return `${start.getDate()}–${end.getDate()} ${endMonth} ${end.getFullYear()}`;
                 })()
               ) : (
-                new Date(selectedDate + "T00:00:00").toLocaleDateString('es-ES', { 
-                  weekday: 'short', 
-                  day: 'numeric', 
-                  month: 'short' 
-                })
+                (() => {
+                  const d = new Date(selectedDate + "T00:00:00");
+                  return `${DIAS_SEMANA_NOMBRES[(d.getDay() + 6) % 7].slice(0, 3)}, ${d.getDate()} ${MESES_NOMBRES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
+                })()
               )}
             </span>
             
             <button 
+              type="button"
               onClick={() => handleDateChange(1)} 
-              className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-primary transition-all"
+              aria-label="Periodo siguiente"
+              className="h-9 w-9 inline-flex items-center justify-center hover:bg-nexus-surface-hover rounded-lg text-nexus-primary transition-colors cursor-pointer"
             >
-              <Icons.ChevronRight className="w-4 h-4" />
+              <Icons.ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
           {/* ALTERNADOR DE VISTA DÍA (Acoplado al extremo derecho) */}
           {showAlternator && selectedRange === "Día" && (
-            <div className="absolute right-1 flex bg-nexus-surface p-1 rounded-xl border border-nexus-border items-center gap-1 shrink-0 animate-fade-in">
+            <div className="flex bg-nexus-surface p-1 rounded-xl border border-nexus-border items-center gap-1 shrink-0 animate-fade-in">
               <button
+                type="button"
                 onClick={() => setDiaViewStyle("Calendario")}
-                className={`p-2 rounded-lg transition-all ${
+                aria-label="Vista calendario"
+                className={`h-9 w-9 inline-flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
                   diaViewStyle === "Calendario" 
                     ? "bg-nexus-primary text-white" 
                     : "text-nexus-text-muted hover:text-nexus-text-secondary"
@@ -1167,8 +1191,10 @@ const fetchByDate = async (subcollection, date) => {
                 </svg>
               </button>
               <button
+                type="button"
                 onClick={() => setDiaViewStyle("Lista")}
-                className={`p-2 rounded-lg transition-all ${
+                aria-label="Vista lista"
+                className={`h-9 w-9 inline-flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
                   diaViewStyle === "Lista" 
                     ? "bg-nexus-primary text-white" 
                     : "text-nexus-text-muted hover:text-nexus-text-secondary"
@@ -1184,6 +1210,16 @@ const fetchByDate = async (subcollection, date) => {
         </div>
       </div>
     );
+  };
+
+  // Duración real de una cita en minutos (cita.duration o la suma de sus servicios).
+  const apptDurationMin = (appt) => {
+    const d = Number(appt?.duration);
+    if (d > 0) return d;
+    const fromServices = getServicesFromCita(appt).reduce((sum, s) => sum + (Number(s?.duration) || 0), 0);
+    if (fromServices > 0) return fromServices;
+    const svc = services.find(s => s.id === appt?.serviceId);
+    return Number(svc?.duration) || 30;
   };
 
   // --- MANEJADOR DE CLIC EN UN SLOT VACÍO DE LA GRILLA ---
@@ -1230,19 +1266,21 @@ const fetchByDate = async (subcollection, date) => {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
+    {confirmDialog}
     <div className="min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none pb-24 md:pb-0">
       
       {/* HEADER SUPERIOR */}
       {activeTab !== "perfil" && (
-        <header className="sticky top-0 z-40 bg-nexus-surface border-b border-nexus-border py-4 px-4 w-full">
-          <div className="w-full max-w-md mx-auto flex bg-nexus-background p-1.5 rounded-2xl border border-nexus-border items-center justify-between shadow-inner">
+        <header className="sticky top-0 z-40 bg-nexus-surface/95 backdrop-blur border-b border-nexus-border py-3 px-3 sm:px-4 w-full">
+          <div className="w-full max-w-md mx-auto flex bg-nexus-background p-1 rounded-2xl border border-nexus-border items-center justify-between gap-1">
             {["Día", "Semana", "Mes", "Año"].map(range => (
               <button
                 key={range}
                 onClick={() => setSelectedRange(range)}
-                className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 text-center select-none active:scale-[0.98] ${
+                aria-pressed={selectedRange === range}
+                className={`flex-1 h-10 px-3 sm:px-4 rounded-xl text-sm font-semibold transition-colors duration-200 text-center select-none cursor-pointer ${
                   selectedRange === range 
-                    ? "bg-nexus-primary text-white shadow-md font-black" 
+                    ? "bg-nexus-primary text-white shadow-sm" 
                     : "text-nexus-text-secondary hover:text-nexus-text"
                 }`}
               >
@@ -1256,7 +1294,7 @@ const fetchByDate = async (subcollection, date) => {
       {/* TOAST SYSTEM */}
       {toast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
-          <div className={`px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-2xl flex items-center gap-2 text-xs font-bold tracking-wide ${
+          <div className={`px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-2xl flex items-center gap-2 text-sm font-bold ${
             toast.type === "error" 
               ? "bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text" 
               : toast.type === "info"
@@ -1298,7 +1336,7 @@ const fetchByDate = async (subcollection, date) => {
                   /* ================= VISTA ANUAL SIMPLE ================= */
                   <div className="space-y-6 animate-fade-in">
                     <div className="bg-nexus-surface border border-nexus-border p-5 rounded-2xl">
-                      <h3 className="text-sm font-bold text-nexus-text mb-1 uppercase tracking-wide">
+                      <h3 className="text-sm font-bold text-nexus-text mb-1">
                         Distribución de Reservas Anuales ({new Date(selectedDate + "T00:00:00").getFullYear()})
                       </h3>
                       <p className="text-xs text-nexus-text-muted">
@@ -1316,10 +1354,10 @@ const fetchByDate = async (subcollection, date) => {
 
                           return (
                             <div key={m.monthIndex} className="bg-nexus-surface-hover border border-nexus-border p-4 rounded-xl flex flex-col justify-between h-28">
-                              <span className="text-xs font-black text-nexus-text-secondary uppercase tracking-widest">{MESES_NOMBRES[m.monthIndex]}</span>
+                              <span className="text-xs font-bold text-nexus-text-secondary">{MESES_NOMBRES[m.monthIndex]}</span>
                               <div className="mt-2">
-                                <span className="text-2xl font-black text-nexus-text">{count}</span>
-                                <span className="text-[10px] text-nexus-text-muted block">Reservas</span>
+                                <span className="text-2xl font-bold text-nexus-text">{count}</span>
+                                <span className="text-xs text-nexus-text-muted block">Reservas</span>
                               </div>
                             </div>
                           );
@@ -1336,7 +1374,7 @@ const fetchByDate = async (subcollection, date) => {
                       {/* Cabecera de los días de la semana */}
                       <div className="grid grid-cols-7 gap-1 text-center border-b border-nexus-border pb-3 select-none">
                         {DIAS_SEMANA_NOMBRES.map(d => (
-                          <span key={d} className="text-[10px] sm:text-xs font-black text-nexus-primary uppercase tracking-wider">
+                          <span key={d} className="text-xs  font-bold text-nexus-primary">
                             {d.slice(0, 3)}
                           </span>
                         ))}
@@ -1417,18 +1455,18 @@ const fetchByDate = async (subcollection, date) => {
                             }`}
                           >
                             <div className="text-center border-b border-nexus-border pb-2 select-none">
-                              <span className="block text-[10px] text-nexus-primary font-black uppercase tracking-wider">{DIAS_SEMANA_NOMBRES[idx].slice(0,3)}</span>
-                              <span className="block text-base font-black text-nexus-text leading-none mt-1">{dateObj.getDate()}</span>
+                              <span className="block text-xs text-nexus-primary font-bold">{DIAS_SEMANA_NOMBRES[idx].slice(0,3)}</span>
+                              <span className="block text-base font-bold text-nexus-text leading-none mt-1">{dateObj.getDate()}</span>
                             </div>
 
                             <div className="space-y-1.5 mt-2 flex-1 flex flex-col justify-end">
                               {dayAppts.length === 0 ? (
-                                <span className="text-[9px] text-nexus-text-muted block text-center italic">Vacío</span>
+                                <span className="text-xs text-nexus-text-muted block text-center italic">Vacío</span>
                               ) : (
                                 dayAppts.slice(0, 3).map((appt) => (
                                   <div 
                                     key={appt.id} 
-                                    className={`text-[9px] font-bold p-1 rounded text-center truncate ${
+                                    className={`text-xs font-bold p-1 rounded text-center truncate ${
                                       appt.status === "Finalizado" ? "bg-nexus-success-bg text-nexus-success-text" :
                                       appt.status === "Confirmado" ? "bg-nexus-info-bg text-nexus-info-text" :
                                       "bg-nexus-warning-bg text-nexus-warning-text"
@@ -1447,122 +1485,160 @@ const fetchByDate = async (subcollection, date) => {
 
                 ) : selectedRange === "Día" && diaViewStyle === "Calendario" ? (
                   
-                  /* ================= VISTA DÍA: CALENDARIO (GRILLA HORARIA) ================= */
-                  <div className="bg-nexus-surface border border-nexus-border rounded-3xl overflow-hidden shadow-lg divide-y divide-nexus-border animate-fade-in">
-                    {visibleHorariosGrid.length === 0 && (
-                      <div className="p-6 text-center text-xs text-nexus-text-muted font-bold">
-                        No disponible este día según tu horario configurado.
+                  /* ================= VISTA DÍA: CALENDARIO (Fase 4) =================
+                     Cada cita ocupa el alto de su duración (igual que la agenda del Admin).
+                     48px por cada media hora. */
+                  (() => {
+                    const SLOT_PX = 48;
+                    const PX_PER_MIN = SLOT_PX / 30;
+                    const dateObj = new Date(selectedDate + "T00:00:00");
+                    const dayName = DIAS_SEMANA_NOMBRES[(dateObj.getDay() + 6) % 7];
+                    const dayAv = (activeBarber?.availability || []).find(a => a?.day === dayName);
+                    const works = !!dayAv && dayAv.status === "Disponible";
+                    const avStart = works ? convertTimeToMinutes(dayAv.start || "00:00") : null;
+                    const avEnd = works ? convertTimeToMinutes(dayAv.end || "00:00") : null;
+                    const dayAppts = filteredAppointments.filter(a => a.date === selectedDate);
+                    const dayBlocks = blockedSlots.filter(b => b.barber === activeBarber.id && b.date === selectedDate);
+                    const dayPendings = appointments.filter(a =>
+                      isOpenPendingCita(a) && a.date === selectedDate && professionalCanDo(activeBarber, getCitaServiceIds(a))
+                    );
+                    // Rango visible: la jornada + cualquier cita o bloqueo fuera de ella (sobrehorario).
+                    const starts = [], ends = [];
+                    if (works) { starts.push(avStart); ends.push(avEnd); }
+                    dayAppts.forEach(a => { const st = convertTimeToMinutes(a.time || "00:00"); starts.push(st); ends.push(st + apptDurationMin(a)); });
+                    dayBlocks.forEach(b => { starts.push(convertTimeToMinutes(b.startTime)); ends.push(convertTimeToMinutes(b.endTime)); });
+                    const hasGrid = starts.length > 0;
+                    const gridStart = hasGrid ? Math.floor(Math.min(...starts) / 60) * 60 : 0;
+                    const gridEnd = hasGrid ? Math.min(24 * 60, Math.ceil(Math.max(...ends) / 60) * 60) : 0;
+                    const slots = [];
+                    for (let m = gridStart; m < gridEnd; m += 30) slots.push(m);
+                    const toTop = (min) => (min - gridStart) * PX_PER_MIN;
+                    const fmt = (min) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+                    const inWorkHours = (min) => works && min >= avStart && min + 30 <= avEnd;
+                    const showNow = selectedDate === todayLocalStr && nowMinutes >= gridStart && nowMinutes <= gridEnd;
+
+                    return (
+                  <div className="space-y-3 animate-fade-in">
+                    {dayPendings.length > 0 && (
+                      <div className="rounded-2xl border border-dashed border-nexus-warning/60 bg-nexus-warning-bg p-3 space-y-2">
+                        <p className="text-sm font-semibold text-nexus-warning-text">
+                          {dayPendings.length === 1 ? `Hay 1 reserva` : `Hay ${dayPendings.length} reservas`} sin {tl('professional')} {g('professional', 'asignado', 'asignada')} que puedes atender
+                        </p>
+                        {dayPendings.map(pa => (
+                          <p key={pa.id} className="text-sm text-nexus-warning-text">
+                            <span className="nx-num font-semibold">{pa.time}</span> · {pa.serviceName}
+                          </p>
+                        ))}
                       </div>
                     )}
-                    {visibleHorariosGrid.map((hourSlot) => {
-                      const prefix = hourSlot.split(":")[0];
-                      
-                      // Cita en este bloque horario
-                      const slotAppointments = filteredAppointments.filter(appt => appt.time.startsWith(prefix));
-                      const hasAppt = slotAppointments.length > 0;
 
-                      // Pendientes (sin profesional) que este profesional podría atender.
-                      // Solo informativas: no ocupan el horario ni se cuentan como citas.
-                      const slotPendings = appointments.filter(a =>
-                        isOpenPendingCita(a) &&
-                        a.date === selectedDate &&
-                        (a.time || '').startsWith(prefix) &&
-                        professionalCanDo(activeBarber, getCitaServiceIds(a))
-                      );
-
-                      // Bloqueo administrativo en este rango de hora
-                      const activeHourNum = parseInt(prefix, 10);
-                      const isBlocked = blockedSlots.find(block => {
-                        if (block.barber !== activeBarber.id || block.date !== selectedDate) return false;
-                        const startHour = parseInt(block.startTime.split(":")[0], 10);
-                        const endHour = parseInt(block.endTime.split(":")[0], 10);
-                        return activeHourNum >= startHour && activeHourNum < endHour;
-                      });
-
-                      return (
-                        <div key={hourSlot} className="flex min-h-[90px] hover:bg-nexus-surface-hover transition-colors">
-                          <div className="w-20 border-r border-nexus-border py-4 px-3 flex flex-col items-center justify-start shrink-0 bg-nexus-background/50 select-none">
-                            <span className="text-xs font-black text-nexus-primary">{hourSlot}</span>
-                          </div>
-
-                          <div className="flex-1 p-3 flex flex-col gap-2.5 justify-center">
-                            {slotPendings.map(pa => (
-                              <div key={pa.id} className="border border-dashed border-nexus-warning/60 bg-nexus-surface-hover text-nexus-warning-text rounded-2xl px-4 py-2 select-none">
-                                <span className="text-[10px] font-black tracking-widest uppercase block">PENDIENTE · {pa.time}</span>
-                                <span className="text-xs font-semibold block">Hay una reserva sin {tl('professional')} {g('professional', 'asignado', 'asignada')}</span>
-                                <span className="text-[10px] opacity-80 block">{pa.serviceName}</span>
-                              </div>
-                            ))}
-                            {isBlocked ? (
-                              /* DISEÑO SLOT BLOQUEADO ADMINISTRATIVAMENTE */
-                              <div className="bg-nexus-error-bg text-nexus-error-text border border-nexus-error/25 rounded-2xl p-4 flex items-center gap-3">
-                                <Icons.Lock className="w-5 h-5 text-nexus-error" />
-                                <div>
-                                  <span className="font-extrabold text-sm block">Espacio Reservado / Bloqueo Administrativo</span>
-                                  <span className="text-xs opacity-75">{isBlocked.reason} ({isBlocked.startTime} - {isBlocked.endTime})</span>
-                                </div>
-                              </div>
-                            ) : hasAppt ? (
-                              /* DISEÑO SLOT CON RESERVA */
-                              slotAppointments.map((appt) => (
-                                <div 
-                                  key={appt.id}
-                                  onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
-                                  className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md transition-all duration-300 hover:brightness-105 cursor-pointer ${
-                                    appt.status === "completed" ? "bg-nexus-success-bg text-nexus-success-text border-nexus-success/20" :
-                                    appt.status === "confirmed" ? "bg-nexus-info-bg text-nexus-info-text border-nexus-info/20" :
-                                    "bg-nexus-warning-bg text-nexus-warning-text border-nexus-warning/20"
-                                  }`}
-                                >
-                                  <div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-extrabold text-nexus-text text-sm">{appt.clientName}</span>
-                                      <span className="text-[9px] font-black tracking-widest uppercase bg-black/10 px-2 py-0.5 rounded-md">
-                                        {appt.time}
-                                      </span>
-                                    </div>
-                                    <p className="text-xs opacity-90 mt-1 font-semibold">{appt.service}</p>
-                                    
-                                    {appt.notes && (
-                                      <p className="text-[10px] italic opacity-80 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-black/5">
-                                        Nota: {appt.notes}
-                                      </p>
-                                    )}
-
-                                    <div className="flex items-center gap-3 text-[10px] opacity-75 mt-2">
-                                      <span className="flex items-center gap-1 font-bold">
-                                        <Icons.Clock className="w-3.5 h-3.5" />
-                                        {getServiceDuration(services, appt)}
-                                      </span>
-                                      <span>•</span>
-                                      {staffPerms.viewFinancials && <span className="font-black text-nexus-text">{appt.price} Bs</span>}
-                                    </div>
-                                  </div>
-
-
-                                </div>
-                              ))
-                            ) : (
-                              /* DISEÑO SLOT LIBRE (Interactivo para desplegar Gestión de Horario) */
-                              <div 
-                                onClick={() => handleSlotClick(hourSlot, isBlocked, hasAppt)}
-                                className="group/btn h-12 border border-dashed border-nexus-border hover:border-nexus-primary/50 hover:bg-nexus-primary-soft rounded-2xl flex items-center justify-between px-4 cursor-pointer transition-all duration-300"
-                              >
-                                <span className="text-[11px] text-nexus-text-muted group-hover/btn:text-nexus-primary font-bold transition-colors">
-                                  Bloque libre para {activeBarber.name}
-                              
-                                </span>
-                                <span className="opacity-0 group-hover/btn:opacity-100 text-[10px] text-nexus-primary font-black uppercase tracking-wider flex items-center gap-1">
-                                  <Icons.Plus className="w-3 h-3 text-nexus-primary" />
-                                  Gestionar horario
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                    {!hasGrid ? (
+                      <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-8 text-center">
+                        <Icons.Calendar className="w-8 h-8 text-nexus-text-muted mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-nexus-text">No trabajas este día</p>
+                        <p className="text-sm text-nexus-text-secondary mt-1">Según tu horario configurado no hay turnos para {dayName.toLowerCase()}.</p>
+                      </div>
+                    ) : (
+                    <div className="bg-nexus-surface border border-nexus-border rounded-2xl overflow-hidden shadow-sm">
+                      <div className="relative flex" style={{ height: slots.length * SLOT_PX }}>
+                        {/* Columna de horas */}
+                        <div className="relative w-16 shrink-0 border-r border-nexus-border bg-nexus-background/60">
+                          {slots.map(m => (
+                            <div key={m} style={{ height: SLOT_PX }} className="flex items-start justify-end pr-2 pt-1 border-b border-nexus-border/60">
+                              <span className={`nx-num ${m % 60 === 0 ? 'text-sm font-semibold text-nexus-text-secondary' : 'text-xs text-nexus-text-muted'}`}>{fmt(m)}</span>
+                            </div>
+                          ))}
+                          {showNow && (
+                            <span
+                              className="absolute right-0.5 z-20 -translate-y-1/2 rounded-full bg-nexus-error px-1.5 py-0.5 text-xs font-bold text-white nx-num shadow-sm"
+                              style={{ top: toTop(nowMinutes) }}
+                              title="Hora actual"
+                            >
+                              {fmt(nowMinutes)}
+                            </span>
+                          )}
                         </div>
-                      );
-                    })}
+
+                        {/* Columna de citas */}
+                        <div className="relative flex-1 min-w-0">
+                          {slots.map(m => (
+                            inWorkHours(m) ? (
+                              <button
+                                type="button"
+                                key={m}
+                                style={{ height: SLOT_PX }}
+                                onClick={() => handleSlotClick(fmt(m), false, false)}
+                                aria-label={`Espacio libre a las ${fmt(m)}`}
+                                className="group block w-full border-b border-nexus-border/50 hover:bg-nexus-primary-soft/60 cursor-pointer text-left px-3"
+                              >
+                                <span className="hidden group-hover:inline-flex items-center gap-1 text-xs font-semibold text-nexus-primary">
+                                  <Icons.Plus className="w-3.5 h-3.5" /> {fmt(m)}
+                                </span>
+                              </button>
+                            ) : (
+                              <div key={m} style={{ height: SLOT_PX }} className="w-full border-b border-nexus-border/50 bg-nexus-border/30" aria-hidden="true" />
+                            )
+                          ))}
+
+                          {dayBlocks.map(block => {
+                            const st = convertTimeToMinutes(block.startTime);
+                            const en = convertTimeToMinutes(block.endTime);
+                            return (
+                              <div
+                                key={block.id}
+                                style={{ top: toTop(st), height: Math.max(20, (en - st) * PX_PER_MIN) }}
+                                className="absolute left-1 right-1 z-[5] rounded-lg border border-nexus-error/30 bg-nexus-error-bg text-nexus-error-text px-3 py-1 overflow-hidden"
+                              >
+                                <p className="text-sm font-semibold leading-5 flex items-center gap-1.5 min-w-0">
+                                  <Icons.Lock className="w-4 h-4 shrink-0 text-nexus-error" />
+                                  <span className="truncate">Bloqueado <span className="nx-num font-normal">{block.startTime}–{block.endTime}</span></span>
+                                </p>
+                                {block.reason && <p className="text-xs leading-4 truncate opacity-80">{block.reason}</p>}
+                              </div>
+                            );
+                          })}
+
+                          {dayAppts.map(appt => {
+                            const st = convertTimeToMinutes(appt.time || "00:00");
+                            const dur = apptDurationMin(appt);
+                            const h = dur * PX_PER_MIN;
+                            return (
+                              <button
+                                type="button"
+                                key={appt.id}
+                                onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
+                                style={{ top: toTop(st), height: h }}
+                                title={`${appt.time} · ${appt.clientName} · ${appt.serviceName || appt.service || ''}`}
+                                className={`absolute left-1 right-1 z-[6] rounded-lg border shadow-sm px-3 ${h < 40 ? 'py-0.5 justify-center' : 'py-1.5'} flex flex-col items-start overflow-hidden text-left cursor-pointer transition-opacity ${getStatusCardClasses(appt.status)}`}
+                              >
+                                <span className="block w-full text-sm font-semibold leading-5 truncate">
+                                  <span className="nx-num">{appt.time}</span> · {appt.clientName}
+                                  {h < 40 && <span className="font-normal text-nexus-text-secondary"> · {appt.serviceName || appt.service}</span>}
+                                </span>
+                                {h >= 40 && (
+                                  <span className="block w-full text-sm leading-5 truncate text-nexus-text-secondary">{appt.serviceName || appt.service}</span>
+                                )}
+                                {h >= 72 && (
+                                  <span className="flex items-center gap-2 text-xs text-nexus-text-secondary mt-0.5">
+                                    <span className="inline-flex items-center gap-1 nx-num"><Icons.Clock className="w-3.5 h-3.5" /> {dur} min</span>
+                                    {staffPerms.viewFinancials && <span className="nx-num font-semibold text-nexus-text">{appt.price} Bs</span>}
+                                    {appt.notes && <span className="truncate italic">Nota: {appt.notes}</span>}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+
+                          {showNow && (
+                            <div className="absolute left-0 right-0 z-[15] border-t-2 border-nexus-error pointer-events-none" style={{ top: toTop(nowMinutes) }} aria-hidden="true" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    )}
                   </div>
+                    );
+                  })()
                 ) : (
                   /* ================= LISTADO DE CITAS ESTÁNDAR (Día-Lista) ================= */
                   <div className="space-y-3 animate-fade-in">
@@ -1583,13 +1659,13 @@ const fetchByDate = async (subcollection, date) => {
                         >
                           <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-xl bg-nexus-background border border-nexus-border flex flex-col items-center justify-center shrink-0">
-                              <span className="text-[9px] text-nexus-primary font-black uppercase tracking-widest">Hora</span>
-                              <span className="text-base font-black text-nexus-text leading-none mt-1">{appt.time}</span>
+                              <span className="text-xs text-nexus-primary font-bold">Hora</span>
+                              <span className="text-base font-bold text-nexus-text leading-none mt-1">{appt.time}</span>
                             </div>
 
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-nexus-text text-sm tracking-wide">{appt.clientName}</h4>
+                                <h4 className="font-bold text-nexus-text text-sm">{appt.clientName}</h4>
                                 
                                 <AppointmentStatusBadge status={appt.status} variant="barber" />
                               </div>
@@ -1597,12 +1673,12 @@ const fetchByDate = async (subcollection, date) => {
                               <p className="text-xs text-nexus-text-secondary mt-1 font-medium">{appt.service}</p>
                               
                               {appt.notes && (
-                                <p className="text-[10px] italic opacity-85 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-black/5">
+                                <p className="text-xs italic opacity-85 mt-1 bg-black/10 px-2 py-1 rounded-lg inline-block border border-black/5">
                                   Nota: {appt.notes}
                                 </p>
                               )}
 
-                              <div className="flex items-center gap-3 text-[10px] text-nexus-text-muted mt-2">
+                              <div className="flex items-center gap-3 text-xs text-nexus-text-muted mt-2">
                                 <span className="flex items-center gap-1 font-semibold text-nexus-text-secondary">
                                   <Icons.Clock className="w-3.5 h-3.5 text-nexus-text-muted" />
                                   {getServiceDuration(services, appt)}
@@ -1619,7 +1695,7 @@ const fetchByDate = async (subcollection, date) => {
                                 {appt.status === "Confirmado" && (
                                   <button
                                   onClick={(e) => { e.stopPropagation(); updateStatus(appt.id, "completed"); }}
-                                    className="px-4 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-xl text-[11px] font-bold transition-all shadow-md"
+                                    className="px-4 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-xl text-xs font-bold transition-all shadow-md"
                                   >
                                     Finalizar
                                   </button>
@@ -1644,23 +1720,23 @@ const fetchByDate = async (subcollection, date) => {
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-nexus-text-muted font-black uppercase tracking-widest">{t('services')}</span>
-                    <span className="block text-2.5xl font-black text-nexus-text mt-1">{commissionSummary.totalServicios}</span>
+                    <span className="block text-xs text-nexus-text-muted font-bold">{t('services')}</span>
+                    <span className="block text-2xl font-bold text-nexus-text mt-1">{commissionSummary.totalServicios}</span>
                   </div>
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-nexus-primary font-black uppercase tracking-widest">Comisión total</span>
-                    <span className="block text-2.5xl font-black text-nexus-success-text mt-1">{commissionSummary.comisionTotal} Bs</span>
+                    <span className="block text-xs text-nexus-primary font-bold">Comisión total</span>
+                    <span className="block text-2xl font-bold text-nexus-success-text mt-1">{commissionSummary.comisionTotal} Bs</span>
                   </div>
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-nexus-primary font-black uppercase tracking-widest">Pagada</span>
-                    <span className="block text-2.5xl font-black text-nexus-info-text mt-1">{commissionSummary.comisionPagada} Bs</span>
+                    <span className="block text-xs text-nexus-primary font-bold">Pagada</span>
+                    <span className="block text-2xl font-bold text-nexus-info-text mt-1">{commissionSummary.comisionPagada} Bs</span>
                   </div>
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-[9px] text-nexus-text-muted font-black uppercase tracking-widest">Pendiente</span>
-                    <span className="block text-2.5xl font-black text-nexus-warning-text mt-1">{commissionSummary.comisionPendiente} Bs</span>
+                    <span className="block text-xs text-nexus-text-muted font-bold">Pendiente</span>
+                    <span className="block text-2xl font-bold text-nexus-warning-text mt-1">{commissionSummary.comisionPendiente} Bs</span>
                   </div>
                 </div>
 
@@ -1668,13 +1744,13 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
                       <h3 className="text-base font-bold text-nexus-text">Transacciones & Comisiones</h3>
-                      <p className="text-xs text-nexus-text-muted">Historial completo de cortes finalizados para este periodo.</p>
+                      <p className="text-xs text-nexus-text-muted">{`${t('services')} ${g('service', 'finalizados', 'finalizadas')} en este periodo.`}</p>
                     </div>
                     {commissionSummary.allFinalized.some(item => !item.commissionPaid) && (
                       <button
                         onClick={markAllCommissionsPaid}
                         disabled={collectingAll}
-                        className="px-4 py-2 bg-nexus-success hover:opacity-90 disabled:opacity-50 text-black font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                        className="h-10 px-4 bg-nexus-success hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
                       >
                         <Icons.Check className="w-3.5 h-3.5" />
                         {collectingAll ? 'Cobrando...' : `Cobrar Todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid).length})`}
@@ -1698,11 +1774,11 @@ const fetchByDate = async (subcollection, date) => {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-nexus-text text-xs">{item.clientName}</span>
-                              <span className="text-[10px] text-nexus-primary bg-nexus-primary-soft px-2 py-0.5 rounded-md font-bold">
+                              <span className="text-xs text-nexus-primary bg-nexus-primary-soft px-2 py-0.5 rounded-md font-bold">
                                 {item.service}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-nexus-text-muted mt-1">
+                            <div className="flex items-center gap-2 text-xs text-nexus-text-muted mt-1">
                               <span>Fecha: {item.date}</span>
                               <span>•</span>
                               <span>Pago: {item.paymentMethod || "Efectivo"}</span>
@@ -1711,20 +1787,16 @@ const fetchByDate = async (subcollection, date) => {
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <span className="block text-sm font-black text-nexus-success-text">Bs {item.commission} </span>
-                              <span className={`text-[9px] font-black uppercase tracking-wider ${item.commissionPaid ? "text-nexus-info-text" : "text-nexus-warning-text"}`}>
+                              <span className="block text-sm font-bold text-nexus-success-text">Bs {item.commission} </span>
+                              <span className={`text-xs font-bold ${item.commissionPaid ? "text-nexus-info-text" : "text-nexus-warning-text"}`}>
                                 {item.commissionPaid ? "Pagada" : "Pendiente"}
                               </span>
                             </div>
 
                             {!item.commissionPaid && (
-                              <button 
-                                onClick={() => markCommissionPaid(item.id)}
-                                className="px-3.5 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1"
-                              >
-                                <Icons.Check className="w-3.5 h-3.5" />
+                              <Button size="sm" icon={Icons.Check} onClick={() => markCommissionPaid(item.id)}>
                                 Cobrar
-                              </button>
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -1744,8 +1816,8 @@ const fetchByDate = async (subcollection, date) => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">Cortes completados</span>
-                      <span className="block text-3xl font-black text-nexus-text mt-1">{performanceData.totalServicios}</span>
+                      <span className="text-xs text-nexus-text-muted font-bold">{`${t('services')} ${g('service', 'completados', 'completadas')}`}</span>
+                      <span className="block text-3xl font-bold text-nexus-text mt-1">{performanceData.totalServicios}</span>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary">
                       <Icons.Scissors className="w-6 h-6" />
@@ -1754,8 +1826,8 @@ const fetchByDate = async (subcollection, date) => {
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">Facturado Total</span>
-                      <span className="block text-3xl font-black text-nexus-success-text mt-1">{performanceData.totalGanado}Bs</span>
+                      <span className="text-xs text-nexus-text-muted font-bold">Facturado Total</span>
+                      <span className="block text-3xl font-bold text-nexus-success-text mt-1">{performanceData.totalGanado}Bs</span>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-nexus-success-bg flex items-center justify-center text-nexus-success-text">
                       <Icons.Dollar className="w-6 h-6" />
@@ -1764,10 +1836,10 @@ const fetchByDate = async (subcollection, date) => {
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-nexus-text-muted font-bold uppercase tracking-wider">
+                      <span className="text-xs text-nexus-text-muted font-bold">
                         {performanceData.crecimientoPorcentaje === null ? 'Crecimiento' : 'Crecimiento Estimado'}
                       </span>
-                      <span className="block text-3xl font-black text-nexus-info-text mt-1">
+                      <span className="block text-3xl font-bold text-nexus-info-text mt-1">
                         {performanceData.crecimientoPorcentaje === null
                           ? 'Sin datos previos'
                           : `${performanceData.crecimientoPorcentaje > 0 ? '+' : ''}${performanceData.crecimientoPorcentaje}%`}
@@ -1783,7 +1855,7 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
                       <h4 className="text-sm font-bold text-nexus-text">Ingresos por Método de Pago (Bs)</h4>
-                      <p className="text-[11px] text-nexus-text-muted">Monto total facturado por caja.</p>
+                      <p className="text-xs text-nexus-text-muted">Monto total facturado por caja.</p>
                     </div>
                     <div className="h-64">
                       {performanceData.totalServicios === 0 ? (
@@ -1810,7 +1882,7 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
                       <h4 className="text-sm font-bold text-nexus-text">{t('services')} más {g('service', 'Solicitados', 'Solicitadas')}</h4>
-                      <p className="text-[11px] text-nexus-text-muted">Distribución de {tl('services')} {g('service', 'realizados', 'realizadas')}.</p>
+                      <p className="text-xs text-nexus-text-muted">Distribución de {tl('services')} {g('service', 'realizados', 'realizadas')}.</p>
                     </div>
                     <div className="h-64 flex items-center justify-center relative">
                       {performanceData.totalServicios === 0 ? (
@@ -1838,8 +1910,8 @@ const fetchByDate = async (subcollection, date) => {
                             </PieChart>
                           </ResponsiveContainer>
                           <div className="absolute flex flex-col items-center">
-                            <span className="text-2xl font-black text-nexus-text">{performanceData.totalServicios}</span>
-                            <span className="text-[9px] text-nexus-primary font-bold uppercase tracking-widest">Totales</span>
+                            <span className="text-2xl font-bold text-nexus-text">{performanceData.totalServicios}</span>
+                            <span className="text-xs text-nexus-primary font-bold">Totales</span>
                           </div>
                         </>
                       )}
@@ -1847,7 +1919,7 @@ const fetchByDate = async (subcollection, date) => {
                     {performanceData.totalServicios > 0 && (
                       <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center pt-1">
                         {performanceData.pieData.map((entry, index) => (
-                          <div key={entry.name} className="flex items-center gap-1.5 text-[10px] text-nexus-text-secondary">
+                          <div key={entry.name} className="flex items-center gap-1.5 text-xs text-nexus-text-secondary">
                             <span
                               className="w-2.5 h-2.5 rounded-full shrink-0"
                               style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
@@ -1881,8 +1953,8 @@ const fetchByDate = async (subcollection, date) => {
                   </div>
 
                   <h3 className="text-xl font-bold tracking-tight text-nexus-text mt-4">{activeBarber.name} </h3>
-                  <span className="text-xs text-nexus-primary font-bold uppercase tracking-wider">{activeBarber.role}</span>
-                  <p className="text-[11px] text-nexus-text-muted mt-1">Nexus Staff</p>
+                  <span className="text-xs text-nexus-primary font-bold">{activeBarber.role}</span>
+                  <p className="text-xs text-nexus-text-muted mt-1">Nexus Staff</p>
                 </div>
 
                 {canUseCapability('linkPersonalProfesional') && (
@@ -1892,14 +1964,14 @@ const fetchByDate = async (subcollection, date) => {
                 <div className="space-y-3 pt-4">
                   <button 
                     onClick={() => triggerToast(`Tutorial de la App: ¡Prueba agendar ${g('appointment', 'un', 'una')} ${tl('appointment')} o completar ${g('service', 'un', 'una')} ${tl('service')}!`, "info")}
-                    className="w-full py-3 px-4 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-xs tracking-wider uppercase rounded-xl transition-all"
+                    className="w-full py-3 px-4 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-sm rounded-xl transition-all"
                   >
                     Ver Tutorial
                   </button>
 
                   <button 
                     onClick={() => triggerToast("Conexión de seguridad establecida con éxito", "success")}
-                    className="w-full py-3 px-4 bg-nexus-surface-hover hover:bg-nexus-border border border-nexus-border text-nexus-text-secondary font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 bg-nexus-surface-hover hover:bg-nexus-border border border-nexus-border text-nexus-text-secondary font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
                   >
                     <Icons.Shield className="w-4 h-4 text-nexus-primary" />
                     Estado del Sistema
@@ -1907,7 +1979,7 @@ const fetchByDate = async (subcollection, date) => {
 
                   <button
                     onClick={logout}
-                    className="w-full py-3 px-4 bg-nexus-error-bg hover:opacity-80 border border-nexus-error/30 text-nexus-error-text font-bold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 bg-nexus-error-bg hover:opacity-80 border border-nexus-error/30 text-nexus-error-text font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
                    >
                     <LogOut className="w-4 h-4" />
                     Cerrar Sesión
@@ -1924,6 +1996,7 @@ const fetchByDate = async (subcollection, date) => {
       {activeTab === "agenda" && staffPerms.createAppointments && (
         <button 
           onClick={() => {
+            setTempSelectedTime("");
             setIsCreateModalOpen(true); 
           }}
           className="fixed bottom-24 right-5 md:bottom-8 md:right-8 w-14 h-14 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all z-40 border border-white/10"
@@ -1933,142 +2006,79 @@ const fetchByDate = async (subcollection, date) => {
         </button>
       )}
 
-      {/* ================= MODAL DE GESTIÓN DE HORARIO ================= */}
-      {isSlotModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-3xl max-w-sm w-full p-6 space-y-5 shadow-xl relative animate-fade-in text-center">
-            <div>
-              <h3 className="text-lg font-black text-nexus-text">Gestión de Horario</h3>
-              <p className="text-xs text-nexus-text-secondary mt-1">Rango seleccionado: <strong className="text-nexus-primary">{tempSelectedTime}</strong></p>
-            </div>
-
-            <div className="space-y-3 pt-2">
-            {staffPerms.createAppointments &&
-              <button
-                onClick={() => {
-                  setIsModalOpenSlot(false);
-                  setIsCreateModalOpen(true); 
-                }}
-                className="w-full py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold text-xs tracking-wider uppercase rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                <Icons.Calendar className="w-4 h-4 text-white" />
-                Crear Nueva Reserva
-                
-              </button>}
-
-              <button
-                onClick={() => {
-                  setBlockDate(selectedDate);
-                  setBlockStartTime(tempSelectedTime);
-                  const [hrs, mins] = tempSelectedTime.split(":").map(Number);
-                  const endHrs = String(hrs + 1).padStart(2, '0');
-                  setBlockEndTime(`${endHrs}:00`);
-                  setIsModalOpenSlot(false);
-                  setIsBlockModalOpen(true); 
-                }}
-                className="w-full py-3 bg-nexus-error-bg hover:opacity-80 text-nexus-error-text border border-nexus-error/25 font-extrabold text-xs tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                <Icons.Lock className="w-4 h-4 text-nexus-error" />
-                Bloquear este espacio
-              </button>
-            </div>
-
-            <div className="border-t border-nexus-border pt-3">
-              <button
-                onClick={() => setIsModalOpenSlot(false)}
-                className="w-full py-2 bg-transparent text-nexus-text-secondary hover:text-nexus-text text-xs font-bold transition-all"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
+      {/* ================= MODAL DE GESTIÓN DE HORARIO (Fase 4: ventana estándar) ================= */}
+      <Modal
+        open={isSlotModalOpen}
+        onClose={() => setIsModalOpenSlot(false)}
+        title="Gestión de horario"
+        description={`Espacio de las ${tempSelectedTime}`}
+        size="sm"
+      >
+        <div className="space-y-2.5">
+          {staffPerms.createAppointments && (
+            <Button
+              fullWidth
+              size="lg"
+              icon={Icons.Calendar}
+              onClick={() => {
+                setIsModalOpenSlot(false);
+                setIsCreateModalOpen(true); 
+              }}
+            >
+              {g('appointment', 'Nuevo', 'Nueva')} {tl('appointment')}
+            </Button>
+          )}
+          <Button
+            fullWidth
+            size="lg"
+            variant="danger-soft"
+            icon={Icons.Lock}
+            onClick={() => {
+              setBlockDate(selectedDate);
+              setBlockStartTime(tempSelectedTime);
+              const endMin = Math.min(convertTimeToMinutes(tempSelectedTime) + 60, 23 * 60 + 59);
+              setBlockEndTime(`${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`);
+              setIsModalOpenSlot(false);
+              setIsBlockModalOpen(true); 
+            }}
+          >
+            Bloquear este espacio
+          </Button>
+          <Button fullWidth variant="ghost" onClick={() => setIsModalOpenSlot(false)}>Cancelar</Button>
         </div>
-      )}
+      </Modal>
 
-      {/* ================= MODAL DE BLOQUEO ADMINISTRATIVO ================= */}
-      {isBlockModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-nexus-surface border border-nexus-border rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-xl relative animate-fade-in">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-base font-bold text-nexus-text">Bloquear Horario Administrativo</h3>
-                <p className="text-[11px] text-nexus-text-muted">Asignada a: {activeBarber.name}</p>
-              </div>
-              <button 
-                onClick={() => setIsBlockModalOpen(false)}
-                className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-text-secondary transition-all"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddBlockSlot} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Fecha *</label>
-                <input 
-                  type="date"
-                  value={blockDate}
-                  onChange={(e) => setBlockDate(e.target.value)}
-                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3 py-2 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Hora Inicio *</label>
-                  <input 
-                    type="time"
-                    value={blockStartTime}
-                    onChange={(e) => setBlockStartTime(e.target.value)}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3 py-2 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Hora Fin *</label>
-                  <input 
-                    type="time"
-                    value={blockEndTime}
-                    onChange={(e) => setBlockEndTime(e.target.value)}
-                    className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3 py-2 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Motivo / Razón del bloqueo *</label>
-                <input 
-                  type="text"
-                  value={blockReason}
-                  onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="Ej: Reunión, Almuerzo, Descanso"
-                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text focus:outline-none focus:border-nexus-primary transition-all"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsBlockModalOpen(false)}
-                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-black text-xs tracking-wider uppercase rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-md"
-                >
-                  Bloquear Horario
-                </button>
-              </div>
-            </form>
+      {/* ================= MODAL DE BLOQUEO ADMINISTRATIVO (Fase 4: ventana estándar) ================= */}
+      <Modal
+        open={isBlockModalOpen}
+        onClose={() => setIsBlockModalOpen(false)}
+        title="Bloquear horario"
+        description={`Para: ${activeBarber.name}`}
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setIsBlockModalOpen(false)} fullWidth className="sm:w-auto">Cancelar</Button>
+            <Button type="submit" form="barber-block-form" fullWidth className="sm:w-auto">Bloquear horario</Button>
+          </>
+        )}
+      >
+        <form id="barber-block-form" onSubmit={handleAddBlockSlot} className="space-y-4">
+          <Field label="Fecha" required>
+            <Input type="date" value={blockDate} onChange={(e) => setBlockDate(e.target.value)} required />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Hora inicio" required>
+              <Input type="time" value={blockStartTime} onChange={(e) => setBlockStartTime(e.target.value)} required className="nx-num" />
+            </Field>
+            <Field label="Hora fin" required>
+              <Input type="time" value={blockEndTime} onChange={(e) => setBlockEndTime(e.target.value)} required className="nx-num" />
+            </Field>
           </div>
-        </div>
-      )}
+          <Field label="Motivo del bloqueo" required>
+            <Input type="text" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} placeholder="Ej: Reunión, Almuerzo, Descanso" required />
+          </Field>
+        </form>
+      </Modal>
 
       {/* ================= MODAL: CREAR NUEVA CITA (compartido con Admin) ================= */}
       {isCreateModalOpen && (
@@ -2077,7 +2087,7 @@ const fetchByDate = async (subcollection, date) => {
           professionals={[]}
           clients={clientes}
           initialDate={selectedDate}
-          initialTime="12:00"
+          initialTime={tempSelectedTime || "12:00"}
           fixedProfessional={activeBarber}
           onClose={() => setIsCreateModalOpen(false)}
           onSubmit={handleBarberCreateReservation}
@@ -2113,7 +2123,7 @@ const fetchByDate = async (subcollection, date) => {
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-bold text-nexus-text">{g('client', 'Nuevo', 'Nueva')} {t('client')}</h3>
-                <p className="text-[11px] text-nexus-text-muted">Registrar un nuevo perfil en el sistema</p>
+                <p className="text-xs text-nexus-text-muted">Registrar un nuevo perfil en el sistema</p>
               </div>
               <button 
                 onClick={() => setIsNewClientModalOpen(false)}
@@ -2125,7 +2135,7 @@ const fetchByDate = async (subcollection, date) => {
 
             <form onSubmit={handleCreateNewClient} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Nombre completo *</label>
+                <label className="text-xs text-nexus-primary font-bold">Nombre completo *</label>
                 <input 
                   type="text" 
                   value={newClientModalName}
@@ -2137,7 +2147,7 @@ const fetchByDate = async (subcollection, date) => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-nexus-primary font-black uppercase tracking-wider">Teléfono *</label>
+                <label className="text-xs text-nexus-primary font-bold">Teléfono *</label>
                 <div className="flex gap-2">
                   <select
                     value={newClientModalCountryCode}
@@ -2169,13 +2179,13 @@ const fetchByDate = async (subcollection, date) => {
                 <button
                   type="button"
                   onClick={() => setIsNewClientModalOpen(false)}
-                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-black text-xs tracking-wider uppercase rounded-xl transition-all"
+                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-bold text-sm rounded-xl transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-black text-xs tracking-wider uppercase rounded-xl transition-all shadow-md"
+                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm rounded-xl transition-all shadow-md"
                 >
                   Guardar {t('client')}
                 </button>
@@ -2186,7 +2196,7 @@ const fetchByDate = async (subcollection, date) => {
       )}
 
       {/* BOTTOM NAVIGATION DE ESTILO MÓVIL */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-nexus-surface border-t border-nexus-border flex justify-around py-3 px-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-nexus-surface border-t border-nexus-border flex justify-around py-1.5 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
         {[
           { id: "agenda", label: "Agenda", icon: Icons.Calendar },
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
@@ -2199,14 +2209,15 @@ const fetchByDate = async (subcollection, date) => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="flex flex-col items-center gap-1 py-1 px-3 transition-all duration-150 group"
+              aria-current={isActive ? 'page' : undefined}
+              className="flex flex-col items-center justify-center gap-1 min-w-16 min-h-12 px-2 transition-colors duration-150 group cursor-pointer"
             >
               <TabIcon className={`w-5 h-5 transition-all ${
                 isActive 
                   ? "text-nexus-primary scale-110" 
                   : "text-nexus-text-muted group-hover:text-nexus-text-secondary"
               }`} />
-              <span className={`text-[9px] font-black tracking-wider transition-all uppercase ${
+              <span className={`text-xs font-semibold transition-colors ${
                 isActive ? "text-nexus-primary" : "text-nexus-text-muted"
               }`}>
                 {tab.label}
@@ -2219,7 +2230,7 @@ const fetchByDate = async (subcollection, date) => {
   className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
 >
   <LogOut size={16} />
-  <span className="text-[9px] font-black tracking-wider uppercase">Salir</span>
+  <span className="text-xs font-bold">Salir</span>
       </button>*/}
       </nav>
 

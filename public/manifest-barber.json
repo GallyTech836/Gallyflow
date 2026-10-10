@@ -1,6 +1,6 @@
 {
-    "name": "GallyFlow Staff",
-    "short_name": "GF Staff",
+    "name": "Nexus Staff",
+    "short_name": "Nexus Staff",
     "start_url": "/barber",
     "scope": "/barber",
     "display": "standalone",

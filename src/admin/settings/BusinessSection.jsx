@@ -89,7 +89,7 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
         </div>
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center font-bold text-nexus-primary text-sm shrink-0">
-            GF
+            {(businessName || 'N').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-base font-semibold text-nexus-text truncate">{businessName}</p>

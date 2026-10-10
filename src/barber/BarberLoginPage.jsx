@@ -12,7 +12,7 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
   }
 
   return (
-    <div className="min-h-screen bg-nexus-background flex items-center justify-center px-4">
+    <div className="min-h-[100dvh] bg-nexus-background flex items-center justify-center px-4">
 
       {/* Glow ambiental */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -26,57 +26,60 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-nexus-primary-soft border border-nexus-primary/20 mb-4">
             <img
               src="/favicon.svg"
-              alt="GallyFlow"
+              alt=""
               className="w-9 h-9 rounded-lg object-contain"
             />
           </div>
-          <h1 className="text-xl font-extrabold text-nexus-text tracking-tight font-mono">
-            Gally<span className="text-nexus-primary">Flow</span> Staff
+          <h1 className="text-2xl font-bold text-nexus-text tracking-tight">
+            Nexus <span className="text-nexus-primary">Staff</span>
           </h1>
-          <p className="text-xs text-nexus-text-muted mt-1 font-mono tracking-widest uppercase">
-            Acceso Profesional
+          <p className="text-sm text-nexus-text-secondary mt-1">
+            Acceso para profesionales
           </p>
         </div>
 
         {/* Card */}
-        <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-6 shadow-xl">
+        <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 sm:p-6 shadow-[var(--nx-shadow-lg)]">
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
             {/* Usuario */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-nexus-primary uppercase tracking-widest font-mono">
+              <label htmlFor="barber-login-user" className="block text-sm font-medium text-nexus-text-secondary">
                 Usuario
               </label>
               <input
+                id="barber-login-user"
+                autoCapitalize="none"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="tu.usuario"
                 autoComplete="username"
-                className="w-full bg-nexus-background border border-nexus-border focus:border-nexus-primary rounded-xl px-4 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted outline-none transition-colors font-mono"
+                className="w-full h-11 bg-nexus-background border border-nexus-border focus:border-nexus-primary focus:ring-2 focus:ring-nexus-primary/20 rounded-lg px-4 text-base sm:text-sm text-nexus-text placeholder-nexus-text-muted outline-none transition-colors"
               />
             </div>
 
             {/* Contraseña */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-nexus-primary uppercase tracking-widest font-mono">
+              <label htmlFor="barber-login-password" className="block text-sm font-medium text-nexus-text-secondary">
                 Contraseña
               </label>
               <div className="relative">
                 <input
+                  id="barber-login-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full bg-nexus-background border border-nexus-border focus:border-nexus-primary rounded-xl px-4 py-2.5 pr-10 text-sm text-nexus-text placeholder-nexus-text-muted outline-none transition-colors font-mono"
+                  className="w-full h-11 bg-nexus-background border border-nexus-border focus:border-nexus-primary focus:ring-2 focus:ring-nexus-primary/20 rounded-lg px-4 pr-12 text-base sm:text-sm text-nexus-text placeholder-nexus-text-muted outline-none transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-nexus-text-muted hover:text-nexus-text-secondary transition-colors"
-                  tabIndex={-1}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-nexus-text-muted hover:text-nexus-text-secondary transition-colors cursor-pointer"
                 >
                   {showPassword ? (
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -94,9 +97,9 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
 
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 bg-nexus-error-bg border border-nexus-error/20 rounded-xl px-3 py-2.5">
+              <div role="alert" className="flex items-center gap-2 bg-nexus-error-bg border border-nexus-error/20 rounded-lg px-3 py-2.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-nexus-error shrink-0" />
-                <p className="text-xs text-nexus-error-text font-semibold font-mono">{error}</p>
+                <p className="text-sm text-nexus-error-text font-medium">{error}</p>
               </div>
             )}
 
@@ -104,11 +107,11 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
             <button
               type="submit"
               disabled={loading || !username.trim() || !password.trim()}
-              className="w-full py-2.5 bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md font-mono mt-2"
+              className="w-full h-11 bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-base sm:text-sm rounded-lg transition-colors shadow-sm mt-2 cursor-pointer"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
@@ -121,8 +124,8 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
           </form>
         </div>
 
-        <p className="text-center text-[10px] text-nexus-text-muted mt-5 font-mono">
-          GallyFlow · Plataforma Staff · v1.0
+        <p className="text-center text-xs text-nexus-text-muted mt-5">
+          Nexus · Plataforma Staff
         </p>
       </div>
     </div>

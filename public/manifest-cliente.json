@@ -1,6 +1,6 @@
 {
-    "name": "GallyFlow",
-    "short_name": "GallyFlow",
+    "name": "Nexus",
+    "short_name": "Nexus",
     "start_url": "/reservar",
     "scope": "/reservar",
     "display": "standalone",

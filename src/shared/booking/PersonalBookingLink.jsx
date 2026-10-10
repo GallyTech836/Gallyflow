@@ -40,29 +40,29 @@ export default function PersonalBookingLink({ url, onToast = () => {} }) {
     <div className="text-left bg-nexus-background border border-nexus-border rounded-2xl p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Link2 className="w-4 h-4 text-nexus-primary" />
-        <h4 className="text-xs font-extrabold text-nexus-text tracking-wide">Mi link de reserva</h4>
+        <h4 className="text-xs font-extrabold text-nexus-text">Mi link de reserva</h4>
       </div>
-      <p className="text-[11px] text-nexus-text-secondary leading-snug">
+      <p className="text-sm text-nexus-text-secondary leading-snug">
         Tus clientes reservan directo contigo, sin elegir sucursal ni profesional.
       </p>
       <input
         readOnly
         value={url}
         onFocus={(e) => e.target.select()}
-        className="w-full bg-nexus-surface border border-nexus-border rounded-lg px-2.5 py-2 text-[10px] text-nexus-text-secondary font-mono outline-none"
+        className="w-full bg-nexus-surface border border-nexus-border rounded-lg h-10 px-3 text-sm text-nexus-text-secondary nx-num outline-none"
       />
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={copy}
-          className="py-2.5 bg-nexus-primary-soft border border-nexus-primary/30 text-nexus-primary font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.97] transition-all"
+          className="h-11 bg-nexus-primary-soft border border-nexus-primary/30 text-nexus-primary font-semibold text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.97] transition-all"
         >
           <Copy className="w-3.5 h-3.5" /> Copiar
         </button>
         <button
           type="button"
           onClick={share}
-          className="py-2.5 bg-nexus-primary text-white font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.97] transition-all"
+          className="h-11 bg-nexus-primary text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.97] transition-all"
         >
           <Share2 className="w-3.5 h-3.5" /> Compartir
         </button>
