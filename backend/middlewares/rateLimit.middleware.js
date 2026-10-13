@@ -48,6 +48,9 @@ export const staffLoginUserRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 8,
   keyGenerator: (req) => 'staff:' + String(req.body?.username || '').trim().toLowerCase(),
+  // Solo cuentan los intentos fallidos (contraseña incorrecta).
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (req, res) => res.statusCode < 400 || res.statusCode === 409,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiados intentos con este usuario. Espera 15 minutos.' },
