@@ -331,7 +331,12 @@ useEffect(() => {
   if (!negocioId || !barberUser?.uidFirebase) return;
   const ref = doc(db, 'negocios', negocioId, 'profesionales', barberUser.uidFirebase);
   const unsub = onSnapshot(ref, (snap) => {
-    if (snap.exists()) setActiveBarber({ id: snap.id, ...snap.data() });
+    if (snap.exists()) {
+      setActiveBarber({ id: snap.id, ...snap.data() });
+    } else {
+      // El profesional fue eliminado: cerrar la sesión y volver al login.
+      logout();
+    }
     setLoading(false);
   });
   return () => unsub();
