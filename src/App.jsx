@@ -5,7 +5,7 @@ import { useManifestByRoute } from './shared/pwa/useManifestByRoute';
 import { useAdminSession } from './auth/useAdminSession';
 import SessionLimitScreen from './shared/session/SessionLimitScreen';
 
-const AdminApp = lazy(() => import('./admin/AdminApp'));
+const AdminEntry = lazy(() => import('./admin/AdminEntry'));
 const BarberApp = lazy(() => import('./barber/BarberApp'));
 const ClientApp = lazy(() => import('./client/ClienteApp'));
 
@@ -67,7 +67,7 @@ function App() {
 
   return (
     <Suspense fallback={LoadingScreen}>
-      <AdminApp user={user} />
+      <AdminEntry user={user} fallback={LoadingScreen} />
     </Suspense>
   );
 }

@@ -34,6 +34,12 @@ export const TERM_KEYS = [
   'appointment', 'appointments',
 ];
 
+// VERTICAL = qué app de Nexus abre el tipo de negocio:
+//   'citas'       -> AdminApp / BarberApp / ClienteApp (agenda). Default.
+//   'restaurante' -> src/verticals/restaurante (pedidos, mesas, menú, caja)
+export const VERTICALS = ['citas', 'restaurante'];
+export const DEFAULT_VERTICAL = 'citas';
+
 // Pestañas que YA existen en AdminApp (activeTab). Debe coincidir con
 // CAPABILITY_MODULES de capabilityModel.js. No agregar módulos que no existan.
 // Quitar un módulo de `modules` de un perfil oculta la pestaña y apaga sus
@@ -41,6 +47,12 @@ export const TERM_KEYS = [
 export const ALL_MODULES = [
   'dashboard', 'agenda', 'barbers', 'services', 'clients', 'branches',
   'inventory', 'commissions', 'assistance', 'reports', 'settings',
+];
+
+// Módulos del vertical 'restaurante' (src/verticals/restaurante/profile.js).
+// 'barbers' (equipo), 'clients', 'branches' y 'settings' se reutilizan de Nexus.
+export const RESTAURANT_MODULES = [
+  'dashboard', 'orders', 'tables', 'menu', 'pos', 'barbers', 'clients', 'branches', 'settings',
 ];
 
 // gender: 'm' | 'f' por sustantivo, para "Nuevo/Nueva", "del/de la", etc.
@@ -102,6 +114,13 @@ export const BUSINESS_PROFILES = {
     modules: ALL_MODULES,
     capabilityDefaults: {},
   },
+  restaurante: {
+    label: 'Restaurante',
+    vertical: 'restaurante',
+    ...terms('Empleado', 'Empleados', 'Cliente', 'Clientes', 'Producto', 'Productos', 'Pedido', 'Pedidos', { appointment: 'm' }),
+    modules: RESTAURANT_MODULES,
+    capabilityDefaults: {},
+  },
   otro: {
     label: 'Otro',
     ...GENERIC,
@@ -132,6 +151,12 @@ export function getBusinessProfile(type) {
 
 export function getBusinessTypeLabel(type) {
   return getBusinessProfile(type).label;
+}
+
+/** Vertical (app) del tipo de negocio: 'citas' si el perfil no dice otra cosa. */
+export function getVertical(type) {
+  const v = getBusinessProfile(type).vertical;
+  return VERTICALS.includes(v) ? v : DEFAULT_VERTICAL;
 }
 
 // ───────────────────────── Terminología ─────────────────────────

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { Router } from 'express';
 import { db } from '../config/firebase.js';
-import { assistantEngine } from '../services/assistantEngine/engine.js';
+import { runAssistant } from '../services/assistantEngine/router.js';
 import * as whatsappProvider from '../services/providers/whatsappProvider.js';
 import { logger } from '../utils/logger.js';
 import { checkCapability, incrementUsage, incrementRejected } from '../services/capabilities/capabilityService.js';
@@ -98,7 +98,7 @@ async function procesarMensaje(value, mensaje) {
     return;
   }
 
-  const { replyText, interactive, preMessages = [] } = await assistantEngine({
+  const { replyText, interactive, preMessages = [] } = await runAssistant({
     negocioId: cuenta.negocioId,
     phone: from,
     message: texto,

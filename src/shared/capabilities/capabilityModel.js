@@ -49,6 +49,11 @@ export const CAPABILITY_MODULES = [
   { key: 'assistance', label: 'Asistencia' },
   { key: 'reports', label: 'Analítica' },
   { key: 'settings', label: 'Configuración y comunicación' },
+    // Vertical restaurante (src/verticals/restaurante)
+    { key: 'orders', label: 'Pedidos y cocina' },
+    { key: 'tables', label: 'Mesas y reservas' },
+    { key: 'menu', label: 'Menú' },
+    { key: 'pos', label: 'Caja' },
 ];
 
 // module: clave de CAPABILITY_MODULES.
@@ -129,6 +134,25 @@ export const CAPABILITIES = [
     description: 'Panel general con métricas del día.', enforcedIn: ['ui'] },
   { key: 'analiticas', module: 'reports', label: 'Analítica financiera', status: 'implemented', kind: 'toggle', default: false,
     description: 'Ingresos, comisiones por profesional y PIN financiero.', enforcedIn: ['ui', 'backend'] },
+
+      // ── RESTAURANTE ──
+  // Solo existen para negocios del vertical 'restaurante': en los demás tipos
+  // su módulo no es relevante y quedan apagadas. Default true para que un
+  // restaurante funcione con cualquier plan ya guardado (igual que appProfesionales).
+  { key: 'pedidos', module: 'orders', label: 'Pedidos y pantalla de cocina', status: 'mock', kind: 'toggle', default: true,
+  description: 'Comandas en tiempo real para cocina y barra.', enforcedIn: ['ui'] },
+  { key: 'appMesero', module: 'orders', label: 'App del mesero', status: 'mock', kind: 'toggle', default: true,
+    requires: 'pedidos', description: 'Toma de pedidos desde el celular del mesero.', enforcedIn: ['ui'] },
+  { key: 'pedidosWhatsapp', module: 'orders', label: 'Pedidos por WhatsApp', status: 'soon', kind: 'toggle', default: false,
+    requires: 'pedidos' },
+  { key: 'mesas', module: 'tables', label: 'Mesas y zonas', status: 'mock', kind: 'toggle', default: true,
+    description: 'Plano de mesas por zona con su estado.', enforcedIn: ['ui'] },
+  { key: 'reservasMesa', module: 'tables', label: 'Reservas de mesa', status: 'soon', kind: 'toggle', default: false,
+    requires: 'mesas' },
+  { key: 'menuRestaurante', module: 'menu', label: 'Menú', status: 'mock', kind: 'toggle', default: true,
+    description: 'Categorías, productos, extras y destino (cocina o barra).', enforcedIn: ['ui'] },
+  { key: 'cajaRestaurante', module: 'pos', label: 'Caja y cobros', status: 'mock', kind: 'toggle', default: true,
+    description: 'Cuentas por mesa, descuentos, división y métodos de pago.', enforcedIn: ['ui'] },
 ];
 
 const BY_KEY = Object.fromEntries(CAPABILITIES.map((c) => [c.key, c]));
