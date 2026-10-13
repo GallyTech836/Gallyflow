@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import { createAppointment } from '../services/appointments/createAppointment.js';
 import { processPendingCita, reevaluatePending } from '../services/appointments/pendingService.js';
-import { pendingRateLimit } from '../middlewares/rateLimit.middleware.js';
+import { pendingRateLimit, publicBookingRateLimit } from '../middlewares/rateLimit.middleware.js';
 import { logger } from '../utils/logger.js';
 import { checkCapability, DENY_MESSAGES } from '../services/capabilities/capabilityService.js';
 
 const router = Router();
 
-router.post('/appointments', async (req, res) => {
+router.post('/appointments', publicBookingRateLimit, async (req, res) => {
   // Endpoint público de reserva: exige la capacidad `reservaPublica` y que
   // el negocio no esté bloqueado.
   const negocioId = req.body?.negocioId;
+  if (!negocioId || typeof negocioId !== 'string') return res.status(400).json({ error: 'Falta negocioId.' });
   if (negocioId) {
     try {
       const permiso = await checkCapability(negocioId, 'reservaPublica');

@@ -28,10 +28,10 @@ function firmaValida(req) {
   const secret = process.env.WHATSAPP_APP_SECRET;
   if (!secret) {
     if (!avisoSinSecret) {
-      logger.warn('[whatsappWebhook] WHATSAPP_APP_SECRET no configurado: no se valida la firma de Meta.');
+      logger.error('[whatsappWebhook] WHATSAPP_APP_SECRET no configurado: se rechazan todos los mensajes.');
       avisoSinSecret = true;
     }
-    return true;
+    return false;
   }
   const firma = req.get('x-hub-signature-256') || '';
   if (!req.rawBody || !firma.startsWith('sha256=')) return false;

@@ -3,10 +3,11 @@
 
 import crypto from 'node:crypto';
 
-const SECRET = process.env.FINANCE_SESSION_SECRET || 'dev-secret-cambiar-en-produccion';
+const SECRET = process.env.FINANCE_SESSION_SECRET; // obligatorio: sin él no se emiten sesiones
 const DURATION_MS = 15 * 60 * 1000;
 
 export function createSessionToken(negocioId) {
+  if (!SECRET) throw new Error('FINANCE_SESSION_SECRET no configurado.');
   const payload = JSON.stringify({ negocioId, exp: Date.now() + DURATION_MS });
   const payloadB64 = Buffer.from(payload).toString('base64url');
   const signature = crypto.createHmac('sha256', SECRET).update(payloadB64).digest('hex');
@@ -14,7 +15,7 @@ export function createSessionToken(negocioId) {
 }
 
 export function verifySessionToken(token, negocioId) {
-  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
+  if (!SECRET || !token || typeof token !== 'string' || !token.includes('.')) return false;
   const [payloadB64, signature] = token.split('.');
   const expected = crypto.createHmac('sha256', SECRET).update(payloadB64).digest('hex');
   if (signature !== expected) return false;

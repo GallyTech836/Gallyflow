@@ -66,7 +66,8 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   logger.error('[app] Error no controlado:', err.message);
-  res.status(err.status || 500).json({ error: err.message || 'Error interno.' });
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: status < 500 ? 'Solicitud inválida.' : 'Error interno.' });
 });
 
 export default app;

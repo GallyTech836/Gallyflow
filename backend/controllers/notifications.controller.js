@@ -8,11 +8,11 @@ export async function handleRegisterDevice(req, res) {
     return res.status(400).json({ error: 'Faltan campos requeridos: uid, rol, negocioId, oneSignalId.' });
   }
   try {
-    const result = await registerDevice({ uid, rol, negocioId, oneSignalId });
+    const result = await registerDevice({ uid, rol, negocioId, oneSignalId, actor: req.actor });
     return res.status(200).json({ ok: true, result });
   } catch (err) {
-    logger.warn('[notifications.controller] registerDevice pendiente:', err.message);
-    return res.status(501).json({ error: err.message });
+    logger.warn('[notifications.controller] registerDevice rechazado:', err.message);
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Error interno.' });
   }
 }
 

@@ -4,6 +4,11 @@ import { startReminderScheduler } from '../services/reminders/reminderScheduler.
 
 const PORT = process.env.PORT || 3000;
 
+// Un error async sin manejar se registra en vez de tumbar el servidor.
+process.on('unhandledRejection', (err) => {
+  logger.error('[server] Promesa sin manejar:', err?.message || err);
+});
+
 app.listen(PORT, () => {
   logger.info(`GallyFlow backend escuchando en el puerto ${PORT}`);
   startReminderScheduler();
