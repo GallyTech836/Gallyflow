@@ -5,6 +5,7 @@ import { saveBusinessSettings } from '../../shared/businessSettings/businessSett
 import { useNegocioPlan } from '../../shared/negocioPlan/useNegocioPlan';
 import { useNegocioStatus } from '../../shared/negocioStatus/useNegocioStatus';
 import { CAPABILITIES } from '../../shared/capabilities/capabilityModel';
+import ActiveSessions from '../../shared/session/ActiveSessions';
 
 function Card({ children, className = '' }) {
   return (
@@ -113,6 +114,8 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
           Cerrar sesión
         </button>
       </Card>
+      
+      <ActiveSessions />
 
       {/* ── Suscripción (solo lectura) ───────────────────────────── */}
       <Card>
