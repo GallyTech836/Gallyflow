@@ -49,7 +49,7 @@ async function requireFinanceSession(req, res, next) {
   }
 }
 
-router.use(identifyRequester, requireSession);
+router.use('/finance', identifyRequester, requireSession);
 
 // Capacidades (validadas en servidor): la sección Analítica usa también
 // el detalle/pago de comisiones, por eso esas rutas aceptan cualquiera de
