@@ -61,7 +61,8 @@ export async function verifyStaffLogin(username, password) {
 }
 
 // Usuario de Firebase Auth SIN correo (uid = id del profesional) + token.
-export async function issueStaffToken(uid, negocioId) {
+// El sid (sesión del servidor) va en el token para usarlo luego en las reglas.
+export async function issueStaffToken(uid, negocioId, sid) {
   const auth = getAuth();
   let user;
   try {
@@ -75,7 +76,7 @@ export async function issueStaffToken(uid, negocioId) {
   if (actuales.rol !== 'barber' || actuales.negocioId !== negocioId) {
     await auth.setCustomUserClaims(uid, claims);
   }
-  return auth.createCustomToken(uid, claims);
+  return auth.createCustomToken(uid, { ...claims, sid });
 }
 
 export async function isUsernameAvailable(username, excludeUid) {

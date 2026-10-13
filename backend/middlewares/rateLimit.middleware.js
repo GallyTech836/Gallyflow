@@ -61,3 +61,12 @@ export const staffAdminRateLimit = rateLimit({
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.' },
 });
+
+// Sesiones (inicio, verificación, lista y cierre).
+export const sessionRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.' },
+});

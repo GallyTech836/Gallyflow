@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { endSession } from '../shared/session/sessionApi';
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -51,6 +52,7 @@ export function useAuth() {
   }
 
   async function logout() {
+    await endSession();
     await signOut(auth);
     setUser(null);
     setError('');

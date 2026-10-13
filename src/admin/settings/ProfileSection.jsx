@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, LogOut } from 'lucide-react';
+import ActiveSessions from '../../shared/session/ActiveSessions';
 
 export default function ProfileSection({ user, onLogout }) {
   return (
@@ -20,6 +21,8 @@ export default function ProfileSection({ user, onLogout }) {
           </p>
         </div>
       </div>
+
+      <ActiveSessions />
 
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
         <h3 className="text-sm font-bold text-nexus-text mb-1">Sesión</h3>

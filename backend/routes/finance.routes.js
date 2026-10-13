@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { financePinRateLimit } from '../middlewares/rateLimit.middleware.js';
 import { logger } from '../utils/logger.js';
+import { requireSession } from '../middlewares/session.middleware.js';
 import { hashPin, verifyPin } from '../services/finance/pin.js';
 import { createSessionToken, verifySessionToken } from '../services/finance/financeSession.js';
 import { requireCapability } from '../services/capabilities/capabilityService.js';
@@ -48,7 +49,7 @@ async function requireFinanceSession(req, res, next) {
   }
 }
 
-router.use(identifyRequester);
+router.use(identifyRequester, requireSession);
 
 // Capacidades (validadas en servidor): la sección Analítica usa también
 // el detalle/pago de comisiones, por eso esas rutas aceptan cualquiera de

@@ -2,13 +2,10 @@
 // Llamadas del admin al backend para usuarios y contraseñas de profesionales.
 // La contraseña solo viaja hacia el backend; nunca se lee de vuelta.
 
-import { auth } from '../../firebase/config';
 import { BASE_URL } from '../notifications/notificationApi';
+import { sessionHeaders } from '../session/sessionStore';
 
-async function adminHeaders() {
-  const token = await auth.currentUser?.getIdToken();
-  return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
-}
+const adminHeaders = () => sessionHeaders();
 
 // -> { available, suggestion } o null si no hay conexión
 export async function checkStaffUsername(username, excludeId) {
@@ -35,5 +32,18 @@ export async function setStaffPassword(profesionalId, password) {
     return { ok: res.ok, error: data.error };
   } catch (_) {
     return { ok: false, error: 'Sin conexión con el servidor.' };
+  }
+}
+
+// Cierra todas las sesiones de un profesional (ej. antes de eliminarlo).
+export async function revokeStaffSessions(profesionalId) {
+  try {
+    const res = await fetch(BASE_URL + '/staff/' + encodeURIComponent(profesionalId) + '/revoke-sessions', {
+      method: 'POST',
+      headers: await adminHeaders(),
+    });
+    return res.ok;
+  } catch (_) {
+    return false;
   }
 }

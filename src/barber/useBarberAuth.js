@@ -1,17 +1,24 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { signInWithCustomToken, signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { BASE_URL } from '../shared/notifications/notificationApi';
+import { getSessionId, setSessionId } from '../shared/session/sessionStore';
+import { endSession } from '../shared/session/sessionApi';
 
-// Clave de localStorage donde vive la sesión del barbero. Se guarda sin el
-// campo `password` (no hace falta después del login, y no tiene sentido
-// dejarlo dando vueltas en el navegador).
+// Datos del profesional para mostrar la app (no es la prueba de la sesión:
+// la sesión real la valida el backend con el token de Firebase + sesión).
 const SESSION_KEY = 'gallyflow_barber_session';
 
 function readStoredSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const user = raw ? JSON.parse(raw) : null;
+    // Sesiones de antes de la etapa 3 (sin sesión del servidor): volver a entrar.
+    if (user && !getSessionId()) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return user;
   } catch {
     return null;
   }
@@ -31,29 +38,39 @@ function persistSession(user) {
 }
 
 export function useBarberAuth() {
-  // Al montar, si ya había una sesión guardada, arranca logueado
-  // directamente en vez de pedir usuario/contraseña de nuevo.
   const [barberUser, setBarberUser] = useState(() => readStoredSession());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Si ya hay 2 sesiones abiertas: lista para elegir cuál cerrar.
+  const [sessionLimit, setSessionLimit] = useState(null);
+  const pendiente = useRef(null); // { username, password } solo mientras elige
 
-    // El backend valida usuario + contraseña (hash) y devuelve un token de
-  // Firebase. La contraseña nunca se consulta desde el navegador.
-  async function loginBarber(username, password) {
+  // El backend valida usuario + contraseña (hash), abre la sesión del
+  // servidor y devuelve un token de Firebase.
+  async function loginBarber(username, password, replaceSid) {
     setLoading(true);
     setError('');
     try {
       const res = await fetch(BASE_URL + '/auth/staff/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), password, ...(replaceSid ? { replaceSid } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data.code === 'SESSION_LIMIT') {
+        pendiente.current = { username, password };
+        setSessionLimit(data.sessions || []);
+        setLoading(false);
+        return;
+      }
       if (!res.ok || !data.token) {
         setError(res.status === 429 ? (data.error || 'Demasiados intentos. Espera unos minutos.') : 'Usuario o contraseña incorrectos.');
         setLoading(false);
         return;
       }
+      pendiente.current = null;
+      setSessionLimit(null);
+      setSessionId(data.sid);
       await signInWithCustomToken(auth, data.token);
       setBarberUser(data.user);
       persistSession(data.user);
@@ -64,12 +81,29 @@ export function useBarberAuth() {
     setLoading(false);
   }
 
-  function logoutBarber() {
+  // Cerrar una de las 2 sesiones abiertas y entrar.
+  async function chooseSessionToClose(sid) {
+    if (!pendiente.current) return;
+    const { username, password } = pendiente.current;
+    await loginBarber(username, password, sid);
+  }
+
+  function cancelSessionLimit() {
+    pendiente.current = null;
+    setSessionLimit(null);
+  }
+
+  // message: texto opcional para mostrar en el login (ej. sesión cerrada).
+  async function logoutBarber(message) {
     setBarberUser(null);
     persistSession(null);
-    setError('');
+    setError(typeof message === 'string' ? message : '');
+    await endSession();
     signOut(auth).catch(() => {});
   }
 
-  return { barberUser, error, loading, loginBarber, logoutBarber };
+  return {
+    barberUser, error, loading, loginBarber, logoutBarber,
+    sessionLimit, chooseSessionToClose, cancelSessionLimit,
+  };
 }

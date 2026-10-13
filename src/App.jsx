@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect } from 'react';
 import LoginPage from './auth/LoginPage';
 import { useAuth } from './auth/useAuth';
 import { useManifestByRoute } from './shared/pwa/useManifestByRoute';
+import { useAdminSession } from './auth/useAdminSession';
+import SessionLimitScreen from './shared/session/SessionLimitScreen';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 const BarberApp = lazy(() => import('./barber/BarberApp'));
@@ -42,13 +44,25 @@ function App() {
 
   // Flujo normal del administrador
   const { user, error, loading, login } = useAuth();
+  const adminSession = useAdminSession(user);
 
-  if (loading) {
+  if (loading || (user && (adminSession.status === 'idle' || adminSession.status === 'checking'))) {
     return LoadingScreen;
   }
 
   if (!user) {
-    return <LoginPage onLogin={login} error={error} />;
+    return <LoginPage onLogin={login} error={error || adminSession.message} />;
+  }
+
+  // Ya hay 2 sesiones abiertas: elegir cuál cerrar.
+  if (adminSession.status === 'limit') {
+    return (
+      <SessionLimitScreen
+        sessions={adminSession.sessions}
+        onChoose={adminSession.replace}
+        onCancel={adminSession.cancel}
+      />
+    );
   }
 
   return (

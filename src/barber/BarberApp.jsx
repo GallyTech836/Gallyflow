@@ -12,6 +12,10 @@ import { isOpenPendingCita, professionalCanDo, getCitaServiceIds } from '../shar
 import { reevaluatePending } from '../shared/appointments/pendingApi';
 import { describeAppointmentChanges } from '../shared/appointments/changeSummary';
 import BarberLoginPage from './BarberLoginPage';
+import SessionLimitScreen from '../shared/session/SessionLimitScreen';
+import ActiveSessions from '../shared/session/ActiveSessions';
+import { useSessionGuard } from '../shared/session/useSessionGuard';
+import { sessionEndMessage } from '../shared/session/sessionStore';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import AppointmentStatusBadge from '../shared/appointments/AppointmentStatusBadge';
@@ -242,7 +246,12 @@ const MESES_NOMBRES = [
 ];
 
 export default function App() {
-  const { barberUser, error: authError, loading: authLoading, loginBarber, logoutBarber } = useBarberAuth();
+  const {
+    barberUser, error: authError, loading: authLoading, loginBarber, logoutBarber,
+    sessionLimit, chooseSessionToClose, cancelSessionLimit,
+  } = useBarberAuth();
+  // Si la sesión se cierra desde otro dispositivo, por el admin o vence: salir.
+  useSessionGuard(!!barberUser, (code) => logoutBarber(sessionEndMessage(code)));
   const negocioId = barberUser?.negocioId;
   const { businessSettings } = useBusinessSettings(negocioId);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
@@ -1234,6 +1243,16 @@ const fetchByDate = async (subcollection, date) => {
     setIsModalOpenSlot(true); 
   };
 
+  if (!barberUser && sessionLimit) {
+    return (
+      <SessionLimitScreen
+        sessions={sessionLimit}
+        onChoose={chooseSessionToClose}
+        onCancel={cancelSessionLimit}
+      />
+    );
+  }
+
   if (!barberUser) {
     return (
       <BarberLoginPage
@@ -1966,8 +1985,9 @@ const fetchByDate = async (subcollection, date) => {
                   <PersonalBookingLink url={buildPersonalBookingUrl(negocioId, activeBarber.id)} onToast={triggerToast} />
                 )}
 
-                <div className="space-y-3 pt-4">
-                  <button 
+                <ActiveSessions />
+
+                <div className="space-y-3 pt-4">                  <button 
                     onClick={() => triggerToast(`Tutorial de la App: ¡Prueba agendar ${g('appointment', 'un', 'una')} ${tl('appointment')} o completar ${g('service', 'un', 'una')} ${tl('service')}!`, "info")}
                     className="w-full py-3 px-4 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-sm rounded-xl transition-all"
                   >

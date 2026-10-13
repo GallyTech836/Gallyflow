@@ -29,7 +29,7 @@ import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { formatServicePrice } from '../shared/servicePricing/servicePricing';
 import { getStaffPermissionOptions, getEditPartOptions, getEditMode, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
-import { checkStaffUsername, setStaffPassword } from '../shared/staff/staffApi';
+import { checkStaffUsername, setStaffPassword, revokeStaffSessions } from '../shared/staff/staffApi';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
@@ -2518,6 +2518,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     });
     if (!ok) return;
     try {
+      await revokeStaffSessions(id); // cierra su BarberApp en todos sus dispositivos
       await deleteDoc(doc(db, 'negocios', negocioId, 'profesionales', id));
       await deleteDoc(doc(db, 'usuarios', id));
       triggerToast(`Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} eliminado con éxito.`);
