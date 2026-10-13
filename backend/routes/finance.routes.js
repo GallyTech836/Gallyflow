@@ -104,7 +104,7 @@ router.get('/finance/overview', requireAuth, requireAnaliticas, requireFinanceSe
     res.status(200).json(data);
   } catch (err) {
     logger.error('[finance]', err.message); res.status(500).json({ error: 'Error interno.' });
-  }logger.error('[finance]', err.message); res.status(500).json({ error: 'Error interno.' });
+  }
 });
 
 router.get('/finance/commissions', requireAuth, requireComisiones, requireFinanceSession, async (req, res) => {
