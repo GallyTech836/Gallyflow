@@ -29,6 +29,7 @@ import { uploadImage } from '../shared/cloudinary/uploadImage';
 import { formatServicePrice } from '../shared/servicePricing/servicePricing';
 import { getStaffPermissionOptions, getEditPartOptions, getEditMode, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
+import { checkStaffUsername, setStaffPassword } from '../shared/staff/staffApi';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
@@ -473,6 +474,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
   const [clickedSlot, setClickedSlot] = useState({ barberId: '', time: '' });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [credentialNotice, setCredentialNotice] = useState(null); // { name, username, password } — se muestra una sola vez
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -2280,7 +2282,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
     handleAvatarFile(file);
   };
 
-  const validateStep1 = () => {
+  const validateStep1 = async () => {
     if (isUploadingAvatar) {
       triggerToast('Espera a que termine de subirse la foto.', 'error');
       return false;
@@ -2289,15 +2291,33 @@ const { businessSettings } = useBusinessSettings(negocioId);
       triggerToast('Por favor completa el nombre y apellido.', 'error');
       return false;
     }
-    if (!newBarber.password || newBarber.password !== newBarber.confirmPassword) {
-      triggerToast('Las contraseñas no coinciden o están vacías.', 'error');
-      return false;
-    }
-    const usernameExists = barbers.some(b => b.id !== editingBarberId && b.username === newBarber.username);
-    if (usernameExists) {
-      triggerToast('El nombre de usuario ya está registrado.', 'error');
-      return false;
-    }
+        // Al editar, la contraseña vacía significa "no cambiarla".
+        if (!editingBarberId && !newBarber.password) {
+          triggerToast('La contraseña es obligatoria.', 'error');
+          return false;
+        }
+        if (newBarber.password && newBarber.password !== newBarber.confirmPassword) {
+          triggerToast('Las contraseñas no coinciden.', 'error');
+          return false;
+        }
+        if (newBarber.password && newBarber.password.length < 4) {
+          triggerToast('La contraseña debe tener al menos 4 caracteres.', 'error');
+          return false;
+        }
+        // Usuario único en todos los negocios (lo verifica el backend).
+        const original = barbers.find(b => b.id === editingBarberId);
+        if (!original || original.username !== newBarber.username) {
+          const check = await checkStaffUsername(newBarber.username, editingBarberId);
+          if (!check) {
+            triggerToast('No se pudo verificar el usuario. Revisa tu conexión.', 'error');
+            return false;
+          }
+          if (!check.available) {
+            setNewBarber(prev => ({ ...prev, username: check.suggestion }));
+            triggerToast('Ese usuario ya existe. Te propusimos @' + check.suggestion + '. Toca Siguiente para continuar.', 'error');
+            return false;
+          }
+        }
     const pinExists = barbers.some(b => b.id !== editingBarberId && b.pin === newBarber.pin);
     if (pinExists) {
       triggerToast(`El PIN biométrico ya está registrado por ${g('professional', 'otro', 'otra')} ${tl('professional')}.`, 'error');
@@ -2306,9 +2326,9 @@ const { businessSettings } = useBusinessSettings(negocioId);
     return true;
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (barberStep === 1) {
-      if (validateStep1()) {
+      if (await validateStep1()) {
         setBarberStep(2);
       }
     } else if (barberStep === 2) {
@@ -2356,7 +2376,31 @@ const { businessSettings } = useBusinessSettings(negocioId);
     triggerToast('Horarios de disponibilidad copiados a toda la semana.');
   };
 
-  const handleSaveBarber = async () => {
+    // Contraseña fácil de dictar: palabra + 4 números (ej. luna4821).
+    const handleGeneratePassword = () => {
+      const palabras = ['luna', 'sol', 'mar', 'rio', 'pino', 'nube', 'roca', 'lago', 'faro', 'puma', 'oso', 'lince'];
+      const n = new Uint32Array(2);
+      window.crypto.getRandomValues(n);
+      const pw = palabras[n[0] % palabras.length] + String(1000 + (n[1] % 9000));
+      setNewBarber(prev => ({ ...prev, password: pw, confirmPassword: pw }));
+      setShowPassword(true);
+    };
+  
+    const handleCopyCredentials = async () => {
+      if (!credentialNotice) return;
+      const texto = 'Usuario: ' + credentialNotice.username + '\nContraseña: ' + credentialNotice.password;
+      try {
+        await navigator.clipboard.writeText(texto);
+        triggerToast('Datos copiados.');
+      } catch (_) {
+        triggerToast('No se pudo copiar. Cópialos a mano.', 'error');
+      }
+    };
+  
+    const handleSaveBarber = async () => {
+      const credencial = newBarber.password
+        ? { name: newBarber.firstName + ' ' + newBarber.lastName, username: newBarber.username, password: newBarber.password }
+        : null;
     if (editingBarberId) {
       const updatedData = {
         firstName: newBarber.firstName,
@@ -2365,7 +2409,6 @@ const { businessSettings } = useBusinessSettings(negocioId);
         branch: newBarber.branch,
         username: newBarber.username,
         pin: newBarber.pin,
-        password: newBarber.password,
         avatar: newBarber.avatar,
         active: newBarber.active,
         services: newBarber.services,
@@ -2376,8 +2419,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
         await updateDoc(doc(db, 'negocios', negocioId, 'profesionales', editingBarberId), updatedData);
         await updateDoc(doc(db, 'usuarios', editingBarberId), {
           username: newBarber.username,
-          password: newBarber.password,
         });
+        if (newBarber.password) {
+          const r = await setStaffPassword(editingBarberId, newBarber.password);
+          if (!r.ok) throw new Error(r.error || 'No se pudo guardar la contraseña.');
+          setCredentialNotice(credencial);
+        }
         triggerToast(`¡Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} actualizado!`);
         reevaluatePending(negocioId); // activo/horario/servicios pueden cambiar los candidatos
       } catch (err) {
@@ -2390,7 +2437,6 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
         await setDoc(doc(db, 'usuarios', uid), {
           username: newBarber.username,
-          password: newBarber.password,
           rol: 'barber',
           negocioId,
           uidFirebase: uid
@@ -2414,6 +2460,16 @@ const { businessSettings } = useBusinessSettings(negocioId);
           availability: newBarber.availability
         });
 
+        const r = await setStaffPassword(uid, newBarber.password);
+        if (!r.ok) {
+          triggerToast('Se creó el perfil, pero no se guardó la contraseña. Edítalo y asígnala de nuevo.', 'error');
+          resetBarberForm();
+          setEditingBarberId(null);
+          setActiveModal(null);
+          return;
+        }
+        setCredentialNotice(credencial);
+
         triggerToast(`¡${t('professional')} ${g('professional', 'creado', 'creada')} con éxito!`);
       } catch (err) {
         triggerToast(`Error al crear ${g('professional', 'el', 'la')} ${tl('professional')}: ` + err.message, 'error');
@@ -2433,8 +2489,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
       branch: barber.branch || selectedBranch || branches[0]?.name || '',
       username: barber.username || '',
       pin: barber.pin || '',
-      password: barber.password || '',
-      confirmPassword: barber.password || '',
+      password: '',
+      confirmPassword: '',
       avatar: hasRealAvatar(barber.avatar) ? barber.avatar : '',
       active: barber.active !== undefined ? barber.active : true,
       services: barber.services || [],
@@ -4714,6 +4770,30 @@ const { businessSettings } = useBusinessSettings(negocioId);
       {/* ==========================================
           5. MODAL MULTI-STEP: AGREGAR / EDITAR PROFESIONAL
           ========================================== */}
+            {credentialNotice && (
+        <Modal
+          open
+          onClose={() => setCredentialNotice(null)}
+          title="Datos de acceso"
+          description={credentialNotice.name}
+          size="sm"
+          footer={<Button onClick={() => setCredentialNotice(null)}>Listo</Button>}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-nexus-text-secondary">Pásale estos datos. Por seguridad, la contraseña no se volverá a mostrar.</p>
+            <div className="bg-nexus-background border border-nexus-border rounded-lg p-3">
+              <p className="text-xs text-nexus-text-secondary">Usuario</p>
+              <p className="text-sm font-bold text-nexus-text">@{credentialNotice.username}</p>
+              <p className="text-xs text-nexus-text-secondary mt-2">Contraseña</p>
+              <p className="text-sm font-bold text-nexus-text nx-num tracking-wide">{credentialNotice.password}</p>
+            </div>
+            <Button variant="secondary" onClick={handleCopyCredentials} className="w-full">
+              <Copy className="w-4 h-4" /> Copiar datos
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {activeModal === 'add-barber' && (
         <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-4xl p-0 relative shadow-xl overflow-hidden flex flex-col max-h-[92dvh]">
@@ -4916,15 +4996,17 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
                     <div className="grid grid-cols-2 gap-3.5 pt-2 border-t border-nexus-border">
                       <div>
-                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Contraseña de Portal *</label>
+                      <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs text-nexus-text-secondary font-bold">{editingBarberId ? 'Restablecer contraseña (opcional)' : 'Contraseña de Portal *'}</label>
+                          <button type="button" onClick={handleGeneratePassword} className="text-xs font-bold text-nexus-primary hover:underline cursor-pointer">Generar</button>
+                        </div>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <Lock className="w-3.5 h-3.5 text-nexus-text-muted" />
                           </span>
                           <input 
                             type={showPassword ? "text" : "password"} 
-                            required
-                            placeholder="••••••••"
+                            placeholder={editingBarberId ? 'Dejar vacío para no cambiarla' : '••••••••'}
                             value={newBarber.password}
                             onChange={(e) => setNewBarber(prev => ({ ...prev, password: e.target.value }))}
                             className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-10 text-nexus-text outline-none focus:border-nexus-primary nx-num h-10 text-base sm:text-sm"

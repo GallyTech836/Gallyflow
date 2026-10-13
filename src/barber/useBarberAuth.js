@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { signInWithCustomToken, signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
+import { BASE_URL } from '../shared/notifications/notificationApi';
 
 // Clave de localStorage donde vive la sesión del barbero. Se guarda sin el
 // campo `password` (no hace falta después del login, y no tiene sentido
@@ -36,32 +37,29 @@ export function useBarberAuth() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+    // El backend valida usuario + contraseña (hash) y devuelve un token de
+  // Firebase. La contraseña nunca se consulta desde el navegador.
   async function loginBarber(username, password) {
     setLoading(true);
     setError('');
     try {
-      const ref = collection(db, 'usuarios');
-      const q = query(
-        ref,
-        where('username', '==', username.trim()),
-        where('password', '==', password),
-        where('rol', '==', 'barber')
-      );
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        setError('Usuario o contraseña incorrectos.');
+      const res = await fetch(BASE_URL + '/auth/staff/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.token) {
+        setError(res.status === 429 ? (data.error || 'Demasiados intentos. Espera unos minutos.') : 'Usuario o contraseña incorrectos.');
         setLoading(false);
         return;
       }
-
-      const doc = snap.docs[0];
-      const user = { id: doc.id, ...doc.data() };
-      setBarberUser(user);
-      persistSession(user);
+      await signInWithCustomToken(auth, data.token);
+      setBarberUser(data.user);
+      persistSession(data.user);
     } catch (err) {
       console.error('Error al autenticar barber:', err);
-      setError('Usuario o contraseña incorrectos.');
+      setError('No se pudo iniciar sesión. Revisa tu conexión.');
     }
     setLoading(false);
   }
@@ -70,6 +68,7 @@ export function useBarberAuth() {
     setBarberUser(null);
     persistSession(null);
     setError('');
+    signOut(auth).catch(() => {});
   }
 
   return { barberUser, error, loading, loginBarber, logoutBarber };

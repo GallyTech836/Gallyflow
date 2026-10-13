@@ -11,7 +11,10 @@ const firebaseConfig = {
   appId: "1:1034377267475:web:ecb0f071d1bc630e0132e6"
 };
 
-const app = initializeApp(firebaseConfig);
+// /barber usa su propia instancia de Firebase: así la sesión del profesional
+// no reemplaza la del administrador si ambos usan el mismo navegador.
+const isStaffRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/barber');
+const app = isStaffRoute ? initializeApp(firebaseConfig, 'staff') : initializeApp(firebaseConfig);
 const secondaryApp = initializeApp(firebaseConfig, 'Secondary');
 
 export const db = getFirestore(app);
