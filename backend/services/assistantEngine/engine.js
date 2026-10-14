@@ -263,10 +263,22 @@ function avisarContacto(negocioId, phone, clientName) {
   }).catch((err) => logger.warn('[assistantEngine] Push contacto falló:', err.message));
 }
 
+// Número vinculado a una sucursal (whatsappAccounts.branch): el bot solo usa
+// profesionales de esa sucursal. Es una copia: el contexto en caché es compartido.
+function contextoDeSucursal(ctx, branch) {
+  if (!branch) return ctx;
+  const pros = ctx.profesionales.filter((p) => (p.branch || '') === branch);
+  if (pros.length === 0) {
+    logger.warn(`[assistantEngine] Sucursal "${branch}" sin profesionales activos en ${ctx.negocioId}; se usan todos.`);
+    return ctx;
+  }
+  return { ...ctx, profesionales: pros };
+}
+
 // ───────────────────────── Motor ─────────────────────────
 
-export async function assistantEngine({ negocioId, phone, message, messageId }) {
-  const context = await getBusinessContext(negocioId);
+export async function assistantEngine({ negocioId, phone, message, messageId, branch = null }) {
+  const context = contextoDeSucursal(await getBusinessContext(negocioId), branch);
 
   // Sin la capacidad `asistenteWhatsapp` el bot no responde nada (tampoco
   // gasta mensajes). El webhook ya lo valida; esto cubre cualquier otra
@@ -286,6 +298,16 @@ export async function assistantEngine({ negocioId, phone, message, messageId }) 
   // procesaría dos veces y se mandarían respuestas cruzadas/duplicadas.
   if (messageId && conversation.lastMessageId === messageId) {
     return { replyText: null, conversation };
+  }
+
+  // El cliente escribió a otro número (otra sucursal) del mismo negocio:
+  // la conversación a medias de la otra sucursal se reinicia.
+  const sucursalChat = branch || '';
+  if ((conversation.waBranch || '') !== sucursalChat) {
+    if (!['welcome', 'human'].includes(conversation.currentFlow)) {
+      conversation = await resetConversation(negocioId, phone);
+    }
+    conversation = await updateConversation(negocioId, phone, { waBranch: sucursalChat });
   }
 
   const texto = (message || '').trim();

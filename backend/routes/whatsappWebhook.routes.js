@@ -20,26 +20,33 @@ router.get('/whatsapp/webhook', (req, res) => {
   return res.sendStatus(403);
 });
 
-// Firma de Meta: HMAC-SHA256 del body crudo con el App Secret.
-// Sin WHATSAPP_APP_SECRET configurado se acepta (con aviso) para no cortar
-// el servicio mientras se configura; en producción debe estar puesto.
-let avisoSinSecret = false;
-function firmaValida(req) {
-  const secret = process.env.WHATSAPP_APP_SECRET;
-  if (!secret) {
-    if (!avisoSinSecret) {
-      logger.error('[whatsappWebhook] WHATSAPP_APP_SECRET no configurado: se rechazan todos los mensajes.');
-      avisoSinSecret = true;
-    }
-    return false;
-  }
+// Firma de Meta: HMAC-SHA256 del body crudo con el App Secret de la app que
+// envía el webhook. Primero WHATSAPP_APP_SECRET (tu app); si no coincide, el
+// appSecret del número en whatsappAccounts (app propia del negocio).
+function firmaCoincide(req, secret) {
+  if (!secret) return false;
   const firma = req.get('x-hub-signature-256') || '';
   if (!req.rawBody || !firma.startsWith('sha256=')) return false;
-
   const esperada = 'sha256=' + crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
   const a = Buffer.from(firma);
   const b = Buffer.from(esperada);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function firmaValida(req) {
+  if (firmaCoincide(req, process.env.WHATSAPP_APP_SECRET)) return true;
+  const ids = new Set();
+  for (const entry of req.body?.entry || []) {
+    for (const change of entry?.changes || []) {
+      const id = change?.value?.metadata?.phone_number_id;
+      if (id) ids.add(String(id));
+    }
+  }
+  for (const id of ids) {
+    const cuenta = await whatsappProvider.resolveAccount(id);
+    if (firmaCoincide(req, cuenta?.appSecret)) return true;
+  }
+  return false;
 }
 
 // Para la sección "Asistente WhatsApp" de AdminApp: número visible y último
@@ -103,6 +110,7 @@ async function procesarMensaje(value, mensaje) {
     phone: from,
     message: texto,
     messageId: mensaje.id,
+    branch: cuenta.branch,
   });
 
   // Mensajes previos (tarjetas con foto), en orden. Si uno falla, se sigue.
@@ -133,7 +141,7 @@ async function procesarMensaje(value, mensaje) {
 
 // Mensajes entrantes reales.
 router.post('/whatsapp/webhook', async (req, res) => {
-  if (!firmaValida(req)) {
+  if (!(await firmaValida(req))) {
     logger.warn('[whatsappWebhook] Firma inválida, se ignora la petición.');
     return res.sendStatus(401);
   }
