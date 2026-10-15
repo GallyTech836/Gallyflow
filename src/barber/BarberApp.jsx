@@ -936,6 +936,7 @@ const fetchByDate = async (subcollection, date) => {
   const filteredAppointments = useMemo(() => {
     return appointments.filter(appt => {
       if (!matchesBarber(appt, activeBarber.id)) return false;
+      if (appt.status === 'cancelled') return false; // canceladas fuera de la agenda
 
       const targetDate = new Date(selectedDate + "T00:00:00");
       const apptDate = new Date(appt.date + "T00:00:00");
@@ -1407,7 +1408,7 @@ const fetchByDate = async (subcollection, date) => {
                       {/* Grilla de Días */}
                       <div className="grid grid-cols-7 gap-1.5 pt-3">
                         {monthlyGridDays.map((gridItem, idx) => {
-                          const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === gridItem.dateStr);
+                          const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === gridItem.dateStr && appt.status !== 'cancelled');
                           const dayBlocks = blockedSlots.filter(block => block.barber === activeBarber.id && block.date === gridItem.dateStr);
                           const isSelected = gridItem.dateStr === selectedDate;
 
@@ -1464,7 +1465,7 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="space-y-4 animate-fade-in">
                     <div className="grid grid-cols-1 sm:grid-cols-7 gap-3">
                       {currentWeekDays.map((dayStr, idx) => {
-                        const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === dayStr);
+                        const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === dayStr && appt.status !== 'cancelled');
                         const isSelected = dayStr === selectedDate;
                         const dateObj = new Date(dayStr + "T00:00:00");
 

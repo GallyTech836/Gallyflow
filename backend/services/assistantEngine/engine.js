@@ -17,7 +17,7 @@ import { getOrCreateConversation, updateConversation, resetConversation } from '
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
 import { upsertClientFromPhone, findClientByPhone, variantesTelefono, nombreValido } from '../appointments/clientRecord.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
-import { findUpcomingCitas, cancelAppointment, rescheduleAppointment, faltaSuficiente } from '../appointments/manageAppointment.js';
+import { findUpcomingCitas, rescheduleAppointment, faltaSuficiente } from '../appointments/manageAppointment.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
@@ -41,11 +41,12 @@ function horasMinimasCambio(ctx) {
 
 const mayuscula = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
-// Intención escrita a mano de cancelar o reprogramar una cita existente.
-// "otro día" / "otra hora" NO cuentan (son opciones del paso de horarios).
+// "Cancelar" = salir de la operación en curso (agendar / reprogramar).
+// Las citas ya agendadas NO se cancelan por WhatsApp.
+// "otro día" / "otra hora" NO cuentan como reprogramar (son opciones del paso de horarios).
 const INTENCION_CANCELAR = /cancel|anul/i;
 const INTENCION_REPROGRAMAR = /reprogram|posterg|adelant|(cambi|mov)\w*\s+(de\s+)?(la\s+|mi\s+|el\s+)?(cita|turno|reserva|hora|horario|fecha|d[ií]a)/i;
-const FLUJOS_SIN_INTENCION = new Set(['confirm_cancel', 'confirming_reschedule', 'confirming', 'awaiting_name', 'human']);
+const FLUJOS_SIN_INTENCION = new Set(['confirming_reschedule', 'confirming', 'awaiting_name', 'human']);
 
 // ───────────────────────── Fecha/hora del negocio ─────────────────────────
 
@@ -367,9 +368,24 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     texto = marca[2];
   }
 
-  if (/^(cancelar|salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
+  if (/^(salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
     conversation = await resetConversation(negocioId, phone);
     return responder(await bienvenida(), conversation);
+  }
+
+  // "cancelar", "quiero cancelar"... cancela la operación en curso, nunca una
+  // cita ya agendada (eso lo ve el equipo con «Hablar con alguien»).
+  if (INTENCION_CANCELAR.test(texto)) {
+    const { tl, g } = context.terms;
+    const flujo = conversation.currentFlow;
+    const reprogramando = Boolean(conversation.rescheduleCitaId);
+    conversation = await resetConversation(negocioId, phone);
+    const aviso = flujo === 'welcome'
+      ? `No tienes ninguna reserva en curso. Si quieres cancelar ${g('appointment', 'un', 'una')} ${tl('appointment')} ${g('appointment', 'agendado', 'agendada')}, toca «Hablar con alguien» y el equipo te ayuda.`
+      : reprogramando
+        ? `Listo, dejé la reprogramación. Tu ${tl('appointment')} sigue como estaba ✅`
+        : 'Listo, cancelé la reserva en curso.';
+    return responder(prefijo(aviso, await bienvenida()), conversation);
   }
 
   // "Más opciones" en las listas de WhatsApp (máx. 10 filas por lista).
@@ -385,10 +401,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
   // hora de mi cita"...) en cualquier paso: si tiene citas próximas, va directo
   // a cancelar o reprogramar. No aplica mientras confirma algo o da su nombre.
   const esBoton = /^(cita_|si_|no_)/i.test(texto); // ids de botones, no frases
-  const intencion = esBoton || FLUJOS_SIN_INTENCION.has(conversation.currentFlow) ? null
-    : INTENCION_CANCELAR.test(texto) ? 'cancelar'
-      : INTENCION_REPROGRAMAR.test(texto) ? 'reprogramar'
-        : null;
+  const intencion = !esBoton && !FLUJOS_SIN_INTENCION.has(conversation.currentFlow) && INTENCION_REPROGRAMAR.test(texto);
   if (intencion) {
     const citas = (await findUpcomingCitas(negocioId, phone, ahoraNegocio())).map(resumenCita);
     conversation = await resetConversation(negocioId, phone);
@@ -401,9 +414,9 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       manageCitaId: citas.length === 1 ? citas[0].id : null,
     });
     if (citas.length === 1) {
-      return intencion === 'cancelar' ? pedirConfirmacionCancelar(citas[0]) : iniciarReprogramacion(citas[0]);
+      return iniciarReprogramacion(citas[0]);
     }
-    return responder(prefijo(`¿Qué ${tl('appointment')} quieres ${intencion}?`, mensajeConCitas(await nombreDelCliente(), citas)), conversation);
+    return responder(prefijo(`¿Qué ${tl('appointment')} quieres reprogramar?`, mensajeConCitas(await nombreDelCliente(), citas)), conversation);
   }
   
   switch (conversation.currentFlow) {
@@ -417,9 +430,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       if (/^cita_reprogramar$|^reprogramar$/i.test(texto) && citaSeleccionada()) {
         return iniciarReprogramacion(citaSeleccionada());
       }
-      if (/^cita_cancelar$|^cancelar cita$/i.test(texto) && citaSeleccionada()) {
-        return pedirConfirmacionCancelar(citaSeleccionada());
-      }
+      
       if (/^otra$/i.test(texto)) {
         return responder(mensajeBienvenida(context, await nombreDelCliente(), conversation.repeatOption), conversation);
       }
@@ -576,16 +587,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       return responder(prefijo(`No entendí. \n\n`, mensajeResumen(conversation)), conversation);
     }
 
-        // ── Cancelar / reprogramar ──
-
-        case 'confirm_cancel': {
-          if (/^si_cancelar$|^s[ií]$/i.test(texto)) return confirmarCancelacion();
-          if (/^no$|^no_cancelar$/i.test(texto)) {
-            conversation = await resetConversation(negocioId, phone);
-            return responder(`Perfecto, tu ${context.terms.tl('appointment')} sigue en pie ✅`, conversation);
-          }
-          return responder(prefijo('No entendí.', mensajeConfirmarCancelar(citaSeleccionada())), conversation);
-        }
+        
     
         case 'confirming_reschedule': {
           if (/^1$|confirmar|^s[ií]$/i.test(texto)) return confirmarReprogramacion();
@@ -823,52 +825,15 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       }), conversation);
     }
     return responder(menuBotones({
-      texto: `${cuerpo}\n¿Qué deseas hacer?\n\nEscribe "reprogramar", "cancelar cita" u "otra".`,
+      texto: `${cuerpo}\n¿Qué deseas hacer?\n\nEscribe "reprogramar", "2" para hablar con alguien u "otra".`,
       cuerpo: `${cuerpo}\n¿Qué deseas hacer?`,
-      botones: [{ id: 'cita_reprogramar', title: 'Reprogramar' }, { id: 'cita_cancelar', title: cabe(`Cancelar ${tl('appointment')}`, 20, 'Cancelar') }, { id: 'otra', title: 'Volver al menú' }],
+      botones: [{ id: 'cita_reprogramar', title: 'Reprogramar' }, { id: '2', title: 'Hablar con alguien' }, { id: 'otra', title: 'Volver al menú' }],
     }), conversation);
   }
 
-  async function pedirConfirmacionCancelar(cita) {
-    if (!puedeCambiar(cita)) return mostrarGestionCita(cita);
-    conversation = await updateConversation(negocioId, phone, { currentFlow: 'confirm_cancel', manageCitaId: cita.id });
-    return responder(mensajeConfirmarCancelar(cita), conversation);
-  }
+  
 
-  async function confirmarCancelacion() {
-    const cita = citaSeleccionada();
-    const { tl, g } = context.terms;
-    let cancelada;
-    try {
-      if (!cita) throw new Error('No encontré esa cita.');
-      cancelada = await cancelAppointment({
-        negocioId, citaId: cita.id, phone, ahora: ahoraNegocio(), minHours: horasMinimasCambio(context),
-      });
-    } catch (err) {
-      logger.warn('[assistantEngine] cancelar cita falló:', err.message);
-      conversation = await resetConversation(negocioId, phone);
-      const motivo = err.message === 'DEMASIADO_TARDE' ? avisoDemasiadoTarde() : `No pude cancelar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ${err.message}`;
-      return responder(prefijo(motivo, await bienvenida()), conversation);
-    }
-
-    const esPendiente = !cancelada.professionalId || cancelada.professionalId === PENDING_ID;
-    sendNotification({
-      tipo: 'RESERVA_CANCELADA',
-      negocioId,
-      data: { clientName: cancelada.clientName, time: `${cancelada.time} (${cancelada.date})` },
-      ...(esPendiente ? { targetProfessionalIds: [] } : { targetProfessionalId: cancelada.professionalId }),
-    }).catch((err) => logger.warn('[assistantEngine] Push cancelación falló:', err.message));
-    reevaluatePending({ negocioId, date: cancelada.date })
-      .catch((err) => logger.warn('[assistantEngine] reevaluatePending falló:', err.message));
-
-    conversation = await resetConversation(negocioId, phone);
-    const cuerpo = `✅ Listo, tu ${tl('appointment')} de ${fechaLegible(cancelada.date)} a las ${cancelada.time} quedó ${g('appointment', 'cancelado', 'cancelada')}.\n¿Quieres agendar ${g('appointment', 'otro', 'otra')}?`;
-    return responder(menuBotones({
-      texto: `${cuerpo}\n\n1. Agendar\n2. Hablar con alguien`,
-      cuerpo,
-      botones: [{ id: '1', title: cabe(`Agendar ${tl('appointment')}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
-    }), conversation);
-  }
+  
 
   async function iniciarReprogramacion(cita) {
     if (!puedeCambiar(cita)) return mostrarGestionCita(cita);
@@ -1019,8 +984,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
           return bienvenida();
         case 'confirming':
           return mensajeResumen(conversation);
-        case 'confirm_cancel':
-          return mensajeConfirmarCancelar(citaSeleccionada());
+        
         case 'confirming_reschedule':
           return mensajeResumenReprogramar(conversation);
         case 'awaiting_name':
@@ -1171,12 +1135,12 @@ function mensajeConCitas(nombre, citas) {
       });
     }
     return menuBotones({
-      texto: `${cuerpo}\n¿Qué deseas hacer?\n\nEscribe "reprogramar", "cancelar cita" u "otra".`,
+      texto: `${cuerpo}\n¿Qué deseas hacer?\n\nEscribe "reprogramar", "1" para agendar ${g('appointment', 'otro', 'otra')} o "2" para hablar con alguien.`,
       cuerpo: `${cuerpo}\n¿Qué deseas hacer?`,
-      botones: [{ id: 'cita_reprogramar', title: 'Reprogramar' }, { id: 'cita_cancelar', title: cabe(`Cancelar ${tl('appointment')}`, 20, 'Cancelar') }, { id: 'otra', title: 'Otra consulta' }],
+      botones: [{ id: 'cita_reprogramar', title: 'Reprogramar' }, { id: '1', title: cabe(`Agendar ${g('appointment', 'otro', 'otra')}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
     });
   }
-  const cuerpo = `${saludo}\n\nTienes ${citas.length} ${tl('appointments')} ${g('appointment', 'próximos', 'próximas')}. Elige una para reprogramarla o cancelarla, o elige otra opción.`;
+  const cuerpo = `${saludo}\n\nTienes ${citas.length} ${tl('appointments')} ${g('appointment', 'próximos', 'próximas')}. Elige una para reprogramarla, o elige otra opción.`;
   return menuLista({
     texto: `${cuerpo}\n\n${citas.map((c, i) => `cita_${i + 1}. ${describirCita(c)}`).join('\n')}\n1. Agendar\n2. Hablar con alguien`,
     cuerpo,
@@ -1192,17 +1156,7 @@ function mensajeConCitas(nombre, citas) {
     ],
   });
 }
-function mensajeConfirmarCancelar(cita) {
-  const { tl, g } = context.terms;
-  const cuerpo = cita
-    ? `¿Seguro que quieres cancelar tu ${tl('appointment')} de ${describirCita(cita)}?`
-    : `¿Seguro que quieres cancelar ${g('appointment', 'el', 'la')} ${tl('appointment')}?`;
-  return menuBotones({
-    texto: `${cuerpo}\n\nEscribe "sí" para cancelar o "no" para no cambiar nada.`,
-    cuerpo,
-    botones: [{ id: 'si_cancelar', title: 'Sí, cancelar' }, { id: 'no', title: 'No, mantener' }],
-  });
-}
+
 function mensajeResumenReprogramar(conv) {
   const { tl } = context.terms;
   const anterior = citaSeleccionada();

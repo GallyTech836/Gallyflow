@@ -1221,6 +1221,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
   const filteredReservations = useMemo(() => {
     if (!Array.isArray(dayReservations)) return [];
     return dayReservations.filter(res => {
+      // Las canceladas no se muestran en la agenda (siguen guardadas).
+      if (res?.status === 'cancelled' && filterStatus !== 'cancelled') return false;
       const matchBarber = filterBarberId === 'all' || res?.professionalId === filterBarberId || res?.barberId === filterBarberId;
       const matchStatus = filterStatus === 'all' || res?.status === filterStatus;
       return matchBarber && matchStatus;
@@ -1233,6 +1235,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
   const barberDayCounts = useMemo(() => {
     const counts = {};
     (dayReservations || []).forEach(res => {
+      if (res?.status === 'cancelled') return;
       const key = res?.professionalId || res?.barberId || 'pending';
       counts[key] = (counts[key] || 0) + 1;
     });
