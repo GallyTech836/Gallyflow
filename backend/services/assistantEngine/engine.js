@@ -325,7 +325,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     conversation = await updateConversation(negocioId, phone, { waBranch: sucursalChat });
   }
 
-  const texto = (message || '').trim();
+  let texto = (message || '').trim();
 
   // Modo "hablar con alguien": el bot no contesta mientras dure, salvo que el
   // cliente escriba "menu". Al vencer, el chat vuelve al bot normalmente.
@@ -354,6 +354,17 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
   if (expirada) {
     conversation = await resetConversation(negocioId, phone);
     return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, await bienvenida()), conversation);
+  }
+
+    // Los botones/listas llevan el paso en que se enviaron ("choosing_time|3").
+  // Si el cliente toca un mensaje VIEJO de otro paso, no se mezcla con el paso
+  // actual (antes un "2" de la lista de profesionales se tomaba como hora 2).
+  const marca = texto.match(/^([a-z_]+)\|(.+)$/);
+  if (marca) {
+    if (marca[1] !== conversation.currentFlow) {
+      return responder(prefijo('Esa opción era de un mensaje anterior 🙂 Elige aquí:', await menuActual()), conversation);
+    }
+    texto = marca[2];
   }
 
   if (/^(cancelar|salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
@@ -1001,6 +1012,24 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     return conv.listPageFlow === conv.currentFlow ? Number(conv.listPage) || 0 : 0;
   }
 
+    // Menú del paso actual, también para pasos de confirmación (mensaje viejo tocado).
+    async function menuActual() {
+      switch (conversation.currentFlow) {
+        case 'welcome':
+          return bienvenida();
+        case 'confirming':
+          return mensajeResumen(conversation);
+        case 'confirm_cancel':
+          return mensajeConfirmarCancelar(citaSeleccionada());
+        case 'confirming_reschedule':
+          return mensajeResumenReprogramar(conversation);
+        case 'awaiting_name':
+          return '¿A nombre de quién hago la reserva?';
+        default:
+          return menuDelPaso();
+      }
+    }
+
   // Vuelve a armar la lista del paso actual (para "Más opciones").
   function menuDelPaso() {
     switch (conversation.currentFlow) {
@@ -1262,9 +1291,25 @@ function prefijo(aviso, mensaje) {
 }
 
 // `previos`: mensajes que se mandan antes del principal (ej. tarjetas con foto).
+// Antepone el paso actual a los ids de botones y filas ("choosing_time|3").
+function marcarIds(interactive, flow) {
+  if (!interactive || !flow) return interactive;
+  const marca = (id) => `${flow}|${id}`;
+  const action = interactive.action || {};
+  if (Array.isArray(action.buttons)) {
+    return { ...interactive, action: { ...action, buttons: action.buttons.map((b) => ({ ...b, reply: { ...b.reply, id: marca(b.reply.id) } })) } };
+  }
+  if (Array.isArray(action.sections)) {
+    return { ...interactive, action: { ...action, sections: action.sections.map((sec) => ({ ...sec, rows: sec.rows.map((r) => ({ ...r, id: marca(r.id) })) })) } };
+  }
+  return interactive;
+}
+
 function responder(mensaje, conversation, previos = []) {
+  const flow = conversation?.currentFlow;
+  previos = previos.map((p) => ({ ...p, interactive: marcarIds(p.interactive, flow) }));
   if (mensaje && typeof mensaje === 'object') {
-    return { replyText: mensaje.text, interactive: mensaje.interactive || null, preMessages: previos, conversation };
+    return { replyText: mensaje.text, interactive: marcarIds(mensaje.interactive, flow), preMessages: previos, conversation };
   }
   return { replyText: mensaje, interactive: null, preMessages: previos, conversation };
 }
