@@ -41,6 +41,12 @@ function horasMinimasCambio(ctx) {
 
 const mayuscula = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
+// Intención escrita a mano de cancelar o reprogramar una cita existente.
+// "otro día" / "otra hora" NO cuentan (son opciones del paso de horarios).
+const INTENCION_CANCELAR = /cancel|anul/i;
+const INTENCION_REPROGRAMAR = /reprogram|posterg|adelant|(cambi|mov)\w*\s+(de\s+)?(la\s+|mi\s+|el\s+)?(cita|turno|reserva|hora|horario|fecha|d[ií]a)/i;
+const FLUJOS_SIN_INTENCION = new Set(['confirm_cancel', 'confirming_reschedule', 'confirming', 'awaiting_name', 'human']);
+
 // ───────────────────────── Fecha/hora del negocio ─────────────────────────
 
 // Railway corre en UTC: este Date "local" tiene la fecha/hora del negocio,
@@ -364,6 +370,31 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     return responder(menuDelPaso(), conversation);
   }
 
+    // Frases libres ("quiero cancelar mi cita", "necesito reprogramar", "cambiar la
+  // hora de mi cita"...) en cualquier paso: si tiene citas próximas, va directo
+  // a cancelar o reprogramar. No aplica mientras confirma algo o da su nombre.
+  const esBoton = /^(cita_|si_|no_)/i.test(texto); // ids de botones, no frases
+  const intencion = esBoton || FLUJOS_SIN_INTENCION.has(conversation.currentFlow) ? null
+    : INTENCION_CANCELAR.test(texto) ? 'cancelar'
+      : INTENCION_REPROGRAMAR.test(texto) ? 'reprogramar'
+        : null;
+  if (intencion) {
+    const citas = (await findUpcomingCitas(negocioId, phone, ahoraNegocio())).map(resumenCita);
+    conversation = await resetConversation(negocioId, phone);
+    const { tl, g } = context.terms;
+    if (citas.length === 0) {
+      return responder(prefijo(`No encontré ${tl('appointments')} ${g('appointment', 'próximos', 'próximas')} con este número.`, await bienvenida()), conversation);
+    }
+    conversation = await updateConversation(negocioId, phone, {
+      citaOptions: citas,
+      manageCitaId: citas.length === 1 ? citas[0].id : null,
+    });
+    if (citas.length === 1) {
+      return intencion === 'cancelar' ? pedirConfirmacionCancelar(citas[0]) : iniciarReprogramacion(citas[0]);
+    }
+    return responder(prefijo(`¿Qué ${tl('appointment')} quieres ${intencion}?`, mensajeConCitas(await nombreDelCliente(), citas)), conversation);
+  }
+  
   switch (conversation.currentFlow) {
     case 'welcome': {
       // ── Citas próximas: elegir, reprogramar, cancelar ──
