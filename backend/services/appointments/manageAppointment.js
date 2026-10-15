@@ -19,9 +19,12 @@ const ACTIVAS = new Set(['confirmed', 'pending']);
 const digitos = (p) => String(p || '').replace(/\D/g, '');
 
 function esDelCliente(cita, phone) {
-  const propias = new Set(variantesTelefono(digitos(phone)).map(digitos));
-  return propias.has(digitos(cita?.clientPhone));
-}
+    const suyo = digitos(cita?.clientPhone);
+    if (!suyo) return false;
+    const propias = new Set(variantesTelefono(digitos(phone)).map(digitos));
+    // Mismo número aunque uno tenga código de país y el otro no.
+    return propias.has(suyo) || (suyo.length >= 8 && suyo.slice(-8) === digitos(phone).slice(-8));
+  }
 
 export function fechaHoraCita(cita) {
   const [y, m, d] = String(cita.date || '').split('-').map(Number);
@@ -48,12 +51,16 @@ function validarCita(snap, phone, ahora, minHours) {
  */
 export async function findUpcomingCitas(negocioId, phone, ahora, max = 5) {
   try {
+        // Se buscan las citas desde hoy y se compara el teléfono por dígitos, porque
+    // el admin lo guarda en distintos formatos ("+591 75196640", "59175196640"...).
+    const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
     const snap = await db.collection('negocios').doc(negocioId).collection('citas')
-      .where('clientPhone', 'in', variantesTelefono(digitos(phone)))
+      .where('date', '>=', hoy)
       .get();
     const ahoraMs = ahora.getTime();
     return snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((c) => esDelCliente(c, phone))
       .filter((c) => ACTIVAS.has(c.status) && c.date && c.time && fechaHoraCita(c).getTime() > ahoraMs)
       .sort((a, b) => fechaHoraCita(a) - fechaHoraCita(b))
       .slice(0, max);
