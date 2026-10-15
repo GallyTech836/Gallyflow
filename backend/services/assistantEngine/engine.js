@@ -24,6 +24,7 @@ import { db } from '../../config/firebase.js';
 import { canUse } from '../capabilities/capabilityModel.js';
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
 import { getServicePriceRange, buildCitaServices, formatPriceRange } from '../pricing/professionalPricing.js';
+import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -310,7 +311,7 @@ function contextoDeSucursal(ctx, branch) {
 
 // ───────────────────────── Motor ─────────────────────────
 
-export async function assistantEngine({ negocioId, phone, message, messageId, branch = null }) {
+export async function assistantEngine({ negocioId, phone, message, messageId, branch = null, referral = null }) {
   const context = contextoDeSucursal(await getBusinessContext(negocioId), branch);
 
   // Sin la capacidad `asistenteWhatsapp` el bot no responde nada (tampoco
@@ -367,6 +368,15 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
 
   if (messageId) {
     conversation = await updateConversation(negocioId, phone, { lastMessageId: messageId });
+  }
+
+  // Cliente que llega desde un anuncio (Click to WhatsApp: viene `referral`,
+  // o el texto típico "Quiero más información"): saludo + qué información
+  // desea. Con referral se reinicia lo que estuviera a medias; solo por texto,
+  // únicamente si estaba en el inicio (para no cortar una reserva en curso).
+  if (esMensajeDeAnuncio(message, referral) && (referral || expirada || conversation.currentFlow === 'welcome')) {
+    if (conversation.currentFlow !== 'welcome') conversation = await resetConversation(negocioId, phone);
+    return responder(await bienvenidaAnuncio(), conversation);
   }
 
   if (expirada) {
@@ -457,6 +467,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       if (/^otra$/i.test(texto)) {
         return responder(mensajeBienvenida(context, await nombreDelCliente(), conversation.repeatOption), conversation);
       }
+      if (/^info_servicios$/i.test(texto)) return responder(mensajeServiciosYPrecios(), conversation);
+      if (/^info_ubicacion$/i.test(texto)) return responder(mensajeUbicacion(), conversation);
       if (/^2$|hablar|persona|humano|asesor|ayuda/i.test(texto)) {
         return hablarConAlguien();
       }
@@ -467,6 +479,9 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null });
         return responder(mensajeServicios(context), conversation);
       }
+      // Preguntas escritas: "¿cuánto cuesta?", "¿dónde están?", "horario"...
+      if (pideServicios(texto)) return responder(mensajeServiciosYPrecios(), conversation);
+      if (pideUbicacion(texto)) return responder(mensajeUbicacion(), conversation);
       return responder(await bienvenida(), conversation);
     }
 
@@ -795,6 +810,95 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     });
     if (citaOptions.length) return mensajeConCitas(nombre, citaOptions);
     return mensajeBienvenida(context, nombre, repetir);
+  }
+
+  // ── Clientes que llegan desde un anuncio ──
+
+  // Saludo + "¿Qué información te gustaría?". Si ya tiene una cita próxima se
+  // usa su saludo de siempre (muestra la cita).
+  async function bienvenidaAnuncio() {
+    const [nombre, proximas] = await Promise.all([
+      nombreDelCliente(),
+      findUpcomingCitas(negocioId, phone, ahoraNegocio()),
+    ]);
+    if (proximas.length) return bienvenida();
+    conversation = await updateConversation(negocioId, phone, { currentFlow: 'welcome', fromAd: true, citaOptions: [], manageCitaId: null });
+    const { tl, g } = context.terms;
+    const cita = tl('appointment');
+    const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋 Gracias por escribir a ${context.businessName}.`;
+    const cuerpo = `${saludo}
+¿Qué información te gustaría?`;
+    return menuBotones({
+      texto: `${cuerpo}
+
+Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una')} ${cita}.`,
+      cuerpo,
+      botones: [
+        { id: 'info_servicios', title: cabe(`${mayuscula(tl('services'))} y precios`, 20, 'Precios') },
+        { id: 'info_ubicacion', title: 'Ubicación y horarios' },
+        { id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') },
+      ],
+    });
+  }
+
+  function mensajeServiciosYPrecios() {
+    const { tl, g } = context.terms;
+    const cita = tl('appointment');
+    const servicios = serviciosOfrecidos(context);
+    const botones = [
+      { id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') },
+      { id: 'info_ubicacion', title: 'Ubicación y horarios' },
+      { id: '2', title: 'Hablar con alguien' },
+    ];
+    if (servicios.length === 0) {
+      const aviso = `Por ahora no hay ${tl('services')} disponibles para reservar. Toca «Hablar con alguien» y el equipo te ayuda.`;
+      return menuBotones({ texto: aviso, cuerpo: aviso, botones: botones.slice(1) });
+    }
+    const { completo, corto } = textoServicios(servicios, {
+      precioDe: (s) => precioServicio(s, context.profesionales),
+      duracionDe: duracionServicio,
+    });
+    const titulo = `Nuestros ${tl('services')}:`;
+    const cierre = `¿Te gustaría agendar ${g('appointment', 'un', 'una')} ${cita}?`;
+    return menuBotones({
+      texto: `${titulo}
+${completo}
+
+${cierre}
+1. Agendar
+2. Hablar con alguien
+(Escribe "ubicación" para ver dónde estamos)`,
+      cuerpo: `${titulo}
+${corto}
+
+${cierre}`,
+      botones,
+    });
+  }
+
+  function mensajeUbicacion() {
+    const { tl, g } = context.terms;
+    const cita = tl('appointment');
+    const info = textoUbicacion({ sucursales: context.sucursales, businessSettings: context.businessSettings, branch });
+    const botones = [
+      { id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') },
+      { id: 'info_servicios', title: cabe(`${mayuscula(tl('services'))} y precios`, 20, 'Precios') },
+      { id: '2', title: 'Hablar con alguien' },
+    ];
+    const cuerpo = info
+      ? `${info}
+
+¿Te gustaría agendar ${g('appointment', 'un', 'una')} ${cita}?`
+      : 'Todavía no tenemos la ubicación cargada aquí. Toca «Hablar con alguien» y el equipo te la pasa.';
+    return menuBotones({
+      texto: `${cuerpo}
+
+1. Agendar
+2. Hablar con alguien
+(Escribe "precios" para ver ${g('service', 'los', 'las')} ${tl('services')})`,
+      cuerpo,
+      botones,
+    });
   }
 
   // ── Cancelar / reprogramar ──

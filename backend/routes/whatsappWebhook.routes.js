@@ -112,6 +112,9 @@ async function procesarMensaje(value, mensaje) {
     message: texto,
     messageId: mensaje.id,
     branch: cuenta.branch,
+    // Click to WhatsApp (anuncios de Facebook/Instagram): Meta y YCloud lo
+    // mandan en el primer mensaje del cliente.
+    referral: mensaje.referral || null,
   });
 
   // Mensajes previos (tarjetas con foto), en orden. Si uno falla, se sigue.
@@ -213,7 +216,7 @@ router.post('/whatsapp/ycloud/webhook', async (req, res) => {
       // Se adapta al formato de Meta para reutilizar procesarMensaje.
       await procesarMensaje(
         { metadata: { phone_number_id: `ycloud_${soloDigitos(m.to)}`, display_phone_number: m.to } },
-        { id: m.wamid || m.id, from: soloDigitos(m.from), type: m.type, text: m.text, interactive: m.interactive },
+        { id: m.wamid || m.id, from: soloDigitos(m.from), type: m.type, text: m.text, interactive: m.interactive, referral: m.referral || null },
       );
     } else if (evento.type === 'whatsapp.smb.message.echoes') {
       await pausarBotPorRespuestaHumana(evento.whatsappMessage || {});
