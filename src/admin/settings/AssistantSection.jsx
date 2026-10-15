@@ -30,6 +30,18 @@ function haceCuanto(iso) {
   return `hace ${dias} día${dias === 1 ? '' : 's'}`;
 }
 
+// Anticipación mínima para que el cliente cancele o reprograme por WhatsApp
+// (assistantConfig.changeMinHours; sin el campo = 2 h).
+const OPCIONES_ANTICIPACION = [
+  { value: 0, label: 'Sin límite (hasta la hora)' },
+  { value: 1, label: 'Hasta 1 hora antes' },
+  { value: 2, label: 'Hasta 2 horas antes' },
+  { value: 3, label: 'Hasta 3 horas antes' },
+  { value: 6, label: 'Hasta 6 horas antes' },
+  { value: 12, label: 'Hasta 12 horas antes' },
+  { value: 24, label: 'Hasta 24 horas antes' },
+];
+
 export default function AssistantSection({ negocioId }) {
   const { tl, g } = useBusinessTerms();
   const [negocio, setNegocio] = useState(null);
@@ -54,6 +66,24 @@ export default function AssistantSection({ negocioId }) {
   const activo = config.enabled !== false;
   const telefono = formatearTelefono(config.displayPhone);
   const ultimoMensaje = haceCuanto(config.lastMessageAt);
+
+  const horasCambio = typeof config.changeMinHours === 'number' ? config.changeMinHours : 2;
+
+  const guardarHorasCambio = async (valor) => {
+    if (!negocioId || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await setDoc(doc(db, 'negocios', negocioId), { assistantConfig: { changeMinHours: Number(valor) } }, { merge: true });
+    } catch (err) {
+      console.error('[AssistantSection] Error al guardar anticipación:', err);
+      setError('No se pudo guardar el cambio. Inténtalo de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
 
   const toggleActivo = async () => {
     if (!negocioId || saving || !conectado) return;
@@ -138,6 +168,22 @@ export default function AssistantSection({ negocioId }) {
             )}
           </button>
         </div>
+        <div className={`mt-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
+          <p className="text-xs font-bold text-nexus-text">Cancelar o reprogramar por WhatsApp</p>
+          <p className="text-xs text-nexus-text-muted mb-2">
+            Hasta cuándo {g('client', 'el', 'la')} {tl('client')} puede cancelar o cambiar su {tl('appointment')} sin hablar con el negocio.
+          </p>
+          <select
+            value={horasCambio}
+            onChange={(e) => guardarHorasCambio(e.target.value)}
+            disabled={!conectado || saving}
+            className="w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text disabled:cursor-not-allowed"
+          >
+            {OPCIONES_ANTICIPACION.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>       
         {error && <p className="mt-2 text-xs text-nexus-error-text">{error}</p>}
       </div>
 
@@ -147,7 +193,8 @@ export default function AssistantSection({ negocioId }) {
           <li>{g('client', 'El', 'La')} {tl('client')} elige {g('service', 'uno o varios', 'una o varias')} {tl('services')}, {g('professional', 'el', 'la')} {tl('professional')}, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
           <li>Con «Cualquier {tl('professional')}» {g('appointment', 'el', 'la')} {tl('appointment')} queda como <b>Pendiente</b>: si solo {g('professional', 'un', 'una')} {tl('professional')} está libre se asigna {g('appointment', 'solo', 'sola')}; si hay {g('professional', 'varios', 'varias')}, decides tú.</li>
           <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si {g('client', 'el', 'la')} {tl('client')} escribe «menu», vuelve el asistente.</li>
-          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva.</li>
+          <li>Si {g('client', 'el', 'la')} {tl('client')} ya tiene {g('appointment', 'un', 'una')} {tl('appointment')}, el saludo se lo muestra con las opciones <b>Reprogramar</b> (día, hora y {tl('professional')}) y <b>Cancelar</b>, respetando la anticipación que elijas arriba.</li>
+          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva, cancelada o reprogramada.</li>
         </ul>
       </div>
     </div>

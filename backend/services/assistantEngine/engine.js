@@ -17,6 +17,7 @@ import { getOrCreateConversation, updateConversation, resetConversation } from '
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
 import { upsertClientFromPhone, findClientByPhone, variantesTelefono, nombreValido } from '../appointments/clientRecord.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
+import { findUpcomingCitas, cancelAppointment, rescheduleAppointment, faltaSuficiente } from '../appointments/manageAppointment.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
@@ -31,6 +32,14 @@ const DIAS_A_BUSCAR = 14;
 const FLUJOS_CON_LISTA = new Set(['choosing_service', 'choosing_extra_service', 'choosing_staff', 'choosing_date', 'choosing_time']);
 const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min sin responder => se reinicia
 const HUMAN_HANDOFF_MS = 2 * 60 * 60 * 1000; // 2 h en que el bot no responde tras pedir hablar con alguien
+const CAMBIO_MIN_HORAS_DEFAULT = 2; // anticipación mínima para cancelar/reprogramar (assistantConfig.changeMinHours)
+
+function horasMinimasCambio(ctx) {
+  const h = Number(ctx.assistantConfig?.changeMinHours);
+  return Number.isFinite(h) && h >= 0 ? h : CAMBIO_MIN_HORAS_DEFAULT;
+}
+
+const mayuscula = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 
 // ───────────────────────── Fecha/hora del negocio ─────────────────────────
 
@@ -357,6 +366,21 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
 
   switch (conversation.currentFlow) {
     case 'welcome': {
+      // ── Citas próximas: elegir, reprogramar, cancelar ──
+      const elegirCita = texto.match(/^cita_(\d+)$/i);
+      if (elegirCita) {
+        const cita = (conversation.citaOptions || [])[parseInt(elegirCita[1], 10) - 1];
+        if (cita) return mostrarGestionCita(cita);
+      }
+      if (/^cita_reprogramar$|^reprogramar$/i.test(texto) && citaSeleccionada()) {
+        return iniciarReprogramacion(citaSeleccionada());
+      }
+      if (/^cita_cancelar$|^cancelar cita$/i.test(texto) && citaSeleccionada()) {
+        return pedirConfirmacionCancelar(citaSeleccionada());
+      }
+      if (/^otra$/i.test(texto)) {
+        return responder(mensajeBienvenida(context, await nombreDelCliente(), conversation.repeatOption), conversation);
+      }
       if (/^2$|hablar|persona|humano|asesor|ayuda/i.test(texto)) {
         return hablarConAlguien();
       }
@@ -459,6 +483,12 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       const hora = slots[idx];
       if (!hora) return responder(prefijo(`No entendí. \n\n`, mensajeHoras(slots, conversation.selectedDate)), conversation);
 
+            // Reprogramando: no se pide nombre, se confirma el cambio.
+            if (conversation.rescheduleCitaId) {
+              conversation = await updateConversation(negocioId, phone, { currentFlow: 'confirming_reschedule', selectedTime: hora });
+              return responder(mensajeResumenReprogramar(conversation), conversation);
+            }
+
       // Cliente ya conocido (reservó antes por WhatsApp o está en Clientes): no se pregunta el nombre.
       const nombreConocido = await nombreDelCliente();
       if (nombreConocido) {
@@ -504,6 +534,26 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       return responder(prefijo(`No entendí. \n\n`, mensajeResumen(conversation)), conversation);
     }
 
+        // ── Cancelar / reprogramar ──
+
+        case 'confirm_cancel': {
+          if (/^si_cancelar$|^s[ií]$/i.test(texto)) return confirmarCancelacion();
+          if (/^no$|^no_cancelar$/i.test(texto)) {
+            conversation = await resetConversation(negocioId, phone);
+            return responder(`Perfecto, tu ${context.terms.tl('appointment')} sigue en pie ✅`, conversation);
+          }
+          return responder(prefijo('No entendí.', mensajeConfirmarCancelar(citaSeleccionada())), conversation);
+        }
+    
+        case 'confirming_reschedule': {
+          if (/^1$|confirmar|^s[ií]$/i.test(texto)) return confirmarReprogramacion();
+          if (/^2$/.test(texto)) {
+            conversation = await resetConversation(negocioId, phone);
+            return responder(`Listo, no cambié nada. Tu ${context.terms.tl('appointment')} sigue como estaba ✅`, conversation);
+          }
+          return responder(prefijo('No entendí.', mensajeResumenReprogramar(conversation)), conversation);
+        }
+    
     default: {
       conversation = await resetConversation(negocioId, phone);
       return responder(await bienvenida(), conversation);
@@ -568,6 +618,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
   // Servicios que todavía se pueden sumar: no elegidos y con al menos un
   // profesional que haga TODOS (los elegidos + este).
   function serviciosExtraCompatibles() {
+    if (conversation.rescheduleCitaId) return []; // al reprogramar no se cambian los servicios
     const elegidosIds = serviciosDe(conversation).map((s) => s.serviceId);
     return serviciosOfrecidos(context).filter(
       (s) => !elegidosIds.includes(s.id) && profesionalesPara(context, [...elegidosIds, s.id]).length > 0
@@ -664,9 +715,202 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
 
   // Saludo: con nombre y "Repetir cita" si el cliente ya reservó antes.
   async function bienvenida() {
-    const [nombre, repetir] = await Promise.all([nombreDelCliente(), buscarCitaParaRepetir()]);
-    conversation = await updateConversation(negocioId, phone, { repeatOption: repetir || null });
+    const [nombre, repetir, proximas] = await Promise.all([
+      nombreDelCliente(),
+      buscarCitaParaRepetir(),
+      findUpcomingCitas(negocioId, phone, ahoraNegocio()),
+    ]);
+    const citaOptions = proximas.map(resumenCita);
+    conversation = await updateConversation(negocioId, phone, {
+      repeatOption: repetir || null,
+      citaOptions,
+      manageCitaId: citaOptions.length === 1 ? citaOptions[0].id : null,
+    });
+    if (citaOptions.length) return mensajeConCitas(nombre, citaOptions);
     return mensajeBienvenida(context, nombre, repetir);
+  }
+
+  // ── Cancelar / reprogramar ──
+
+  // Lo mínimo de la cita que se guarda en la conversación.
+  function resumenCita(c) {
+    const pro = c.professionalId && c.professionalId !== PENDING_ID
+      ? context.profesionales.find((p) => p.id === c.professionalId)
+      : null;
+    return {
+      id: c.id,
+      date: c.date,
+      time: c.time,
+      serviceName: c.serviceName || (c.services || []).map((x) => x.serviceName).join(' + '),
+      services: Array.isArray(c.services) && c.services.length
+        ? c.services.map((x) => ({ serviceId: x.serviceId, serviceName: x.serviceName, price: x.price, duration: Number(x.duration) || SERVICE_DURATION_DEFAULT }))
+        : (c.serviceId ? [{ serviceId: c.serviceId, serviceName: c.serviceName, price: c.price, duration: Number(c.duration) || SERVICE_DURATION_DEFAULT }] : []),
+      professionalId: c.professionalId || null,
+      professionalName: pro?.name || '',
+    };
+  }
+
+  function citaSeleccionada() {
+    return (conversation.citaOptions || []).find((c) => c.id === conversation.manageCitaId) || null;
+  }
+
+  function puedeCambiar(cita) {
+    return faltaSuficiente(cita, ahoraNegocio(), horasMinimasCambio(context));
+  }
+
+  function describirCita(c) {
+    const conQuien = c.professionalName ? ` con ${c.professionalName}` : '';
+    return `${fechaLegible(c.date)} a las ${c.time} · ${c.serviceName}${conQuien}`;
+  }
+
+  function avisoDemasiadoTarde() {
+    const h = horasMinimasCambio(context);
+    const { tl, g } = context.terms;
+    return `Faltan menos de ${h} h para tu ${tl('appointment')}, así que no puedo ${g('appointment', 'cambiarlo', 'cambiarla')} por aquí. Toca «Hablar con alguien» y el equipo te ayuda.`;
+  }
+
+  async function mostrarGestionCita(cita) {
+    conversation = await updateConversation(negocioId, phone, { manageCitaId: cita.id });
+    const { tl } = context.terms;
+    const cuerpo = `Tu ${tl('appointment')}: ${describirCita(cita)}.`;
+    if (!puedeCambiar(cita)) {
+      return responder(menuBotones({
+        texto: `${cuerpo}\n\n${avisoDemasiadoTarde()}\n\n2. Hablar con alguien`,
+        cuerpo: `${cuerpo}\n\n${avisoDemasiadoTarde()}`,
+        botones: [{ id: '2', title: 'Hablar con alguien' }, { id: 'otra', title: 'Volver al menú' }],
+      }), conversation);
+    }
+    return responder(menuBotones({
+      texto: `${cuerpo}\n¿Qué deseas hacer?\n\nEscribe "reprogramar", "cancelar cita" u "otra".`,
+      cuerpo: `${cuerpo}\n¿Qué deseas hacer?`,
+      botones: [{ id: 'cita_reprogramar', title: 'Reprogramar' }, { id: 'cita_cancelar', title: cabe(`Cancelar ${tl('appointment')}`, 20, 'Cancelar') }, { id: 'otra', title: 'Volver al menú' }],
+    }), conversation);
+  }
+
+  async function pedirConfirmacionCancelar(cita) {
+    if (!puedeCambiar(cita)) return mostrarGestionCita(cita);
+    conversation = await updateConversation(negocioId, phone, { currentFlow: 'confirm_cancel', manageCitaId: cita.id });
+    return responder(mensajeConfirmarCancelar(cita), conversation);
+  }
+
+  async function confirmarCancelacion() {
+    const cita = citaSeleccionada();
+    const { tl, g } = context.terms;
+    let cancelada;
+    try {
+      if (!cita) throw new Error('No encontré esa cita.');
+      cancelada = await cancelAppointment({
+        negocioId, citaId: cita.id, phone, ahora: ahoraNegocio(), minHours: horasMinimasCambio(context),
+      });
+    } catch (err) {
+      logger.warn('[assistantEngine] cancelar cita falló:', err.message);
+      conversation = await resetConversation(negocioId, phone);
+      const motivo = err.message === 'DEMASIADO_TARDE' ? avisoDemasiadoTarde() : `No pude cancelar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ${err.message}`;
+      return responder(prefijo(motivo, await bienvenida()), conversation);
+    }
+
+    const esPendiente = !cancelada.professionalId || cancelada.professionalId === PENDING_ID;
+    sendNotification({
+      tipo: 'RESERVA_CANCELADA',
+      negocioId,
+      data: { clientName: cancelada.clientName, time: `${cancelada.time} (${cancelada.date})` },
+      ...(esPendiente ? { targetProfessionalIds: [] } : { targetProfessionalId: cancelada.professionalId }),
+    }).catch((err) => logger.warn('[assistantEngine] Push cancelación falló:', err.message));
+    reevaluatePending({ negocioId, date: cancelada.date })
+      .catch((err) => logger.warn('[assistantEngine] reevaluatePending falló:', err.message));
+
+    conversation = await resetConversation(negocioId, phone);
+    const cuerpo = `✅ Listo, tu ${tl('appointment')} de ${fechaLegible(cancelada.date)} a las ${cancelada.time} quedó ${g('appointment', 'cancelado', 'cancelada')}.\n¿Quieres agendar ${g('appointment', 'otro', 'otra')}?`;
+    return responder(menuBotones({
+      texto: `${cuerpo}\n\n1. Agendar\n2. Hablar con alguien`,
+      cuerpo,
+      botones: [{ id: '1', title: cabe(`Agendar ${tl('appointment')}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
+    }), conversation);
+  }
+
+  async function iniciarReprogramacion(cita) {
+    if (!puedeCambiar(cita)) return mostrarGestionCita(cita);
+    const { tl } = context.terms;
+    if (!cita.services.length) {
+      return responder(prefijo(`No pude leer ${tl('services')} de esa ${tl('appointment')}.`, mensajeBienvenida(context)), conversation);
+    }
+    conversation = await updateConversation(negocioId, phone, {
+      rescheduleCitaId: cita.id,
+      manageCitaId: cita.id,
+      selectedServices: cita.services,
+      selectedStaff: null,
+    });
+    const pros = profesionalesPara(context, cita.services.map((s) => s.serviceId));
+    const aviso = `Reprogramemos tu ${tl('appointment')} (${describirCita(cita)}).`;
+    if (pros.length === 0) {
+      conversation = await resetConversation(negocioId, phone);
+      return responder(`${aviso}\n\nAhora mismo no hay ${tl('professionals')} para ese ${tl('service')}. Toca «Hablar con alguien» o escribe "menu".`, conversation);
+    }
+    if (pros.length === 1) {
+      const p = pros[0];
+      conversation = await updateConversation(negocioId, phone, { selectedStaff: { id: p.id, name: p.name, branch: p.branch || '' } });
+      return ofrecerHorarios(`${aviso} Te atenderá ${p.name}.`);
+    }
+    conversation = await updateConversation(negocioId, phone, {
+      currentFlow: 'choosing_staff',
+      staffOptionsIds: pros.map((p) => p.id),
+    });
+    return responder(prefijo(aviso, mensajeProfesionales(pros)), conversation);
+  }
+
+  async function confirmarReprogramacion() {
+    const conv = conversation;
+    const staff = conv.selectedStaff || {};
+    const esCualquiera = staff.id === PENDING_ID;
+    const { tl, g } = context.terms;
+    let r;
+    try {
+      r = await rescheduleAppointment({
+        negocioId,
+        citaId: conv.rescheduleCitaId,
+        phone,
+        ahora: ahoraNegocio(),
+        minHours: horasMinimasCambio(context),
+        date: conv.selectedDate,
+        time: conv.selectedTime,
+        duration: totalDuracion(conv),
+        professionalId: esCualquiera ? null : staff.id,
+        candidateIds: esCualquiera ? staff.candidateIds : null,
+      });
+    } catch (err) {
+      logger.warn('[assistantEngine] reprogramar falló:', err.message);
+      if (/disponible|pasó/i.test(err.message)) return ofrecerHorarios('Ese horario ya no está disponible.');
+      conversation = await resetConversation(negocioId, phone);
+      const motivo = err.message === 'DEMASIADO_TARDE' ? avisoDemasiadoTarde() : `No pude reprogramar: ${err.message}`;
+      return responder(prefijo(motivo, await bienvenida()), conversation);
+    }
+
+    const { antes, despues, professionalName } = r;
+    const cambios = [`Nueva fecha: ${fechaLegible(despues.date)} ${despues.time} (antes ${antes.date} ${antes.time})`];
+    const cambioPro = antes.professionalId !== despues.professionalId;
+    if (cambioPro) cambios.push(`${mayuscula(tl('professional'))}: ${professionalName}`);
+    sendNotification({
+      tipo: 'RESERVA_MODIFICADA',
+      negocioId,
+      data: { clientName: despues.clientName, time: despues.time, changes: cambios },
+      targetProfessionalId: despues.professionalId,
+    }).catch((err) => logger.warn('[assistantEngine] Push reprogramación falló:', err.message));
+    if (cambioPro && antes.professionalId && antes.professionalId !== PENDING_ID) {
+      // Al profesional anterior se le avisa que ya no tiene esa cita (solo a él).
+      sendNotification({
+        tipo: 'RESERVA_CANCELADA',
+        negocioId,
+        data: { clientName: antes.clientName, time: `${antes.time} (${antes.date})` },
+        targetProfessionalId: antes.professionalId,
+        onlyTargetProfessional: true,
+      }).catch(() => {});
+    }
+    for (const date of new Set([antes.date, despues.date])) {
+      reevaluatePending({ negocioId, date }).catch((err) => logger.warn('[assistantEngine] reevaluatePending falló:', err.message));
+    }
+
+    conversation = await resetConversation(negocioId, phone);
+    return responder(`✅ ¡Listo! Tu ${tl('appointment')} quedó ${g('appointment', 'reprogramado', 'reprogramada')} para ${fechaLegible(despues.date)} (${despues.date}) a las ${despues.time} con ${professionalName}.`, conversation);
   }
 
   // Primero el nombre de Clientes (el admin lo puede corregir), después el
@@ -852,6 +1096,65 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       botones: [{ id: '1', title: 'Confirmar' }, { id: 'nombre', title: 'Cambiar nombre' }, { id: '2', title: 'Cancelar' }],
     });
   }
+
+function mensajeConCitas(nombre, citas) {
+  const { tl, g } = context.terms;
+  const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋 Soy el asistente de ${context.businessName}.`;
+  if (citas.length === 1) {
+    const c = citas[0];
+    const cuerpo = `${saludo}\n\nTienes ${g('appointment', 'un', 'una')} ${tl('appointment')} ${describirCita(c)}.`;
+    if (!puedeCambiar(c)) {
+      return menuBotones({
+        texto: `${cuerpo}\n\n1. Agendar ${g('appointment', 'otro', 'otra')}\n2. Hablar con alguien`,
+        cuerpo: `${cuerpo}\n\n${avisoDemasiadoTarde()}`,
+        botones: [{ id: '1', title: cabe(`Agendar ${tl('appointment')}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
+      });
+    }
+    return menuBotones({
+      texto: `${cuerpo}\n¿Qué deseas hacer?\n\nEscribe "reprogramar", "cancelar cita" u "otra".`,
+      cuerpo: `${cuerpo}\n¿Qué deseas hacer?`,
+      botones: [{ id: 'cita_reprogramar', title: 'Reprogramar' }, { id: 'cita_cancelar', title: cabe(`Cancelar ${tl('appointment')}`, 20, 'Cancelar') }, { id: 'otra', title: 'Otra consulta' }],
+    });
+  }
+  const cuerpo = `${saludo}\n\nTienes ${citas.length} ${tl('appointments')} ${g('appointment', 'próximos', 'próximas')}. Elige una para reprogramarla o cancelarla, o elige otra opción.`;
+  return menuLista({
+    texto: `${cuerpo}\n\n${citas.map((c, i) => `cita_${i + 1}. ${describirCita(c)}`).join('\n')}\n1. Agendar\n2. Hablar con alguien`,
+    cuerpo,
+    boton: 'Ver opciones',
+    items: citas.map((c, i) => ({
+      id: `cita_${i + 1}`,
+      title: `${mayuscula(fechaLegible(c.date))} ${c.time}`,
+      description: `${c.serviceName}${c.professionalName ? ` · ${c.professionalName}` : ''}`,
+    })),
+    fijas: [
+      { id: '1', title: cabe(`📅 Agendar ${tl('appointment')}`, 24, '📅 Agendar') },
+      { id: '2', title: '💬 Hablar con alguien' },
+    ],
+  });
+}
+function mensajeConfirmarCancelar(cita) {
+  const { tl, g } = context.terms;
+  const cuerpo = cita
+    ? `¿Seguro que quieres cancelar tu ${tl('appointment')} de ${describirCita(cita)}?`
+    : `¿Seguro que quieres cancelar ${g('appointment', 'el', 'la')} ${tl('appointment')}?`;
+  return menuBotones({
+    texto: `${cuerpo}\n\nEscribe "sí" para cancelar o "no" para no cambiar nada.`,
+    cuerpo,
+    botones: [{ id: 'si_cancelar', title: 'Sí, cancelar' }, { id: 'no', title: 'No, mantener' }],
+  });
+}
+function mensajeResumenReprogramar(conv) {
+  const { tl } = context.terms;
+  const anterior = citaSeleccionada();
+  const staff = conv.selectedStaff || {};
+  const conQuien = staff.id && staff.id !== PENDING_ID ? ` con ${staff.name}` : '';
+  const resumen = `Confirma el cambio de tu ${tl('appointment')}:\n${anterior ? `Antes: ${fechaLegible(anterior.date)} ${anterior.time}\n` : ''}Ahora: ${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${conQuien}\n${nombresServicios(conv)}`;
+  return menuBotones({
+    texto: `${resumen}\n\n1. Confirmar\n2. No cambiar`,
+    cuerpo: resumen,
+    botones: [{ id: '1', title: 'Confirmar cambio' }, { id: '2', title: 'No cambiar' }],
+  });
+}
 }
 
 function listaNumerada(items, getLabel) {

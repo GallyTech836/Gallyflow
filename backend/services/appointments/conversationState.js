@@ -18,6 +18,10 @@ const DEFAULT_STATE = {
   selectedStaff: null,
   selectedDate: null,
   selectedTime: null,
+  // Cancelar / reprogramar
+  citaOptions: null,
+  manageCitaId: null,
+  rescheduleCitaId: null,
 };
 
 function conversationsRef(negocioId) {
