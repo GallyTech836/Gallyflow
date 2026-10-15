@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { runAssistant } from '../services/assistantEngine/router.js';
 import * as whatsappProvider from '../services/providers/whatsappProvider.js';
 import { logger } from '../utils/logger.js';
+import { checkCapability, incrementUsage, incrementRejected } from '../services/capabilities/capabilityService.js';
 import { updateConversation } from '../services/appointments/conversationState.js';
 
 const router = Router();
