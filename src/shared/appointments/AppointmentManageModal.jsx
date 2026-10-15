@@ -3,7 +3,9 @@ import { Trash2, ChevronDown } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates, canAdjustDuration } from './permissions';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
 import { getLabel } from './statusModel';
-import { formatServicePrice } from '../servicePricing/servicePricing';
+import { formatServicePriceFor } from '../servicePricing/servicePricing';
+import { buildCitaService, buildPendingCitaService, getMinimumPrice, distributeFinalPrice, summarizeCitaServices } from '../servicePricing/professionalPricing';
+import { professionalCanDo } from './pendingModel';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import { Modal, Button, Field, Input, Select, Textarea, useConfirm } from '../ui';
 
@@ -67,23 +69,30 @@ export default function AppointmentManageModal({
     ? appointment.services
     : getServicesFromCita(appointment);
 
+    // Profesional de la cita (null = Pendiente). El precio de un servicio que se
+  // agrega es el de ESE profesional; los ya guardados no se tocan (histórico).
+  const assignedId = appointment.professionalId || appointment.barberId || 'pending';
+  const currentProfessional = assignedId !== 'pending'
+    ? (professionals || []).find(p => p?.id === assignedId) || null
+    : null;
+  const activeProfessionals = (professionals || []).filter(p => p?.active !== false);
+
   const toggleService = (service) => {
     const exists = currentServices.some(s => s.serviceId === service.id);
     const nextServices = exists
       ? currentServices.filter(s => s.serviceId !== service.id)
-      : [...currentServices, {
-          serviceId: service.id,
-          serviceName: service.name,
-          price: service.price || 0,
-          duration: service.duration || 30,
-        }];
+      : [...currentServices, assignedId !== 'pending'
+          // Si el profesional no está en la lista (otra sucursal), usa el precio base.
+          ? buildCitaService(service, currentProfessional)
+          : buildPendingCitaService(service, activeProfessionals.filter(p => professionalCanDo(p, [service.id])))];
 
-    const { totalPrice, totalDuration } = calculateTotals(nextServices);
+    const { totalPrice, totalDuration, priceProvisional } = summarizeCitaServices(nextServices);
     onChangeField('services', nextServices);
     onChangeField('serviceId', nextServices[0]?.serviceId || '');
     onChangeField('serviceName', nextServices.map(s => s.serviceName).join(' + '));
     onChangeField('price', totalPrice);
     onChangeField('duration', totalDuration);
+    if (assignedId === 'pending') onChangeField('priceProvisional', priceProvisional);
   };
 
   // Mientras el estatus sea "Completada" y no haya un método de pago real
@@ -94,7 +103,9 @@ export default function AppointmentManageModal({
   // --- Precio variable: al finalizar hay que ingresar el precio final ---
   const catalogOf = (cs) => (services || []).find(s => s?.id === cs.serviceId);
   const isVariableSvc = (cs) => cs.priceVariable === true || catalogOf(cs)?.priceVariable === true;
-  const minPriceOf = (cs) => (isVariableSvc(cs) && catalogOf(cs) ? Number(catalogOf(cs).price || 0) : Number(cs.price || 0));
+    // Mínimo "Desde": el guardado al reservar (listPrice, ya con el precio del
+  // profesional); en citas viejas, el del catálogo para este profesional.
+  const minPriceOf = (cs) => (isVariableSvc(cs) ? getMinimumPrice(cs, catalogOf(cs), currentProfessional) : Number(cs.price || 0));
   const hasVariable = currentServices.some(isVariableSvc);
   const minTotal = currentServices.reduce((sum, cs) => sum + minPriceOf(cs), 0);
   const finalPriceMissing = isCompleting && hasVariable && !(Number(appointment.price) > 0);
@@ -102,15 +113,8 @@ export default function AppointmentManageModal({
 
   const applyFinalPrice = (value) => {
     onChangeField('price', value);
-    const final = Number(value);
-    const next = currentServices.map(cs => ({ ...cs, price: isVariableSvc(cs) ? minPriceOf(cs) : cs.price }));
-    const vIdx = next.findIndex(isVariableSvc);
-    if (vIdx < 0) return;
-    if (final > 0) {
-      const others = next.reduce((sum, cs, i) => (i === vIdx ? sum : sum + Number(cs.price || 0)), 0);
-      next[vIdx].price = Math.max(0, final - others);
-    }
-    onChangeField('services', next);
+    if (!hasVariable) return;
+    onChangeField('services', distributeFinalPrice(currentServices, value, isVariableSvc, minPriceOf));
   };
   const startFinalPrice = () => {
     if (!hasVariable) return;
@@ -341,7 +345,7 @@ export default function AppointmentManageModal({
                       className="h-4 w-4 shrink-0 accent-nexus-primary"
                     />
                     <span className="min-w-0 flex-1">{s?.name}</span>
-                    {showPrices && <span className="nx-num shrink-0 text-nexus-text-secondary">{formatServicePrice(s)}</span>}
+                    {showPrices && <span className="nx-num shrink-0 text-nexus-text-secondary">{formatServicePriceFor(s, { professional: currentProfessional, professionals: activeProfessionals })}</span>}
                   </label>
                 ))}
               </div>

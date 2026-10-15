@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useId } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
-import { formatServicePrice } from '../servicePricing/servicePricing';
-import { calculateTotals } from './serviceSelection';
+import { formatServicePriceFor } from '../servicePricing/servicePricing';
+import { buildCitaServices } from '../servicePricing/professionalPricing';
+import { professionalCanDo } from './pendingModel';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import { Modal, Button, Field, Input, Select, Textarea } from '../ui';
 
@@ -135,6 +136,13 @@ export default function AppointmentCreateModal({
     return byDate.filter(s => assignedIds.has(String(s?.id)));
   }, [services, draft.date, draft.professionalId, professionals, fixedProfessional]);
 
+  // Profesional elegido (o el fijo en Barber); null = Pendiente.
+  const selectedProfessional =
+    fixedProfessional ||
+    (draft.professionalId && draft.professionalId !== 'pending'
+      ? professionals.find(b => b?.id === draft.professionalId) || null
+      : null);
+
   // Si cambia la fecha y algún servicio ya elegido deja de estar disponible
   // ese día, lo deseleccionamos automáticamente.
   useEffect(() => {
@@ -178,18 +186,19 @@ export default function AppointmentCreateModal({
     if (draft.serviceIds.length === 0) return;
     if (!String(draft.clientName || '').trim()) return;
   
-    const servicesForCita = servicesForDate
-      .filter(s => draft.serviceIds.includes(s.id))
-      .map(s => {
-        const customDuration = draft.overtime && draft.serviceDurations[s.id];
-        return {
-          serviceId: s.id,
-          serviceName: s.name,
-          price: s.price || 0,
-          duration: customDuration ? Number(draft.serviceDurations[s.id]) : (s.duration || 30),
-        };
-      });
-    const { totalPrice, totalDuration } = calculateTotals(servicesForCita);
+        // Precio por profesional: el elegido (o el fijo en Barber) usa su precio
+    // personalizado o el base; "Pendiente" guarda el mínimo entre los
+    // candidatos que hacen esos servicios (se recalcula al asignar).
+    const chosen = servicesForDate.filter(s => draft.serviceIds.includes(s.id));
+    const durations = {};
+    if (draft.overtime) {
+      chosen.forEach(s => { if (draft.serviceDurations[s.id]) durations[s.id] = Number(draft.serviceDurations[s.id]); });
+    }
+    const { services: servicesForCita, totalPrice, totalDuration, priceProvisional } = buildCitaServices(chosen, {
+      professional: selectedProfessional,
+      candidates: selectedProfessional ? [] : (professionals || []).filter(p => p?.active !== false && professionalCanDo(p, chosen.map(s => s.id))),
+      durations,
+    });
   
     setSubmitting(true);
     try {
@@ -199,6 +208,7 @@ export default function AppointmentCreateModal({
         serviceId: servicesForCita[0]?.serviceId || '',
         serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
         price: totalPrice,
+        priceProvisional,
         duration: totalDuration,
         overtime: !!draft.overtime,
       });
@@ -383,7 +393,7 @@ export default function AppointmentCreateModal({
                       className="h-4 w-4 shrink-0 accent-nexus-primary"
                     />
                     <span className="min-w-0 flex-1">{s?.name}</span>
-                    <span className="nx-num shrink-0 text-nexus-text-secondary">{formatServicePrice(s)}</span>
+                    <span className="nx-num shrink-0 text-nexus-text-secondary">{formatServicePriceFor(s, { professional: selectedProfessional, professionals: (professionals || []).filter(p => p?.active !== false) })}</span>
                   </label>
                 ))}
               </div>

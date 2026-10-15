@@ -6,6 +6,17 @@
 import { db } from '../../config/firebase.js';
 import { getAvailableSlots } from './availability.js';
 import { getPendingCandidates, PENDING_ID } from './pendingModel.js';
+import { repriceCitaServices } from '../pricing/professionalPricing.js';
+import { readServicesInTx } from '../pricing/catalogInTx.js';
+
+// Precio por profesional: el precio NUNCA se toma de quien llama (el endpoint
+// es público); se recalcula aquí con el catálogo y el profesional, dentro de
+// la misma transacción. Nombre y duración sí se respetan.
+function priceServicesOrThrow(services, catalog, professional, opts) {
+  const missing = services.find((s) => !catalog.some((c) => String(c.id) === String(s.serviceId)));
+  if (missing) throw new Error('Servicio no encontrado. Actualiza e inténtalo de nuevo.');
+  return repriceCitaServices(services, catalog, professional, opts);
+}
 
 export async function createAppointment({
   negocioId,
@@ -42,6 +53,7 @@ export async function createAppointment({
 
     const bloqueosDelDiaSnap = await tx.get(bloqueosRef.where('date', '==', date));
     const bloqueos = bloqueosDelDiaSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const catalog = await readServicesInTx(tx, negocioRef, services.map((s) => s.serviceId));
 
     const slotsLibres = getAvailableSlots({
       fecha: date,
@@ -55,7 +67,7 @@ export async function createAppointment({
       throw new Error('El horario ya no está disponible. Elige otro horario.');
     }
 
-    const totalPrice = services.reduce((acc, s) => acc + Number(s.price || 0), 0);
+    const priced = priceServicesOrThrow(services, catalog, profesional);
 
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
@@ -65,11 +77,11 @@ export async function createAppointment({
       clientPhone: clientPhone?.trim() || 'No especificado',
       professionalId,
       barberId: professionalId,
-      services,
+      services: priced.services,
       serviceId: services[0]?.serviceId || '',
       serviceName: services.map((s) => s.serviceName).join(' + '),
       duration: serviceDuration,
-      price: totalPrice,
+      price: priced.totalPrice,
       date,
       time,
       status: 'confirmed',
@@ -138,6 +150,10 @@ export async function createPendingAppointment({
     if (candidatos.length === 0) {
       throw new Error('El horario ya no está disponible. Elige otro horario.');
     }
+    // Pendiente: precio = mínimo entre candidatos (rango guardado); se
+    // recalcula con el del profesional cuando se asigna.
+    const catalog = await readServicesInTx(tx, negocioRef, services.map((s) => s.serviceId));
+    const priced = priceServicesOrThrow(services, catalog, null, { candidates: candidatos });
 
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
@@ -147,11 +163,12 @@ export async function createPendingAppointment({
       clientPhone: clientPhone?.trim() || 'No especificado',
       professionalId: PENDING_ID,
       barberId: PENDING_ID,
-      services,
+      services: priced.services,
       serviceId: services[0]?.serviceId || '',
       serviceName: services.map((s) => s.serviceName).join(' + '),
       duration: serviceDuration,
-      price: services.reduce((acc, s) => acc + Number(s.price || 0), 0),
+      price: priced.totalPrice,
+      priceProvisional: true,
       date,
       time,
       status: 'confirmed',

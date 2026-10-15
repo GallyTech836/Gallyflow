@@ -7,7 +7,7 @@ import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
-import { getPendingCandidates, getCitaServiceIds } from '../shared/appointments/pendingModel';
+import { getPendingCandidates, getCitaServiceIds, professionalCanDo } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
 import { describeAppointmentChanges } from '../shared/appointments/changeSummary';
 import { getLabel as getStatusLabel } from '../shared/appointments/statusModel';
@@ -26,7 +26,8 @@ import { calculateCommission, calculateCommissionForCita } from '../shared/commi
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { checkWorkingHours } from '../shared/appointments/workingHours';
 import { uploadImage } from '../shared/cloudinary/uploadImage';
-import { formatServicePrice } from '../shared/servicePricing/servicePricing';
+import { formatServicePrice, formatServicePriceFor } from '../shared/servicePricing/servicePricing';
+import { repriceCitaServices, normalizeCustomPrice, hasCustomPrices } from '../shared/servicePricing/professionalPricing';
 import { getStaffPermissionOptions, getEditPartOptions, getEditMode, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
 import { checkStaffUsername, setStaffPassword, revokeStaffSessions } from '../shared/staff/staffApi';
@@ -1783,11 +1784,14 @@ const { businessSettings } = useBusinessSettings(negocioId);
             : [];
         })();
 
-    // Aplica la promo de martes a cada servicio individualmente.
+        // Aplica la promo de martes a cada servicio individualmente, pero solo si
+    // usa el precio base: el precio propio de un profesional tiene prioridad.
     const pricedServices = draftServices.map(s => {
       const fullService = services.find(sv => sv.id === s.serviceId);
-      const promoPrice = (isTuesday && fullService?.promoPrice) ? fullService.promoPrice : s.price;
-      return { ...s, price: promoPrice };
+      const usesBase = !s.priceSource || s.priceSource === 'base';
+      if (!(isTuesday && usesBase && Number(fullService?.promoPrice) > 0)) return s;
+      const promo = Number(fullService.promoPrice);
+      return { ...s, price: promo, ...(s.priceSource ? { listPrice: promo, priceSource: 'promo' } : {}) };
     });
 
     const totalPrice = pricedServices.reduce((sum, s) => sum + Number(s.price || 0), 0);
@@ -1822,6 +1826,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       serviceId: pricedServices[0]?.serviceId || '',
       serviceName: pricedServices.map(s => s.serviceName).join(' + '),
       price: totalPrice, time: draft.time, startTime: draft.time,
+      ...(targetProfessionalId === 'pending' ? { priceProvisional: true } : {}),
       endTime: endTimeStr, duration: Number(totalDuration),
       date: draft.date, reservationDate: draft.date, status: 'confirmed',
       paymentMethod: draft.paymentMethod, bookedBy: 'admin',
@@ -1868,6 +1873,19 @@ const { businessSettings } = useBusinessSettings(negocioId);
       ignoreCitaId: editingReservation.id,
     });
   }, [editingReservation, barbers, reservations, blockouts, businessSettings]);
+
+    // Cambiar de profesional (o asignar una Pendiente) recalcula el precio con el
+  // del nuevo profesional. Citas finalizadas/canceladas no se tocan: su precio
+  // es histórico (comisiones y finanzas ya lo usan).
+  const repriceForProfessional = (cita, professionalId) => {
+    if (!cita || cita.status === 'completed' || cita.status === 'cancelled') return {};
+    const current = cita.services && cita.services.length > 0 ? cita.services : getServicesFromCita(cita);
+    if (current.length === 0) return {};
+    const pro = professionalId && professionalId !== 'pending' ? barbers.find(b => b.id === professionalId) : null;
+    const candidates = pro ? [] : barbers.filter(b => b?.active !== false && professionalCanDo(b, current.map(s => s.serviceId)));
+    const r = repriceCitaServices(current, services, pro, { candidates });
+    return { services: r.services, price: r.totalPrice, priceProvisional: r.priceProvisional };
+  };
 
   const handleOpenEditReservation = (res) => {
     const services = res.services && res.services.length > 0 ? res.services : getServicesFromCita(res);
@@ -1916,6 +1934,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
       serviceId: currentServices[0]?.serviceId || '',
       serviceName: currentServices.map(s => s.serviceName).join(' + '),
       price: editingReservation.price,
+      // Pendiente = precio provisional (rango); con profesional asignado ya es definitivo.
+      priceProvisional: targetProfessionalId === 'pending' ? !!editingReservation.priceProvisional : false,
       time: editingReservation.time,
       startTime: editingReservation.time,
       endTime: endTimeStr,
@@ -2401,6 +2421,15 @@ const { businessSettings } = useBusinessSettings(negocioId);
     };
   
     const handleSaveBarber = async () => {
+            // Precio por profesional: se guarda como número; si está vacío se quita
+      // el campo y se usa el precio base del servicio.
+      const savedServices = (newBarber.services || []).map(a => {
+        if (!a || typeof a !== 'object') return a;
+        const rest = { ...a };
+        delete rest.customPrice;
+        const customPrice = normalizeCustomPrice(a.customPrice);
+        return customPrice === null ? rest : { ...rest, customPrice };
+      });
       const credencial = newBarber.password
         ? { name: newBarber.firstName + ' ' + newBarber.lastName, username: newBarber.username, password: newBarber.password }
         : null;
@@ -2414,7 +2443,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         pin: newBarber.pin,
         avatar: newBarber.avatar,
         active: newBarber.active,
-        services: newBarber.services,
+        services: savedServices,
         permissions: normalizeStaffPermissions(newBarber.permissions),
         availability: newBarber.availability
       };
@@ -2458,7 +2487,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
           createdDate: new Date().toISOString(),
           attendance: { in: null, out: null, status: 'inactive' },
           performance: { servicesCount: 0, totalGenerated: 0 },
-          services: newBarber.services,
+          services: savedServices,
           permissions: normalizeStaffPermissions(newBarber.permissions),
           availability: newBarber.availability
         });
@@ -3684,6 +3713,12 @@ const { businessSettings } = useBusinessSettings(negocioId);
                         <span className="text-sm text-nexus-text-secondary">Precio general</span>
                         <span className="text-nexus-primary nx-num font-bold text-base">{formatServicePrice(s)}</span>
                       </div>
+                      {hasCustomPrices(s, barbers) && (
+                        <div className="flex justify-between items-center gap-3 pt-1.5">
+                          <span className="text-xs text-nexus-text-muted">Varía por {tl('professional')}</span>
+                          <span className="nx-num text-xs font-semibold text-nexus-text-secondary">{formatServicePriceFor(s, { professionals: barbers })}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -4650,7 +4685,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
         onClose={() => setActiveModal(null)}
           onChangeField={(field, value) => {
             if (field === 'professionalId') {
-              setEditingReservation(prev => ({ ...prev, professionalId: value, barberId: value }));
+              setEditingReservation(prev => ({ ...prev, professionalId: value, barberId: value, ...repriceForProfessional(prev, value) }));
             } else {
               setEditingReservation(prev => ({ ...prev, [field]: value }));
             }
@@ -5077,7 +5112,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                             <div className="flex justify-between items-start">
                               <div>
                                 <h5 className="text-xs font-bold text-nexus-text leading-tight">{original.name}</h5>
-                                <p className="text-xs text-nexus-text-muted nx-num">Precio: {original.price} Bs</p>
+                                <p className="text-xs text-nexus-text-muted nx-num">Precio base: {formatServicePrice(original)}</p>
                               </div>
                               <button
                                 type="button"
@@ -5092,6 +5127,34 @@ const { businessSettings } = useBusinessSettings(negocioId);
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
+                            </div>
+
+                            <div className="pt-2 border-t border-nexus-border">
+                              <label htmlFor={`custom-price-${assigned.serviceId}`} className="text-xs text-nexus-text-secondary font-bold">
+                                {original.priceVariable ? `Precio mínimo ${g('professional', 'de este', 'de esta')} ${tl('professional')} (Bs)` : `Precio ${g('professional', 'de este', 'de esta')} ${tl('professional')} (Bs)`}
+                              </label>
+                              <input
+                                id={`custom-price-${assigned.serviceId}`}
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="any"
+                                value={assigned.customPrice ?? ''}
+                                placeholder={`${original.price ?? 0} (precio base)`}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  setNewBarber(prev => ({
+                                    ...prev,
+                                    services: prev.services.map(s =>
+                                      s.serviceId === assigned.serviceId
+                                        ? { ...s, customPrice: raw === '' ? null : raw }
+                                        : s
+                                    )
+                                  }));
+                                }}
+                                className="mt-1 w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text nx-num px-3 h-10 text-base sm:text-sm"
+                              />
+                              <p className="mt-1 text-xs text-nexus-text-muted">Vacío = usa el precio base. Solo afecta {tl('appointments')} nuevas.</p>
                             </div>
 
                             <div className="pt-2 border-t border-nexus-border flex items-center justify-between">

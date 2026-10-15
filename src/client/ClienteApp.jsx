@@ -6,8 +6,8 @@ import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
 import { notify, NotificationType } from '../shared/notifications';
-import { calculateTotals } from '../shared/appointments/serviceSelection';
-import { formatServicePrice, formatAmount } from '../shared/servicePricing/servicePricing';
+import { formatServicePriceFor, formatAmountRange } from '../shared/servicePricing/servicePricing';
+import { buildCitaServices, getCustomPrice } from '../shared/servicePricing/professionalPricing';
 import DirectionsButton from '../shared/location/DirectionsButton';
 import WhatsAppButton from '../shared/location/WhatsAppButton';
 import Avatar from '../shared/avatar/Avatar';
@@ -55,7 +55,11 @@ export default function App({ negocioSlug } = {}) {
   const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
   const [toasts, setToasts] = useState([]);
 
-  const resetBooking = () => {
+    // Precio confirmado al reservar (lo que se guardó), para la pantalla final.
+    const [bookedPricing, setBookedPricing] = useState(null);
+
+    const resetBooking = () => {
+      setBookedPricing(null);
     setSelectedBranch(null)
     setSelectedServices([]);
     setSelectedBarber(null);
@@ -437,15 +441,42 @@ export default function App({ negocioSlug } = {}) {
     return freeHoursOf(selectedBarber).filter(cumpleAnticipacion);
   }, [selectedBarber, barbers, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
 
-  const hasVariablePrice = selectedServices.some(s => s.priceVariable);
-  const calculateTotal = useMemo(() => {
-    return selectedServices.reduce((acc, curr) => {
-      if (isTuesday && (curr.id === 'sr' || curr.id === 'jr')) {
-        return acc + curr.promoPrice;
-      }
-      return acc + curr.price;
-    }, 0);
-  }, [selectedServices, isTuesday]);
+    // === PRECIO POR PROFESIONAL ===
+    const realBarbers = useMemo(() => barbers.filter(b => !b.isPending), [barbers]);
+    const chosenPro = selectedBarber && !selectedBarber.isPending ? selectedBarber : null;
+  
+    // "Pendiente": el precio es un rango entre los profesionales que podrían
+    // atender (candidatos libres a esa hora; si aún no hay hora, todos los que
+    // hacen esos servicios). Se guarda el mínimo y se recalcula al asignar.
+    const pendingPricePool = useMemo(() => {
+      if (chosenPro) return [];
+      const ids = selectedServices.map(s => s.id);
+      const canDoAll = realBarbers.filter(b => (ids.length ? professionalCanDo(b, ids) : true));
+      if (!ids.length || !selectedDate || !selectedHour || citasFecha !== selectedDate || bloqueosFecha !== selectedDate) return canDoAll;
+      const candidates = getPendingCandidates({
+        professionals: realBarbers,
+        serviceIds: ids,
+        fecha: selectedDate,
+        time: selectedHour,
+        duration: selectedServices.reduce((acc, s) => acc + (s?.durationMin || 30), 0),
+        citas: citasNegocio,
+        bloqueos: blockouts,
+        businessSchedule: businessSettings?.schedule || [],
+      });
+      return candidates.length ? candidates : canDoAll;
+    }, [chosenPro, selectedServices, realBarbers, selectedDate, selectedHour, citasFecha, bloqueosFecha, citasNegocio, blockouts, businessSettings]);
+  
+    // Siempre con los datos actuales del catálogo (por id).
+    const bookingPricing = useMemo(() => {
+      // Promo de martes heredada: solo servicios 'sr'/'jr' (igual que antes).
+      const promoFor = (service) => isTuesday && (service?.id === 'sr' || service?.id === 'jr');
+      const catalog = selectedServices.map(sel => services.find(s => s.id === sel.id) || sel);
+      return buildCitaServices(catalog, { professional: chosenPro, candidates: pendingPricePool, promoActive: promoFor });
+    }, [selectedServices, services, chosenPro, pendingPricePool, isTuesday]);
+  
+    const hasVariablePrice = bookingPricing.hasVariable;
+    const calculateTotal = bookingPricing.priceMin;
+    const calculateTotalMax = bookingPricing.priceMax;
 
   // Selección única de servicio (igual que el modelo de Admin/Barber: un
   // serviceId por cita). Se mantiene un array de 1 elemento para no tocar
@@ -551,18 +582,9 @@ export default function App({ negocioSlug } = {}) {
     }
     setLoading(true);
     try {
-      const servicesForCita = selectedServices.map((service) => {
-        const finalPrice = (isTuesday && service.promoPrice && (service.id === 'sr' || service.id === 'jr'))
-          ? service.promoPrice
-          : service.price;
-        return {
-          serviceId: service.id,
-          serviceName: service.name,
-          price: finalPrice,
-          duration: service.durationMin || 30,
-        };
-      });
-      const { totalPrice, totalDuration } = calculateTotals(servicesForCita);
+            // Precio aplicado (histórico): el del profesional elegido, o el mínimo
+      // entre candidatos si es "Pendiente" (priceProvisional).
+      const { services: servicesForCita, totalPrice, totalDuration, priceProvisional } = bookingPricing;
       const professionalId = selectedBarber.isPending ? 'pending' : selectedBarber.id;
 
       // "Pendiente": revalida que siga existiendo algún candidato. La asignación
@@ -643,6 +665,7 @@ export default function App({ negocioSlug } = {}) {
         serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
         duration: totalDuration,
         price: totalPrice,
+        ...(priceProvisional ? { priceProvisional: true } : {}),
         date: selectedDate,
         time: selectedHour,
         status: 'confirmed',
@@ -669,6 +692,7 @@ export default function App({ negocioSlug } = {}) {
       // Sin "await" a propósito: la confirmación visual (SuccessStep) no
       // debe esperar al diálogo de permiso de notificaciones del navegador.
       confirmBookingToClient({ time: selectedHour, negocioId }); // negocioId: solo para la terminología del push
+      setBookedPricing({ min: bookingPricing.priceMin, max: bookingPricing.priceMax, hasVariable: bookingPricing.hasVariable });
       setStep(6); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);
@@ -711,12 +735,16 @@ export default function App({ negocioSlug } = {}) {
         onNext={handleServicesNext} 
         onBack={() => setStep(3)} 
         total={calculateTotal}
+        totalMax={calculateTotalMax}
         hasVariable={hasVariablePrice}
+        professional={chosenPro}
+        professionals={realBarbers}
       />;
       case 5: return <ConfirmStep 
         name={clientName} setName={setClientName} 
         phone={clientPhone} setPhone={setClientPhone}
         total={calculateTotal}
+        totalMax={calculateTotalMax}
         selectedServices={selectedServices}
         selectedBarber={selectedBarber}
         selectedDate={selectedDate}
@@ -733,8 +761,9 @@ export default function App({ negocioSlug } = {}) {
         selectedHour={selectedHour}
         selectedBarber={selectedBarber}
         selectedServices={selectedServices}
-        total={calculateTotal}
-        hasVariable={hasVariablePrice}
+        total={bookedPricing ? bookedPricing.min : calculateTotal}
+        totalMax={bookedPricing ? bookedPricing.max : calculateTotalMax}
+        hasVariable={bookedPricing ? bookedPricing.hasVariable : hasVariablePrice}
         branch={selectedBranch}
       />;
       default: return <Home heroConfig={heroConfig} />;
@@ -910,7 +939,7 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
   );
 };
 
-const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable = false }) => {
+const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [] }) => {
   const terms = useBusinessTerms();
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
@@ -933,7 +962,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
                   : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/30'
               }`}
             >
-              {isTodayTuesday && s.promoPrice && (
+              {isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null) && (
                 <div className="absolute top-2.5 right-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
                   Promo Hoy
                 </div>
@@ -958,13 +987,13 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
                   <Clock size={10} /> {s.duration}
                 </span>
                 <div>
-                  {isTodayTuesday && s.promoPrice ? (
+                  {isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null) ? (
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-nexus-text-muted line-through">{s.price} Bs</span>
                       <span className="text-xs font-bold text-nexus-success-text">{s.promoPrice} Bs</span>
                     </div>
                   ) : (
-                    <span className="text-xs font-bold text-nexus-text">{formatServicePrice(s)}</span>
+                    <span className="text-xs font-bold text-nexus-text">{formatServicePriceFor(s, { professional, professionals })}</span>
                   )}
                 </div>
               </div>
@@ -983,7 +1012,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, hasVariable =
         </div>
         <div className="text-right">
           <span className="text-nexus-text-muted text-xs block font-semibold">Total Estimado</span>
-          <span className="text-xl font-bold text-nexus-text">{formatAmount(total, hasVariable)}</span>
+          <span className="text-xl font-bold text-nexus-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
         </div>
       </div>
       <button 
@@ -1264,7 +1293,8 @@ const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
 const ConfirmStep = ({ 
   name, setName, 
   phone, setPhone, 
-  total, 
+  total,
+  totalMax, 
   selectedServices, 
   selectedBarber, 
   selectedDate, 
@@ -1324,7 +1354,7 @@ const ConfirmStep = ({
           
           <div className="flex justify-between pt-1">
             <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-            <span className="text-base font-bold text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
+            <span className="text-base font-bold text-nexus-success-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
           </div>
         </div>
       </form>
@@ -1350,7 +1380,7 @@ const ConfirmStep = ({
   );
 };
 
-const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, hasVariable = false, branch = null }) => {
+const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, totalMax, hasVariable = false, branch = null }) => {
   const terms = useBusinessTerms();
 
   useEffect(() => {
@@ -1414,7 +1444,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           {typeof total === 'number' && (
             <div className="flex justify-between pt-1">
               <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-              <span className="text-base font-bold text-nexus-success-text">{formatAmount(total, hasVariable)}</span>
+              <span className="text-base font-bold text-nexus-success-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
             </div>
           )}
         </div>

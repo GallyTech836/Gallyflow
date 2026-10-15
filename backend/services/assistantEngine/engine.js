@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
 import { canUse } from '../capabilities/capabilityModel.js';
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
+import { getServicePriceRange, buildCitaServices, formatPriceRange } from '../pricing/professionalPricing.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -88,8 +89,24 @@ function fotoProfesional(p) {
   return url;
 }
 
-function precioServicio(s) {
-  return `${s.priceVariable === true ? 'Desde Bs ' : 'Bs '}${s.price}`;
+// Precio por profesional: sin profesional elegido se muestra el rango entre
+// los que hacen el servicio ("Bs 100 – 150"), o "Desde Bs X" si es variable.
+function precioServicio(s, pros = []) {
+  const r = getServicePriceRange(s, pros);
+  return formatPriceRange(r.min, r.max, { variable: r.priceVariable });
+}
+
+// Precio total de los servicios elegidos: exacto con UN profesional, rango con
+// varios (cualquier profesional). null si no se pueden leer los servicios.
+function precioServicios(ctx, serviciosElegidos = [], pros = []) {
+  const catalogo = serviciosElegidos
+    .map((x) => ctx.servicios.find((s) => String(s.id) === String(x.serviceId)))
+    .filter(Boolean);
+  if (catalogo.length === 0 || catalogo.length !== serviciosElegidos.length) return null;
+  const r = pros.length === 1
+    ? buildCitaServices(catalogo, { professional: pros[0] })
+    : buildCitaServices(catalogo, { candidates: pros });
+  return formatPriceRange(r.priceMin, r.priceMax, { variable: r.hasVariable });
 }
 
 function duracionServicio(servicio) {
@@ -902,6 +919,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     const cambios = [`Nueva fecha: ${fechaLegible(despues.date)} ${despues.time} (antes ${antes.date} ${antes.time})`];
     const cambioPro = antes.professionalId !== despues.professionalId;
     if (cambioPro) cambios.push(`${mayuscula(tl('professional'))}: ${professionalName}`);
+    if (Number(antes.price) !== Number(despues.price)) cambios.push(`Precio: Bs ${antes.price} → Bs ${despues.price}`);
     sendNotification({
       tipo: 'RESERVA_MODIFICADA',
       negocioId,
@@ -1044,13 +1062,13 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     const { tl } = ctx.terms;
     const servicios = serviciosOfrecidos(ctx);
     if (servicios.length === 0) return `Por ahora no hay ${tl('services')} disponibles para reservar.`;
-    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s)}`);
+    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s, context.profesionales)}`);
     const pregunta = `¿Qué ${tl('service')} deseas?`;
     return menuLista({
       texto: `${pregunta}\n\n${lista}`,
       cuerpo: pregunta,
       boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
-      items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s)} · ${duracionServicio(s)} min` })),
+      items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min` })),
       page: paginaActual(),
     });
   }
@@ -1060,22 +1078,33 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     const todos = serviciosOfrecidos(context);
     const extras = serviciosExtraCompatibles();
     return menuLista({
-      texto: `¿Qué ${tl('service')} agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s)}`).join('\n')}`,
+      texto: `¿Qué ${tl('service')} agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s, context.profesionales)}`).join('\n')}`,
       cuerpo: `Elegiste: ${nombresServicios(conversation)}.\n¿Qué ${tl('service')} agregas?`,
       boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
-      items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s)} · ${duracionServicio(s)} min` })),
+      items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min` })),
       page: paginaActual(),
     });
   }
   function mensajeProfesionales(pros) {
     const { tl, g } = context.terms;
     const opciones = opcionesCualquiera(pros, context.terms);
-    const items = [...pros.map((p) => ({ title: p.name })), ...opciones.map((o) => ({ title: o.label, description: 'El primero disponible' }))];
+    const elegidos = serviciosDe(conversation);
+    const precioDe = (lista) => precioServicios(context, elegidos, lista);
+    const items = [
+      ...pros.map((p) => {
+        const precio = precioDe([p]);
+        return { title: p.name, ...(precio ? { description: precio, precio } : {}) };
+      }),
+      ...opciones.map((o) => {
+        const precio = precioDe(o.candidateIds.map((id) => pros.find((p) => p.id === id)).filter(Boolean));
+        return { title: o.label, description: precio ? `El primero disponible · ${precio}` : 'El primero disponible', ...(precio ? { precio } : {}) };
+      }),
+    ];
     const puedeAgregar = serviciosExtraCompatibles().length > 0;
     const elegido = nombresServicios(conversation);
     const titulo = `${elegido ? `Elegiste: ${elegido}.\n` : ''}¿Con quién deseas atenderte?`;
     return menuLista({
-      texto: `${titulo}\n\n${listaNumerada(items, (i) => i.title)}${puedeAgregar ? `\n\n(Escribe "agregar" para sumar ${g('service', 'otro', 'otra')} ${tl('service')})` : ''}`,
+      texto: `${titulo}\n\n${listaNumerada(items, (i) => (i.precio ? `${i.title} - ${i.precio}` : i.title))}${puedeAgregar ? `\n\n(Escribe "agregar" para sumar ${g('service', 'otro', 'otra')} ${tl('service')})` : ''}`,
       cuerpo: titulo,
       boton: cabe(`Ver ${tl('professionals')}`, 20, 'Ver opciones'),
       items,
@@ -1119,7 +1148,9 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     });
   }
   function mensajeResumen(conv) {
-    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}\nA nombre de: ${conv.clientName}`;
+    const precio = precioServicios(context, serviciosDe(conv), prosElegidos(context, conv));
+    const lineaPrecio = precio ? `\nPrecio: ${precio}${conv.selectedStaff?.id === PENDING_ID && /–/.test(precio) ? ` (según quién te atienda)` : ''}` : '';
+    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}\nA nombre de: ${conv.clientName}`;
     return menuBotones({
       texto: `${resumen}\n\n1. Confirmar\n2. Cancelar\n(Escribe "nombre" para cambiar el nombre)`,
       cuerpo: resumen,
@@ -1168,7 +1199,12 @@ function mensajeResumenReprogramar(conv) {
   const anterior = citaSeleccionada();
   const staff = conv.selectedStaff || {};
   const conQuien = staff.id && staff.id !== PENDING_ID ? ` con ${staff.name}` : '';
-  const resumen = `Confirma el cambio de tu ${tl('appointment')}:\n${anterior ? `Antes: ${fechaLegible(anterior.date)} ${anterior.time}\n` : ''}Ahora: ${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${conQuien}\n${nombresServicios(conv)}`;
+    // Si cambia el profesional, el precio pasa a ser el del nuevo: se avisa.
+    const cambiaPro = !!anterior && staff.id && staff.id !== anterior.professionalId;
+    const precioNuevo = cambiaPro ? precioServicios(context, serviciosDe(conv), prosElegidos(context, conv)) : null;
+    const precioAntes = anterior ? formatPriceRange(anterior.services.reduce((acc, s) => acc + (Number(s.price) || 0), 0)) : null;
+    const lineaPrecio = precioNuevo && precioNuevo !== precioAntes ? `\nPrecio: ${precioNuevo}${precioAntes ? ` (antes ${precioAntes})` : ''}` : '';
+    const resumen = `Confirma el cambio de tu ${tl('appointment')}:\n${anterior ? `Antes: ${fechaLegible(anterior.date)} ${anterior.time}\n` : ''}Ahora: ${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${conQuien}\n${nombresServicios(conv)}${lineaPrecio}`;
   return menuBotones({
     texto: `${resumen}\n\n1. Confirmar\n2. No cambiar`,
     cuerpo: resumen,

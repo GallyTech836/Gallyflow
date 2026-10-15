@@ -6,7 +6,8 @@
     "description": "Backend de notificaciones de GallyFlow (Railway). Fase 1: infraestructura base.",
     "scripts": {
       "start": "node src/server.js",
-      "dev": "node --watch src/server.js"
+      "dev": "node --watch src/server.js",
+      "test": "node --test --experimental-test-module-mocks \"tests/*.test.js\""
     },
     "engines": {
       "node": ">=18.0.0"

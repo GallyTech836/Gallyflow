@@ -14,6 +14,9 @@ import { db } from '../../config/firebase.js';
 import { getAvailableSlots } from './availability.js';
 import { professionalCanDo, getCitaServiceIds, PENDING_ID } from './pendingModel.js';
 import { variantesTelefono } from './clientRecord.js';
+import { repriceCitaServices } from '../pricing/professionalPricing.js';
+import { readServicesInTx } from '../pricing/catalogInTx.js';
+import { getServicesFromCita } from '../finance/serviceSelection.js';
 
 const ACTIVAS = new Set(['confirmed', 'pending']);
 const digitos = (p) => String(p || '').replace(/\D/g, '');
@@ -128,12 +131,27 @@ export async function rescheduleAppointment({
       }).includes(time));
     if (!elegido) throw new Error('El horario ya no está disponible. Elige otro horario.');
 
+        // Precio por profesional: si cambia quien atiende (o era Pendiente), se
+    // recalcula con el precio del nuevo profesional. Mismo profesional = mismo
+    // precio guardado (aunque el catálogo haya cambiado después).
+    const anteriorPro = cita.professionalId || cita.barberId || PENDING_ID;
+    let precio = {};
+    if (anteriorPro !== elegido.id || cita.priceProvisional === true) {
+      const citaServices = getServicesFromCita(cita);
+      const catalog = await readServicesInTx(tx, negocioRef, citaServices.map((s) => s.serviceId));
+      if (citaServices.length) {
+        const priced = repriceCitaServices(citaServices, catalog, elegido);
+        precio = { services: priced.services, price: priced.totalPrice, priceProvisional: false };
+      }
+    }
+
     const nowIso = new Date().toISOString();
     const cambios = {
       date,
       time,
       professionalId: elegido.id,
       barberId: elegido.id,
+      ...precio,
       branch: elegido.branch || cita.branch || '',
       status: 'confirmed',
       rescheduledBy: 'client',

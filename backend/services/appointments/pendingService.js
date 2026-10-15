@@ -16,6 +16,9 @@ import {
   isOpenPendingCita,
   pickAutoAssignee,
 } from './pendingModel.js';
+import { repriceCitaServices } from '../pricing/professionalPricing.js';
+import { readServicesInTx } from '../pricing/catalogInTx.js';
+import { getServicesFromCita } from '../finance/serviceSelection.js';
 
 async function evaluateOne(negocioId, citaId) {
   const negocioRef = db.collection('negocios').doc(negocioId);
@@ -56,6 +59,11 @@ async function evaluateOne(negocioId, citaId) {
     const assignee = pickAutoAssignee(candidates);
 
     if (assignee) {
+      // Precio por profesional: al asignarse, la cita deja de tener precio
+      // provisional (rango) y toma el precio de ESE profesional.
+      const citaServices = getServicesFromCita(cita);
+      const catalog = await readServicesInTx(tx, negocioRef, citaServices.map((s) => s.serviceId));
+      const priced = citaServices.length ? repriceCitaServices(citaServices, catalog, assignee) : null;
       tx.update(citaRef, {
         professionalId: assignee.id,
         barberId: assignee.id,
@@ -63,6 +71,7 @@ async function evaluateOne(negocioId, citaId) {
         assignedFromPending: true,
         assignmentMode: 'auto',
         pendingAssignedAt: nowIso,
+        ...(priced ? { services: priced.services, price: priced.totalPrice, priceProvisional: false } : {}),
         updatedAt: nowIso,
       });
       return { action: 'assigned', cita, assignee };
