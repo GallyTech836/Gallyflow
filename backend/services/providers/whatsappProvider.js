@@ -42,13 +42,15 @@ async function leerCuenta(id) {
         token: acc.token || null,
         branch: acc.branch || null,
         appSecret: acc.appSecret || null,
+        provider: acc.provider || 'meta',
+        phone: acc.phone || null,
       };
     }
   }
 
   const snap = await db.collection('negocios').where('whatsappPhoneNumberId', '==', id).limit(1).get();
   if (snap.empty) return null;
-  return { negocioId: snap.docs[0].id, phoneNumberId: id, token: null, branch: null, appSecret: null };
+  return { negocioId: snap.docs[0].id, phoneNumberId: id, token: null, branch: null, appSecret: null, provider: 'meta', phone: null };
 }
 
 /**
@@ -87,6 +89,7 @@ async function enviar(destinatario, contenido, opciones) {
 }
 
 async function post(payload, opciones) {
+  if (opciones.provider === 'ycloud') return postYCloud(payload, opciones);
   const phoneNumberId = opciones.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
   const token = opciones.token || process.env.WHATSAPP_TOKEN;
 
@@ -106,6 +109,46 @@ async function post(payload, opciones) {
   const data = await res.json();
   if (!res.ok) {
     throw new Error(`[whatsappProvider] Meta API error: ${JSON.stringify(data)}`);
+  }
+  return data;
+}
+
+// ───────────────────────── YCloud (coexistencia) ─────────────────────────
+// Números conectados por YCloud: whatsappAccounts/ycloud_<digitos> =
+// { provider: 'ycloud', negocioId, phone: '+591...', branch? }.
+// Una sola API key (tu cuenta de YCloud) para todos los negocios.
+const YCLOUD_URL = 'https://api.ycloud.com/v2/whatsapp';
+
+async function postYCloud(payload, opciones) {
+  const apiKey = process.env.YCLOUD_API_KEY;
+  const digitosNegocio = String(opciones.from || '').replace(/\D/g, '');
+  if (!apiKey || !digitosNegocio) {
+    throw new Error('[whatsappProvider] YCloud: falta YCLOUD_API_KEY o el campo phone de la cuenta.');
+  }
+
+  let url;
+  let body;
+  if (payload.status === 'read') {
+    // markAsRead: marca leído + "escribiendo…"
+    url = `${YCLOUD_URL}/inboundMessages/${encodeURIComponent(payload.message_id)}/typing`;
+  } else {
+    url = `${YCLOUD_URL}/messages/sendDirectly`;
+    const { messaging_product, to, ...contenido } = payload;
+    body = JSON.stringify({
+      ...contenido,
+      from: `+${digitosNegocio}`,
+      to: `+${String(to).replace(/\D/g, '')}`,
+    });
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+    body,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`[whatsappProvider] YCloud error: ${JSON.stringify(data)}`);
   }
   return data;
 }

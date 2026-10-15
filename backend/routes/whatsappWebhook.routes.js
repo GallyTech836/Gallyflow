@@ -4,7 +4,7 @@ import { db } from '../config/firebase.js';
 import { runAssistant } from '../services/assistantEngine/router.js';
 import * as whatsappProvider from '../services/providers/whatsappProvider.js';
 import { logger } from '../utils/logger.js';
-import { checkCapability, incrementUsage, incrementRejected } from '../services/capabilities/capabilityService.js';
+import { updateConversation } from '../services/appointments/conversationState.js';
 
 const router = Router();
 
@@ -75,7 +75,7 @@ async function procesarMensaje(value, mensaje) {
     logger.warn('[whatsappWebhook] Sin negocio para phoneNumberId:', phoneNumberId);
     return;
   }
-  const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token };
+  const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token, provider: cuenta.provider, from: cuenta.phone };
   registrarActividad(cuenta.negocioId, value?.metadata?.display_phone_number);
   // Capacidad `asistenteWhatsapp` + límite mensual de mensajes. Si no está
   // permitido, el bot no responde (no gasta mensajes). Se valida aquí, en el
@@ -159,6 +159,66 @@ router.post('/whatsapp/webhook', async (req, res) => {
         }
       }
     }
+  }
+});
+
+// ───────────────────────── YCloud (coexistencia) ─────────────────────────
+// El negocio sigue usando su app de WhatsApp Business y el bot responde por
+// YCloud en el mismo número. Webhook: POST /api/whatsapp/ycloud/webhook
+
+// Firma: header YCloud-Signature "t=<timestamp>,s=<firma>", HMAC-SHA256 de
+// "<timestamp>.<body>" con YCLOUD_WEBHOOK_SECRET (el whsec_... del endpoint).
+function firmaYCloudValida(req) {
+  const secret = process.env.YCLOUD_WEBHOOK_SECRET;
+  if (!secret || !req.rawBody) return false;
+  const partes = {};
+  for (const p of (req.get('ycloud-signature') || '').split(',')) {
+    const i = p.indexOf('=');
+    if (i > 0) partes[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+  }
+  if (!partes.t || !partes.s) return false;
+  const esperada = crypto.createHmac('sha256', secret).update(`${partes.t}.${req.rawBody.toString('utf8')}`).digest('hex');
+  const a = Buffer.from(partes.s);
+  const b = Buffer.from(esperada);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+const soloDigitos = (n) => String(n || '').replace(/\D/g, '');
+const PAUSA_HUMANO_MS = 2 * 60 * 60 * 1000; // igual que "Hablar con alguien"
+
+// El dueño respondió desde la app de WhatsApp Business: el bot se calla en
+// ese chat por 2 h (el cliente puede escribir "menu" para volver al bot).
+async function pausarBotPorRespuestaHumana(m) {
+  const cuenta = await whatsappProvider.resolveAccount(`ycloud_${soloDigitos(m.from)}`);
+  const cliente = soloDigitos(m.to);
+  if (!cuenta || !cliente) return;
+  await updateConversation(cuenta.negocioId, cliente, {
+    currentFlow: 'human',
+    humanUntil: new Date(Date.now() + PAUSA_HUMANO_MS).toISOString(),
+  });
+}
+
+router.post('/whatsapp/ycloud/webhook', async (req, res) => {
+  if (!firmaYCloudValida(req)) {
+    logger.warn('[ycloudWebhook] Firma inválida, se ignora la petición.');
+    return res.sendStatus(401);
+  }
+  res.sendStatus(200);
+
+  const evento = req.body || {};
+  try {
+    if (evento.type === 'whatsapp.inbound_message.received') {
+      const m = evento.whatsappInboundMessage || {};
+      // Se adapta al formato de Meta para reutilizar procesarMensaje.
+      await procesarMensaje(
+        { metadata: { phone_number_id: `ycloud_${soloDigitos(m.to)}`, display_phone_number: m.to } },
+        { id: m.wamid || m.id, from: soloDigitos(m.from), type: m.type, text: m.text, interactive: m.interactive },
+      );
+    } else if (evento.type === 'whatsapp.smb.message.echoes') {
+      await pausarBotPorRespuestaHumana(evento.whatsappMessage || {});
+    }
+  } catch (err) {
+    logger.error('[ycloudWebhook] Error procesando evento:', err.message);
   }
 });
 
