@@ -385,8 +385,14 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       : reprogramando
         ? `Listo, dejé la reprogramación. Tu ${tl('appointment')} sigue como estaba ✅`
         : 'Listo, cancelé la reserva en curso.';
-    return responder(prefijo(aviso, await bienvenida()), conversation);
-  }
+        return responder(menuBotones({
+          texto: `${aviso}\n\n1. Agendar\n2. Hablar con alguien`,
+          cuerpo: aviso,
+          botones: flujo === 'welcome'
+            ? [{ id: '2', title: 'Hablar con alguien' }, { id: 'otra', title: 'Volver al menú' }]
+            : [{ id: '1', title: cabe(`Agendar ${tl('appointment')}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
+        }), conversation);
+      }
 
   // "Más opciones" en las listas de WhatsApp (máx. 10 filas por lista).
   if (/^(mas|más)$/i.test(texto) && FLUJOS_CON_LISTA.has(conversation.currentFlow)) {
