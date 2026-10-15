@@ -19,6 +19,7 @@ import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
+import BusinessInfoPage from './BusinessInfoPage';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
 import { BusinessProfileContext, useBusinessProfile, useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
@@ -57,9 +58,13 @@ export default function App({ negocioSlug } = {}) {
 
     // Precio confirmado al reservar (lo que se guardó), para la pantalla final.
     const [bookedPricing, setBookedPricing] = useState(null);
+  // Servicio elegido desde «Más información» (botón Reservar de un servicio):
+  // en el paso de profesional solo se ofrecen quienes lo realizan.
+  const [preselectedServiceId, setPreselectedServiceId] = useState(null);
 
     const resetBooking = () => {
       setBookedPricing(null);
+    setPreselectedServiceId(null);
     setSelectedBranch(null)
     setSelectedServices([]);
     setSelectedBarber(null);
@@ -192,7 +197,7 @@ export default function App({ negocioSlug } = {}) {
         .map(b => ({
           id: b.id,
           name: b.name,
-          specialty: '',
+          specialty: typeof b.specialty === 'string' ? b.specialty.trim() : '',
           image: b.avatar,
           branch: b.branch,
           availability: b.availability || [],
@@ -221,7 +226,9 @@ export default function App({ negocioSlug } = {}) {
     ? barbers.find(b => b.id === personalProId && !b.isPending)
     : null;
   const isPersonalLink = !!personalBarber;
-  const stepOffset = isPersonalLink ? 2 : 0;
+  // Con una sola sucursal (o ninguna) no se pregunta: se pasa directo al profesional.
+  const skipBranch = !isPersonalLink && branches.length <= 1;
+  const stepOffset = isPersonalLink ? 2 : skipBranch ? 1 : 0;
   useEffect(() => {
     if (!personalBarber) return;
     if (selectedBarber !== personalBarber) setSelectedBarber(personalBarber);
@@ -291,56 +298,49 @@ export default function App({ negocioSlug } = {}) {
     return `${h}:${m}`;
   };
 
-  // Servicios visibles para el día elegido en el calendario. Si el servicio
-  // no tiene availableDays configurado (o viene vacío), se muestra todos los
-  // días — así no rompemos servicios creados antes de esta función.
-  const servicesForDate = useMemo(() => {
-    if (!selectedDate) return services;
-    const date = new Date(selectedDate + "T12:00:00");
-    const dayName = DAY_NAMES_MON_FIRST[(date.getDay() + 6) % 7];
-    return services.filter(s => !s?.availableDays?.length || s.availableDays.includes(dayName));
-  }, [services, selectedDate]);
+  // === FLUJO DE RESERVA: Sucursal (si hay más de una) → Profesional → Servicios → Fecha y hora ===
+  // Profesionales de la sucursal elegida (si el negocio tiene varias). Los que
+  // no tienen sucursal asignada se muestran en todas.
+  const branchPros = useMemo(() => {
+    const reales = barbers.filter(b => !b.isPending);
+    if (!selectedBranch || branches.length < 2) return reales;
+    return reales.filter(b => !b.branch || b.branch === selectedBranch.name || b.branch === selectedBranch.id);
+  }, [barbers, selectedBranch, branches]);
 
+  // Servicios del paso 3 (ya no dependen de la fecha: se eligen antes).
+  // Profesional elegido: los suyos. "Pendiente": los que al menos un
+  // profesional de la sucursal realiza (sin profesionales: todos).
   const servicesForProfessional = useMemo(() => {
-    // "Pendiente": se ofrecen los servicios que al menos un profesional activo
-    // pueda realizar y esté libre en la hora elegida (candidatos). Mientras no
-    // haya hora/datos cargados, se muestran todos como antes.
     if (!selectedBarber || selectedBarber.isPending) {
-      const pros = barbers.filter(b => !b.isPending);
-      if (pros.length === 0 || !selectedDate || !selectedHour ||
-          citasFecha !== selectedDate || bloqueosFecha !== selectedDate) {
-        return servicesForDate;
-      }
-      return servicesForDate.filter(service =>
-        getPendingCandidates({
-          professionals: pros,
-          serviceIds: [service.id],
-          fecha: selectedDate,
-          time: selectedHour,
-          duration: service.durationMin || 30,
-          citas: citasNegocio,
-          bloqueos: blockouts,
-          businessSchedule: businessSettings?.schedule || [],
-        }).length > 0
-      );
+      if (branchPros.length === 0) return services;
+      return services.filter(service => branchPros.some(b => professionalCanDo(b, [service.id])));
     }
-  
     // En Firestore, `services` del profesional es un array de objetos
-    // { serviceId, commissionEnabled, type, value }. Se extraen los IDs;
-    // también se tolera un array de strings por compatibilidad.
+    // { serviceId, commissionEnabled, type, value }; se tolera también un array de strings.
     const assignedIds = new Set(
       (Array.isArray(selectedBarber.services) ? selectedBarber.services : [])
         .map(a => (typeof a === 'string' ? a : a?.serviceId))
         .filter(Boolean)
         .map(String)
     );
-  
-    return servicesForDate.filter(service =>
-      assignedIds.has(String(service.id))
-    );
-  }, [servicesForDate, selectedBarber, barbers, selectedDate, selectedHour, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
+    return services.filter(service => assignedIds.has(String(service.id)));
+  }, [services, selectedBarber, branchPros]);
+
+  // Días del calendario: cerrado si el negocio no atiende ese día o si algún
+  // servicio elegido no se ofrece ese día (availableDays vacío = todos).
+  const isDayDisabled = (dateStr) => {
+    const dayName = DAY_NAMES_MON_FIRST[(new Date(dateStr + "T12:00:00").getDay() + 6) % 7];
+    const businessDay = (businessSettings?.schedule || []).find(d => d?.day === dayName);
+    if (businessDay && businessDay.status !== 'Disponible') return true;
+    return selectedServices.some(sel => {
+      const svc = services.find(x => x.id === sel.id) || sel;
+      return svc?.availableDays?.length > 0 && !svc.availableDays.includes(dayName);
+    });
+  };
+
   const availableHours = useMemo(() => {
-    const serviceDuration = selectedServices[0]?.durationMin || 30;
+    // Duración TOTAL de los servicios elegidos (ahora se eligen antes de la hora).
+    const serviceDuration = selectedServices.reduce((acc, s) => acc + (s?.durationMin || 30), 0) || 30;
 
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -351,7 +351,7 @@ export default function App({ negocioSlug } = {}) {
     const cumpleAnticipacion = (hourStr) => !isToday || timeToMin(hourStr) >= nowMin + minAdvance;
 
     const eligePendiente = !selectedBarber || selectedBarber.isPending;
-    const realBarbers = barbers.filter(b => !b.isPending);
+    const realBarbers = branchPros;
 
     // Negocio sin profesionales activos: comportamiento anterior para "Pendiente".
     if (eligePendiente && realBarbers.length === 0) {
@@ -439,10 +439,10 @@ export default function App({ negocioSlug } = {}) {
 
     // Profesional elegido: sus horas libres.
     return freeHoursOf(selectedBarber).filter(cumpleAnticipacion);
-  }, [selectedBarber, barbers, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
+  }, [selectedBarber, branchPros, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
 
     // === PRECIO POR PROFESIONAL ===
-    const realBarbers = useMemo(() => barbers.filter(b => !b.isPending), [barbers]);
+    const realBarbers = branchPros;
     const chosenPro = selectedBarber && !selectedBarber.isPending ? selectedBarber : null;
   
     // "Pendiente": el precio es un rango entre los profesionales que podrían
@@ -497,64 +497,15 @@ export default function App({ negocioSlug } = {}) {
     }, 4000);
   };
 
-  // Ahora los servicios se eligen DESPUÉS de la hora, así que recién acá
-  // sabemos la duración real. Revalidamos que el horario elegido siga
-  // alcanzando (que no se cruce con otra cita real del profesional) antes
-  // de dejar avanzar; si no alcanza, se manda de vuelta a elegir otra hora.
+  // Servicios → Fecha y hora. La hora se vuelve a elegir porque la duración
+  // (y por lo tanto los horarios libres) depende de los servicios elegidos.
   const handleServicesNext = () => {
     if (selectedServices.length === 0) return;
-
-    if (selectedBarber && !selectedBarber.isPending && selectedDate && selectedHour) {
-      const totalDuration = selectedServices.reduce((acc, s) => acc + (s?.durationMin || 30), 0);
-      const slotStart = timeToMin(selectedHour);
-      const slotEnd = slotStart + totalDuration;
-
-      const citasDelBarbero = citasNegocio.filter(c =>
-        c?.date === selectedDate &&
-        (c?.professionalId === selectedBarber.id || c?.barberId === selectedBarber.id) &&
-        c?.status !== 'cancelled'
-      );
-
-      const seCruza = citasDelBarbero.some(c => {
-        const cStart = timeToMin(c?.time);
-        const cEnd = cStart + (c?.duration || 30);
-        return slotStart < cEnd && slotEnd > cStart;
-      });
-
-      if (seCruza) {
-        triggerToast('El horario elegido no alcanza para estos servicios. Elige otro horario.', 'error');
-        setSelectedHour(null);
-        setStep(3);
-        return;
-      }
-    }
-
-    // "Pendiente": debe existir al menos un candidato (activo + hace TODOS los
-    // servicios + libre durante la duración total) o se vuelve a elegir hora.
-    if ((!selectedBarber || selectedBarber.isPending) && selectedDate && selectedHour) {
-      const pros = barbers.filter(b => !b.isPending);
-      if (pros.length > 0) {
-        const candidates = getPendingCandidates({
-          professionals: pros,
-          serviceIds: selectedServices.map(s => s.id),
-          fecha: selectedDate,
-          time: selectedHour,
-          duration: selectedServices.reduce((acc, s) => acc + (s?.durationMin || 30), 0),
-          citas: citasNegocio,
-          bloqueos: blockouts,
-          businessSchedule: businessSettings?.schedule || [],
-        });
-        if (candidates.length === 0) {
-          triggerToast('Ese horario ya no está disponible para estos servicios. Elige otro horario.', 'error');
-          setSelectedHour(null);
-          setStep(3);
-          return;
-        }
-      }
-    }
-
-    setStep(5);
+    setSelectedHour(null);
+    if (selectedDate && isDayDisabled(selectedDate)) setSelectedDate(null);
+    setStep(4);
   };
+
 
   const handleBooking = async (e) => {
     if (e) e.preventDefault();
@@ -591,7 +542,7 @@ export default function App({ negocioSlug } = {}) {
       // automática (si queda UN solo candidato) la decide el backend en una
       // transacción, para no duplicar lógica ni competir entre clientes.
       if (selectedBarber.isPending) {
-        const pros = barbers.filter(b => !b.isPending);
+        const pros = branchPros;
         if (pros.length > 0) {
           const candidates = getPendingCandidates({
             professionals: pros,
@@ -606,7 +557,7 @@ export default function App({ negocioSlug } = {}) {
           if (candidates.length === 0) {
             triggerToast('Ese horario ya no está disponible. Elige otro horario.', 'error');
             setSelectedHour(null);
-            setStep(3);
+            setStep(4);
             return;
           }
         }
@@ -702,9 +653,104 @@ export default function App({ negocioSlug } = {}) {
     }
   };
 
+  // Empieza la reserva: link personal → servicios; una sola sucursal →
+  // profesional; varias → elegir sucursal.
+  const startBooking = () => {
+    if (isPersonalLink) { setStep(3); return; }
+    if (skipBranch) {
+      if ((branches[0]?.id || null) !== (selectedBranch?.id || null)) setSelectedBranch(branches[0] || null);
+      setStep(2);
+      return;
+    }
+    setStep(1);
+  };
+
+  // Reserva normal (portada o «Reservar ahora»): empieza sin el servicio que
+  // se haya elegido antes desde «Más información».
+  // Borra lo elegido en una reserva anterior (profesional, servicios, fecha y
+  // hora). En el link personal el profesional se mantiene.
+  const clearSelection = () => {
+    setPreselectedServiceId(null);
+    setSelectedServices([]);
+    if (!isPersonalLink) setSelectedBarber(null);
+    setSelectedDate(null);
+    setSelectedHour(null);
+    setCurrentCalendarMonth(new Date());
+  };
+
+  const startFreshBooking = () => {
+    clearSelection();
+    startBooking();
+  };
+
+  const reserveService = (service) => {
+    clearSelection();
+    setSelectedServices([service]);
+    setPreselectedServiceId(service.id);
+    if (isPersonalLink) { setStep(4); return; }
+    startBooking();
+  };
+
+  // Al cambiar de profesional se quitan los servicios que no realiza.
+  const chooseBarber = (b) => {
+    setSelectedBarber(b);
+    if (b && !b.isPending) setSelectedServices(prev => prev.filter(sv => professionalCanDo(b, [sv.id])));
+  };
+
+  const barberOptions = [
+    ...branchPros.filter(b => !preselectedServiceId || professionalCanDo(b, [preselectedServiceId])),
+    ...barbers.filter(b => b.isPending),
+  ];
+
+  // Si el servicio ya se eligió desde «Más información», no se vuelve a pedir.
+  const skipServices = !!preselectedServiceId && selectedServices.some(sv => sv.id === preselectedServiceId);
+
+  // Pasos visibles (para la barra de progreso y el botón Volver).
+  const visibleSteps = [1, 2, 3, 4, 5].filter(st =>
+    st > stepOffset && !(skipServices && st === 3)
+  );
+  const prevStep = (st) => {
+    const i = visibleSteps.indexOf(st);
+    return i > 0 ? visibleSteps[i - 1] : 0;
+  };
+
+  const goToDateTime = () => {
+    setSelectedHour(null);
+    if (selectedDate && isDayDisabled(selectedDate)) setSelectedDate(null);
+    setStep(4);
+  };
+
+  // Precios por profesional en el paso de profesional (reemplaza la
+  // calificación de ejemplo). Con un servicio ya elegido, solo ese.
+  const proPrices = (b) => {
+    const list = preselectedServiceId
+      ? services.filter(sv => sv.id === preselectedServiceId)
+      : services.filter(sv => (b.isPending ? branchPros.some(p => professionalCanDo(p, [sv.id])) : professionalCanDo(b, [sv.id])));
+    return list.map(sv => ({
+      id: sv.id,
+      name: sv.name,
+      price: b.isPending
+        ? formatServicePriceFor(sv, { professionals: branchPros.filter(p => professionalCanDo(p, [sv.id])) })
+        : formatServicePriceFor(sv, { professional: b }),
+    }));
+  };
+
   const renderStep = () => {
     switch(step) {
-      case 0: return <Home onNext={() => setStep(isPersonalLink ? 3 : 1)} heroConfig={heroConfig} branches={branches} proName={personalBarber?.name} />;
+      case 0: return <Home onNext={startFreshBooking} onInfo={() => setStep('info')} heroConfig={heroConfig} branches={branches} proName={personalBarber?.name} />;
+      // Página «Más información del negocio»: usa los datos ya cargados y
+      // "Reservar ahora" entra al mismo flujo que el botón de la portada.
+      case 'info': return <BusinessInfoPage
+        heroConfig={heroConfig || DEFAULT_HERO_CONFIG}
+        services={services}
+        professionals={barbers}
+        branches={branches}
+        businessSettings={businessSettings}
+        personalPro={personalBarber}
+        onReserve={startFreshBooking}
+        onReserveService={reserveService}
+        onBack={() => setStep(0)}
+      />;
       case 1: return <BranchStep 
         branches={branches}
         selected={selectedBranch}
@@ -712,33 +758,36 @@ export default function App({ negocioSlug } = {}) {
         onNext={() => setStep(2)}
       />;
       case 2: return <BarberStep 
-        barbers={barbers}
+        barbers={barberOptions}
         selected={selectedBarber} 
-        setSelected={setSelectedBarber} 
-        onNext={() => setStep(3)} 
-        onBack={() => setStep(1)} 
+        setSelected={chooseBarber} 
+        pricesOf={proPrices}
+        highlightService={!!preselectedServiceId}
+        onNext={() => (skipServices ? goToDateTime() : setStep(3))} 
+        onBack={() => setStep(skipBranch ? 0 : 1)} 
       />;
-      case 3: return <DateTimeStep 
-        hours={availableHours}
-        date={selectedDate} setDate={setSelectedDate} 
-        hour={selectedHour} setHour={setSelectedHour} 
-        isTuesday={isTuesday}
-        currentMonth={currentCalendarMonth}
-        setCurrentMonth={setCurrentCalendarMonth}
-        onNext={() => setStep(4)} 
-        onBack={() => setStep(isPersonalLink ? 0 : 2)}
-      />;
-      case 4: return <ServicesStep 
+      case 3: return <ServicesStep 
       services={servicesForProfessional}
         selected={selectedServices} 
         toggle={toggleService} 
         onNext={handleServicesNext} 
-        onBack={() => setStep(3)} 
+        onBack={() => setStep(isPersonalLink ? 0 : 2)} 
         total={calculateTotal}
         totalMax={calculateTotalMax}
         hasVariable={hasVariablePrice}
         professional={chosenPro}
         professionals={realBarbers}
+      />;
+      case 4: return <DateTimeStep 
+        hours={availableHours}
+        date={selectedDate} setDate={setSelectedDate} 
+        hour={selectedHour} setHour={setSelectedHour} 
+        isTuesday={isTuesday}
+        isDayDisabled={isDayDisabled}
+        currentMonth={currentCalendarMonth}
+        setCurrentMonth={setCurrentCalendarMonth}
+        onNext={() => setStep(5)} 
+        onBack={() => setStep(prevStep(4))}
       />;
       case 5: return <ConfirmStep 
         name={clientName} setName={setClientName} 
@@ -810,8 +859,7 @@ export default function App({ negocioSlug } = {}) {
           <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
             <button 
               onClick={() => {
-                if (step === 1 || (isPersonalLink && step === 3)) setStep(0);
-                else setStep(step - 1);
+                setStep(prevStep(step));
               }}
               aria-label="Volver"
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary hover:text-nexus-text transition-colors cursor-pointer"
@@ -819,7 +867,7 @@ export default function App({ negocioSlug } = {}) {
               <ChevronLeft size={16} />
             </button>
             <div className="flex gap-1.5">
-            {[1, 2, 3, 4, 5].filter((s) => s > stepOffset).map((s) => (
+            {visibleSteps.map((s) => (
                 <div 
                   key={s} 
                   className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -832,7 +880,7 @@ export default function App({ negocioSlug } = {}) {
                 />
               ))}
             </div>
-            <span className="text-xs text-nexus-text-secondary font-bold nx-num">Paso {step - stepOffset}/{5 - stepOffset}</span>
+            <span className="text-xs text-nexus-text-secondary font-bold nx-num">Paso {visibleSteps.indexOf(step) + 1}/{visibleSteps.length}</span>
           </div>
         )}
         
@@ -870,9 +918,25 @@ export default function App({ negocioSlug } = {}) {
 
 // === COMPONENTES DE PANTALLA ===
 
-const Home = ({ onNext, heroConfig, branches = [], proName = '' }) => (
+const Home = ({ onNext, onInfo, heroConfig, branches = [], proName = '' }) => {
+  const terms = useBusinessTerms();
+  return (
   <div className="flex-1 flex flex-col justify-center items-center text-center py-10 animate-scale-up">
-    <HeroDisplay config={heroConfig || DEFAULT_HERO_CONFIG} onReservar={onNext} />
+    <HeroDisplay
+      config={heroConfig || DEFAULT_HERO_CONFIG}
+      onReservar={onNext}
+      ctaLabel={`Reservar ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}`}
+    />
+    {onInfo && (
+      <button
+        type="button"
+        onClick={onInfo}
+        className="mt-3 w-full py-4 px-6 rounded-2xl border border-nexus-border bg-nexus-surface hover:bg-nexus-surface-hover text-nexus-text font-semibold text-sm transition-colors active:scale-[0.97] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+      >
+        <Info size={16} className="text-nexus-text-secondary" />
+        Más información del negocio
+      </button>
+    )}
     {proName && (
       <p className="mt-4 text-xs text-nexus-text-secondary">
         Reservando con <span className="font-bold text-nexus-primary">{proName}</span>
@@ -880,7 +944,8 @@ const Home = ({ onNext, heroConfig, branches = [], proName = '' }) => (
     )}
     
   </div>
-);
+  );
+};
 
 const BranchStep = ({ branches, selected, setSelected, onNext }) => {
   const terms = useBusinessTerms();
@@ -1028,7 +1093,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
   );
 };
 
-const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
+const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highlightService = false, onNext, onBack }) => {
   const terms = useBusinessTerms();
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
@@ -1057,13 +1122,33 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
             
             <div className="flex-1 text-left">
               <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
-              <p className="text-nexus-text-secondary text-xs mt-0.5">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
-              {!b.isPending && (
-                <div className="flex items-center gap-1 mt-1">
-                  <Star size={10} className="text-amber-400 fill-amber-400" />
-                  <span className="text-xs text-nexus-text-secondary font-semibold">5.0 (Excelente)</span>
-                </div>
+              {(b.isPending || b.specialty) && (
+                <p className="text-nexus-text-secondary text-xs mt-0.5">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
               )}
+              {(() => {
+                // Precio de sus servicios (en vez de la calificación de ejemplo).
+                const precios = pricesOf(b);
+                if (!precios.length) return null;
+                if (highlightService) {
+                  const p0 = precios[0];
+                  return (
+                    <p className="mt-1 text-xs text-nexus-text-secondary">
+                      {p0.name}: <span className="nx-num font-bold text-nexus-primary">{p0.price}</span>
+                    </p>
+                  );
+                }
+                const visibles = precios.slice(0, 3);
+                return (
+                  <p className="mt-1 text-xs text-nexus-text-secondary leading-relaxed">
+                    {visibles.map((x, i) => (
+                      <span key={x.id}>
+                        {i > 0 && ' · '}{x.name} <span className="nx-num font-bold text-nexus-text">{x.price}</span>
+                      </span>
+                    ))}
+                    {precios.length > visibles.length && <span className="text-nexus-text-muted"> · +{precios.length - visibles.length} más</span>}
+                  </p>
+                );
+              })()}
             </div>
             
             {selected?.id === b.id ? (
@@ -1093,7 +1178,7 @@ const BarberStep = ({ barbers, selected, setSelected, onNext, onBack }) => {
   );
 };
 
-const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, currentMonth, setCurrentMonth }) => {
+const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, currentMonth, setCurrentMonth }) => {
   const terms = useBusinessTerms();
   
   const handlePrevMonth = () => {
@@ -1175,7 +1260,8 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
               if (!cell.dayNum) return <div key={`empty-${idx}`} />;
               
               const isSelected = date === cell.dateString;
-              const isPast = cell.isPast;
+              // Pasado, o día en que el negocio no atiende / el servicio no se ofrece.
+              const isPast = cell.isPast || isDayDisabled(cell.dateString);
 
               return (
                 <button
