@@ -23,13 +23,11 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
 
         {/* Logo / marca */}
         <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-nexus-primary-soft border border-nexus-primary/20 mb-4">
-            <img
-              src="/favicon.svg"
-              alt=""
-              className="w-9 h-9 rounded-lg object-contain"
-            />
-          </div>
+        <img
+            src="/favicon.svg"
+            alt=""
+            className="block w-14 h-14 rounded-2xl shadow-md mb-4 mx-auto object-contain"
+          />
           <h1 className="text-2xl font-bold text-nexus-text tracking-tight">
             Nexus <span className="text-nexus-primary">Staff</span>
           </h1>
