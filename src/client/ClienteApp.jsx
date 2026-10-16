@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc, getDocs, setDoc, increment, collection, onSnapshot, addDoc, query, where } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Sparkles, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
@@ -22,6 +22,7 @@ import { useBusinessSettings } from '../shared/businessSettings/useBusinessSetti
 import BusinessInfoPage from './BusinessInfoPage';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
+import { fetchBusyAppointments, createPublicBooking } from '../shared/appointments/publicBookingApi';
 import { BusinessProfileContext, useBusinessProfile, useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
@@ -242,43 +243,36 @@ export default function App({ negocioSlug } = {}) {
   // Solo se consultan las citas y bloqueos de la fecha elegida (selectedDate).
   // citasFecha / bloqueosFecha indican de qué fecha son los datos cargados, para no
   // calcular horarios con datos de otro día mientras llega la consulta nueva.
+  // Seguridad: citas y bloqueos llegan del backend SIN nombres, teléfonos
+  // ni motivos (antes se leían completos desde Firestore). Se refrescan cada
+  // 30 s mientras hay una fecha elegida, y al pedir `refreshBusy`.
   const [citasNegocio, setCitasNegocio] = useState([]);
   const [citasFecha, setCitasFecha] = useState(null);
+  const [blockouts, setBlockouts] = useState([]);
+  const [bloqueosFecha, setBloqueosFecha] = useState(null);
+  const [busyTick, setBusyTick] = useState(0);
+  const refreshBusy = () => setBusyTick(t => t + 1);
   useEffect(() => {
     if (!negocioId || !selectedDate) {
       setCitasNegocio([]);
       setCitasFecha(null);
-      return;
-    }
-    const q = query(
-      collection(db, 'negocios', negocioId, 'citas'),
-      where('date', '==', selectedDate)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setCitasNegocio(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setCitasFecha(selectedDate);
-    });
-    return () => unsub();
-  }, [negocioId, selectedDate]);
-
-  const [blockouts, setBlockouts] = useState([]);
-  const [bloqueosFecha, setBloqueosFecha] = useState(null);
-  useEffect(() => {
-    if (!negocioId || !selectedDate) {
       setBlockouts([]);
       setBloqueosFecha(null);
-      return;
+      return undefined;
     }
-    const q = query(
-      collection(db, 'negocios', negocioId, 'horariosBloqueados'),
-      where('date', '==', selectedDate)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setBlockouts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    let activo = true;
+    const cargar = async () => {
+      const ocupado = await fetchBusyAppointments(negocioId, selectedDate);
+      if (!activo || ocupado === null) return; // sin conexión: se mantiene lo último cargado
+      setCitasNegocio(ocupado.citas);
+      setCitasFecha(selectedDate);
+      setBlockouts(ocupado.bloqueos);
       setBloqueosFecha(selectedDate);
-    });
-    return () => unsub();
-  }, [negocioId, selectedDate]);
+    };
+    cargar();
+    const id = setInterval(cargar, 30000);
+    return () => { activo = false; clearInterval(id); };
+  }, [negocioId, selectedDate, busyTick]);
 
   useEffect(() => {
     if (selectedDate) {
@@ -533,9 +527,9 @@ export default function App({ negocioSlug } = {}) {
     }
     setLoading(true);
     try {
-            // Precio aplicado (histórico): el del profesional elegido, o el mínimo
-      // entre candidatos si es "Pendiente" (priceProvisional).
-      const { services: servicesForCita, totalPrice, totalDuration, priceProvisional } = bookingPricing;
+      // El precio que se guarda lo calcula el backend (mismo criterio que se
+      // muestra aquí: el del profesional, o el mínimo entre candidatos).
+      const { services: servicesForCita, totalDuration } = bookingPricing;
       const professionalId = selectedBarber.isPending ? 'pending' : selectedBarber.id;
 
       // "Pendiente": revalida que siga existiendo algún candidato. La asignación
@@ -563,70 +557,29 @@ export default function App({ negocioSlug } = {}) {
         }
       }
 
-      // Misma colección que usan Admin y Barber: negocios/{negocioId}/citas.
-      // Se guarda el array completo en `services[]`, y además se mantienen
-      // serviceId/serviceName/price/duration a nivel raíz como alias de
-      // compatibilidad (apuntando al primer servicio / totales), para que
-      // el código que todavía no fue actualizado (reportes, agenda) siga
-      // funcionando sin romperse mientras se completan las fases siguientes.
-      const nowIso = new Date().toISOString();
-
-      // Guarda / actualiza el cliente en la base de clientes (igual que Admin y Barber)
-      const cleanName = clientName.trim();
-      const cleanPhone = clientPhone.trim();
-      const phoneDigits = cleanPhone.replace(/[^0-9]/g, '');
-      let savedClientId = null;
-      try {
-        let existing = null;
-        try {
-          const snap = await getDocs(collection(db, 'negocios', negocioId, 'clientes'));
-          const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          existing =
-            (phoneDigits && all.find(c => (c.phone || '').replace(/[^0-9]/g, '') === phoneDigits)) ||
-            all.find(c => (c.name || '').toLowerCase() === cleanName.toLowerCase()) ||
-            null;
-        } catch (_) { /* sin permiso de lectura */ }
-
-        const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        const clientDocId = existing?.id || phoneDigits || `${slug || 'cliente'}-${Date.now()}`;
-        const clientData = {
-          name: existing?.name || cleanName,
-          lastVisit: selectedDate,
-          favoriteService: existing?.favoriteService || servicesForCita[0]?.serviceName || 'N/A',
-          visits: increment(1),
-          totalSpent: increment(0),
-        };
-        if (cleanPhone) clientData.phone = cleanPhone;
-        else if (!existing?.phone) clientData.phone = 'N/A';
-
-        await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientDocId), clientData, { merge: true });
-        savedClientId = clientDocId;
-      } catch (err) {
-        console.warn('[Cliente] No se pudo guardar en la base de clientes:', err?.message || err);
-      }
-
-      const citaRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), {
-        ...(savedClientId ? { clientId: savedClientId } : {}),
-        clientName: clientName.trim(),
-        clientPhone: clientPhone.trim() || 'No especificado',
+      // La reserva la guarda el backend: valida el horario en una transacción,
+      // toma precio y duración del catálogo y guarda/actualiza el cliente.
+      const result = await createPublicBooking({
+        negocioId,
         professionalId,
-        barberId: professionalId,
-        services: servicesForCita,
-        serviceId: servicesForCita[0]?.serviceId || '',
-        serviceName: servicesForCita.map(s => s.serviceName).join(' + '),
-        duration: totalDuration,
-        price: totalPrice,
-        ...(priceProvisional ? { priceProvisional: true } : {}),
+        serviceIds: servicesForCita.map(sv => sv.serviceId),
         date: selectedDate,
         time: selectedHour,
-        status: 'confirmed',
-        paymentMethod: 'Pendiente',
-        bookedBy: 'client',
-        notes: '',
+        clientName: clientName.trim(),
+        clientPhone: clientPhone.trim(),
         branch: selectedBarber?.branch || selectedBranch?.name || '',
-        createdAt: nowIso,
-        updatedAt: nowIso
+        ...(professionalId === 'pending' ? { candidateIds: branchPros.map(p => p.id) } : {}),
       });
+      if (!result.ok) {
+        triggerToast(result.error, 'error');
+        if (result.code === 'UNAVAILABLE' || result.code === 'TOO_SOON') {
+          setSelectedHour(null);
+          refreshBusy();
+          setStep(4);
+        }
+        return;
+      }
+      const citaRef = { id: result.cita.id };
       if (professionalId === 'pending') {
         // El backend asigna (si hay un único candidato) o avisa SOLO a los candidatos.
         // Si no responde, se avisa únicamente a los administradores.

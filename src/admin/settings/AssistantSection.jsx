@@ -1,23 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { MessageCircle, ToggleRight, ToggleLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { MessageCircle, ToggleRight, ToggleLeft } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 import AssistantPersonalitySection from './AssistantPersonalitySection';
+import WhatsAppNumbersPanel from './WhatsAppNumbersPanel';
 
 // Asistente de reservas por WhatsApp (backend en Railway).
 // Lee/escribe negocios/{negocioId}.assistantConfig:
 //   enabled       -> lo controla el admin aquí (sin el campo = activo)
 //   displayPhone  -> lo guarda el backend al recibir mensajes
 //   lastMessageAt -> idem (se actualiza como máximo cada 10 min)
-// El número lo conecta soporte (whatsappPhoneNumberId / whatsappAccounts).
-
-function formatearTelefono(raw) {
-  const d = String(raw || '').replace(/\D/g, '');
-  if (!d) return '';
-  if (d.startsWith('591') && d.length === 11) return `+591 ${d.slice(3)}`;
-  return `+${d}`;
-}
+// El número se conecta en el panel "Número de WhatsApp" (WhatsAppNumbersPanel,
+// por el backend: whatsappAccounts no se lee desde el front).
 
 function haceCuanto(iso) {
   const t = Date.parse(iso || '');
@@ -31,7 +26,7 @@ function haceCuanto(iso) {
   return `hace ${dias} día${dias === 1 ? '' : 's'}`;
 }
 
-// Anticipación mínima para que el cliente cancele o reprograme por WhatsApp
+// Anticipación mínima para que el cliente reprograme por WhatsApp
 // (assistantConfig.changeMinHours; sin el campo = 2 h).
 const OPCIONES_ANTICIPACION = [
   { value: 0, label: 'Sin límite (hasta la hora)' },
@@ -48,6 +43,8 @@ export default function AssistantSection({ negocioId }) {
   const [negocio, setNegocio] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [numeros, setNumeros] = useState(null); // del panel de números
+  const onNumbersChange = useCallback((lista) => setNumeros(lista), []);
 
   useEffect(() => {
     if (!negocioId) return undefined;
@@ -63,9 +60,8 @@ export default function AssistantSection({ negocioId }) {
   }, [negocioId]);
 
   const config = negocio?.assistantConfig || {};
-  const conectado = Boolean(negocio?.whatsappPhoneNumberId || config.displayPhone);
+  const conectado = Boolean((numeros && numeros.length > 0) || negocio?.whatsappPhoneNumberId);
   const activo = config.enabled !== false;
-  const telefono = formatearTelefono(config.displayPhone);
   const ultimoMensaje = haceCuanto(config.lastMessageAt);
 
   const horasCambio = typeof config.changeMinHours === 'number' ? config.changeMinHours : 2;
@@ -110,6 +106,8 @@ export default function AssistantSection({ negocioId }) {
 
   return (
     <div className="space-y-4 animate-fadeIn">
+      <WhatsAppNumbersPanel negocioId={negocioId} onNumbersChange={onNumbersChange} />
+
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
         <div className="flex items-center gap-2.5 mb-1">
           <MessageCircle className="w-4 h-4 text-nexus-primary" />
@@ -119,32 +117,14 @@ export default function AssistantSection({ negocioId }) {
           Tus {tl('clients')} pueden reservar escribiendo a tu número de WhatsApp. {g('appointment', 'Los', 'Las')} {tl('appointments')} aparecen en la agenda al instante.
         </p>
 
-        <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl flex items-start gap-3">
-          {conectado ? (
-            <CheckCircle2 className="w-5 h-5 text-nexus-success shrink-0 mt-0.5" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-nexus-text-muted shrink-0 mt-0.5" />
-          )}
-          <div className="text-xs space-y-1 min-w-0">
-            {conectado ? (
-              <>
-                <p className="font-bold text-nexus-text">
-                  Número conectado{telefono ? `: ${telefono}` : ''}
-                </p>
-                <p className="text-nexus-text-muted">
-                  {ultimoMensaje ? `Último mensaje recibido ${ultimoMensaje}.` : 'Aún no se recibieron mensajes.'}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-bold text-nexus-text">Sin número conectado</p>
-                <p className="text-nexus-text-muted">
-                  Contacta a soporte de Nexus para conectar el WhatsApp de tu negocio.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+        {conectado && (
+          <p className="text-xs text-nexus-text-muted">
+            {ultimoMensaje ? `Último mensaje recibido ${ultimoMensaje}.` : 'Aún no se recibieron mensajes.'}
+          </p>
+        )}
+        {!conectado && numeros !== null && (
+          <p className="text-xs text-nexus-text-muted">Conecta tu número arriba para activar el asistente.</p>
+        )}
 
         <div className={`mt-4 flex items-center justify-between gap-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
           <div className="min-w-0">
@@ -170,9 +150,9 @@ export default function AssistantSection({ negocioId }) {
           </button>
         </div>
         <div className={`mt-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
-          <p className="text-xs font-bold text-nexus-text">Cancelar o reprogramar por WhatsApp</p>
+          <p className="text-xs font-bold text-nexus-text">Reprogramar por WhatsApp</p>
           <p className="text-xs text-nexus-text-muted mb-2">
-            Hasta cuándo {g('client', 'el', 'la')} {tl('client')} puede cancelar o cambiar su {tl('appointment')} sin hablar con el negocio.
+            Hasta cuándo {g('client', 'el', 'la')} {tl('client')} puede cambiar su {tl('appointment')} sin hablar con el negocio.
           </p>
           <select
             value={horasCambio}
@@ -200,8 +180,8 @@ export default function AssistantSection({ negocioId }) {
           <li>{g('client', 'El', 'La')} {tl('client')} elige {g('service', 'uno o varios', 'una o varias')} {tl('services')}, {g('professional', 'el', 'la')} {tl('professional')}, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
           <li>Con «Cualquier {tl('professional')}» {g('appointment', 'el', 'la')} {tl('appointment')} queda como <b>Pendiente</b>: si solo {g('professional', 'un', 'una')} {tl('professional')} está libre se asigna {g('appointment', 'solo', 'sola')}; si hay {g('professional', 'varios', 'varias')}, decides tú.</li>
           <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si {g('client', 'el', 'la')} {tl('client')} escribe «menu», vuelve el asistente.</li>
-          <li>Si {g('client', 'el', 'la')} {tl('client')} ya tiene {g('appointment', 'un', 'una')} {tl('appointment')}, el saludo se lo muestra con las opciones <b>Reprogramar</b> (día, hora y {tl('professional')}) y <b>Cancelar</b>, respetando la anticipación que elijas arriba.</li>
-          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva, cancelada o reprogramada.</li>
+          <li>Si {g('client', 'el', 'la')} {tl('client')} ya tiene {g('appointment', 'un', 'una')} {tl('appointment')}, el saludo se lo muestra con la opción <b>Reprogramar</b> (día, hora y {tl('professional')}), respetando la anticipación que elijas arriba. Para cancelar, {g('client', 'el', 'la')} {tl('client')} debe hablar con el negocio.</li>
+          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva o reprogramada.</li>
         </ul>
       </div>
     </div>
