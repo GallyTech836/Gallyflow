@@ -61,7 +61,8 @@ export async function findClientByPhone(negocioId, phone) {
   }
 }
 
-export async function upsertClientFromPhone({ negocioId, phone, name, date, serviceName }) {
+// displayPhone: cómo lo escribió el cliente en el link público (se guarda tal cual).
+export async function upsertClientFromPhone({ negocioId, phone, name, date, serviceName, displayPhone = null }) {
   try {
     const clientesRef = db.collection('negocios').doc(negocioId).collection('clientes');
     const phoneDigits = soloDigitos(phone);
@@ -82,7 +83,7 @@ export async function upsertClientFromPhone({ negocioId, phone, name, date, serv
       visits: FieldValue.increment(1),
       totalSpent: FieldValue.increment(0),
     };
-    if (!existing?.phone) data.phone = phoneDigits ? `+${phoneDigits}` : 'N/A';
+    if (!existing?.phone) data.phone = displayPhone || (phoneDigits ? `+${phoneDigits}` : 'N/A');
 
     await clientesRef.doc(clientDocId).set(data, { merge: true });
     return clientDocId;

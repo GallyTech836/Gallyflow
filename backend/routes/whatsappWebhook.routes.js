@@ -192,8 +192,24 @@ const PAUSA_HUMANO_MS = 2 * 60 * 60 * 1000; // igual que "Hablar con alguien"
 
 // El dueño respondió desde la app de WhatsApp Business: el bot se calla en
 // ese chat por 2 h (el cliente puede escribir "menu" para volver al bot).
+// Coexistencia: Meta exige abrir la app de WhatsApp Business al menos cada
+// 14 días. Cada mensaje que el dueño manda desde la app prueba que la usó:
+// se guarda (como máximo una vez por hora) para el aviso del panel.
+const APP_ACTIVIDAD_INTERVALO_MS = 60 * 60 * 1000;
+const ultimaActividadApp = new Map();
+function registrarActividadApp(cuentaId) {
+  const ahora = Date.now();
+  if (ahora - (ultimaActividadApp.get(cuentaId) || 0) < APP_ACTIVIDAD_INTERVALO_MS) return;
+  ultimaActividadApp.set(cuentaId, ahora);
+  db.collection('whatsappAccounts').doc(cuentaId)
+    .update({ lastAppActivityAt: new Date(ahora).toISOString() }) // update: nunca recrea un número quitado
+    .catch((err) => logger.warn('[ycloudWebhook] No se pudo registrar uso de la app:', err.message));
+}
+
 async function pausarBotPorRespuestaHumana(m) {
-  const cuenta = await whatsappProvider.resolveAccount(`ycloud_${soloDigitos(m.from)}`);
+  const cuentaId = `ycloud_${soloDigitos(m.from)}`;
+  const cuenta = await whatsappProvider.resolveAccount(cuentaId);
+  if (cuenta) registrarActividadApp(cuentaId);
   const cliente = soloDigitos(m.to);
   if (!cuenta || !cliente) return;
   await updateConversation(cuenta.negocioId, cliente, {

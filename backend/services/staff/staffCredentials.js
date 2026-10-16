@@ -5,11 +5,13 @@
 //   reglas de Firestore ya la cierran con la regla final "deny").
 // - Migración perezosa: si un profesional todavía no tiene hash, se compara
 //   con la contraseña antigua de usuarios/{uid}.password y, si coincide, se
-//   guarda el hash. La contraseña antigua NO se borra en esta etapa.
+//   guarda el hash y se BORRA el texto plano. Si ya tenía hash y aún queda el
+//   texto plano, también se borra al entrar.
 
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { getAuth } from 'firebase-admin/auth';
+import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
 
@@ -55,6 +57,11 @@ export async function verifyStaffLogin(username, password) {
   if (legacy) {
     await setStaffPassword(doc.id, password, 'legacy-login');
     logger.info('[staff] Credencial migrada a hash en el primer login.');
+  }
+  // El hash ya existe: la contraseña en texto plano sobra.
+  if (Object.prototype.hasOwnProperty.call(doc.data(), 'password')) {
+    await doc.ref.update({ password: FieldValue.delete() })
+      .catch((err) => logger.warn('[staff] No se pudo borrar la contraseña antigua:', err.message));
   }
   const { password: _omitida, ...data } = doc.data();
   return { uid: doc.id, data };

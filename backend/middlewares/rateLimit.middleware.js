@@ -25,6 +25,16 @@ export const publicBookingRateLimit = rateLimit({
   message: { error: 'Demasiadas reservas seguidas. Intenta de nuevo en unos minutos.' },
 });
 
+// Lecturas públicas del link de reservas (horarios ocupados): la página
+// refresca cada ~30 s y al cambiar de fecha.
+export const publicReadRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.' },
+});
+
 // PIN financiero: máximo 8 intentos cada 15 minutos por negocio.
 export const financePinRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,

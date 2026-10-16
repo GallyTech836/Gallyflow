@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js';
 import financeRoutes from '../routes/finance.routes.js';
 import staffRoutes from '../routes/staff.routes.js';
 import sessionRoutes from '../routes/session.routes.js';
+import whatsappConnectionRoutes from '../routes/whatsappConnection.routes.js';
 
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api', whatsappWebhookRoutes);
 app.use('/api', financeRoutes);
 app.use('/api', staffRoutes);
 app.use('/api', sessionRoutes);
+app.use('/api', whatsappConnectionRoutes);
 
 
 app.get('/health', (req, res) => {

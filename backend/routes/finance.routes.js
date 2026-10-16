@@ -5,6 +5,7 @@ import { financePinRateLimit } from '../middlewares/rateLimit.middleware.js';
 import { logger } from '../utils/logger.js';
 import { requireSession } from '../middlewares/session.middleware.js';
 import { hashPin, verifyPin } from '../services/finance/pin.js';
+import { getPinHash, setPinHash } from '../services/finance/pinStore.js';
 import { createSessionToken, verifySessionToken } from '../services/finance/financeSession.js';
 import { requireCapability } from '../services/capabilities/capabilityService.js';
 import { getFinanceSummary, getFinanceOverview, getComisionesPorProfesional, getDetalleComisionesBarbero, registrarPagoComision } from '../services/finance/financeData.js';
@@ -63,8 +64,13 @@ router.post('/finance/set-pin', requireAuth, requireAnaliticas, async (req, res)
     return res.status(400).json({ error: 'El PIN debe tener al menos 4 dígitos.' });
   }
   try {
-    const financePinHash = await hashPin(pin);
-    await db.collection('negocios').doc(req.negocioId).update({ financePinHash });
+    // Solo se puede CREAR el PIN. Si ya existe, no se cambia desde aquí
+    // (si no, cualquiera con la sesión abierta podría reemplazarlo):
+    // se restablece desde Super Admin.
+    if (await getPinHash(req.negocioId)) {
+      return res.status(409).json({ code: 'PIN_EXISTS', error: 'Ya hay un PIN. Para cambiarlo, pide a soporte de Nexus que lo restablezca.' });
+    }
+    await setPinHash(req.negocioId, await hashPin(pin));
     return res.status(200).json({ ok: true });
   } catch (err) {
     logger.error('[finance] set-pin:', err.message);
@@ -75,8 +81,7 @@ router.post('/finance/set-pin', requireAuth, requireAnaliticas, async (req, res)
 router.post('/finance/verify-pin', requireAuth, financePinRateLimit, requireAnaliticas, async (req, res) => {
   try {
     const { pin } = req.body || {};
-    const negocioSnap = await db.collection('negocios').doc(req.negocioId).get();
-    const financePinHash = negocioSnap.data()?.financePinHash;
+    const financePinHash = await getPinHash(req.negocioId);
     if (!financePinHash) return res.status(409).json({ error: 'Todavía no configuraste un PIN financiero.' });
     const valido = await verifyPin(pin, financePinHash);
     if (!valido) return res.status(401).json({ error: 'PIN incorrecto.' });

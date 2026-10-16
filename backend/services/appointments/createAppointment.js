@@ -31,6 +31,7 @@ export async function createAppointment({
   branch,
   clientId,
   bookedBy = 'client',
+  promoActive = false, // promo heredada de la reserva pública (ver publicBooking.js)
 }) {
   if (!negocioId || !professionalId || !date || !time || !serviceDuration || !services?.length) {
     throw new Error('Faltan campos requeridos para crear la cita.');
@@ -67,7 +68,7 @@ export async function createAppointment({
       throw new Error('El horario ya no está disponible. Elige otro horario.');
     }
 
-    const priced = priceServicesOrThrow(services, catalog, profesional);
+    const priced = priceServicesOrThrow(services, catalog, profesional, { promoActive });
 
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
@@ -118,6 +119,7 @@ export async function createPendingAppointment({
   branch,
   candidateIds,
   bookedBy = 'client',
+  promoActive = false,
 }) {
   if (!negocioId || !date || !time || !serviceDuration || !services?.length) {
     throw new Error('Faltan campos requeridos para crear la cita.');
@@ -153,7 +155,7 @@ export async function createPendingAppointment({
     // Pendiente: precio = mínimo entre candidatos (rango guardado); se
     // recalcula con el del profesional cuando se asigna.
     const catalog = await readServicesInTx(tx, negocioRef, services.map((s) => s.serviceId));
-    const priced = priceServicesOrThrow(services, catalog, null, { candidates: candidatos });
+    const priced = priceServicesOrThrow(services, catalog, null, { candidates: candidatos, promoActive });
 
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();

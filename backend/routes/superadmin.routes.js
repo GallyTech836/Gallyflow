@@ -6,8 +6,8 @@ import { logger } from '../utils/logger.js';
 import { getNegocioAccess, getUsage, currentPeriod } from '../services/capabilities/capabilityService.js';
 import { getCapability, usageStatus } from '../services/capabilities/capabilityModel.js';
 import { hashPin } from '../services/finance/pin.js';
+import { setPinHash } from '../services/finance/pinStore.js';
 import { isValidBusinessType, DEFAULT_BUSINESS_TYPE } from '../services/businessProfiles/businessProfileModel.js';
-import { FieldValue } from 'firebase-admin/firestore';
 
 const router = Router();
 
@@ -163,24 +163,27 @@ router.post('/negocios/:negocioId/analytics-pin', identifyRequester, requireSupe
   const { enabled, pin, clearPin } = req.body || {};
   const patch = {};
   if (typeof enabled === 'boolean') patch.analyticsPinEnabled = enabled;
+  // El hash va a negocioSecrets (privado), nunca al documento del negocio.
+  let nuevoHash; // undefined = no tocar, null = borrar
   if (pin !== undefined && pin !== null && pin !== '') {
     if (!/^\d{4,8}$/.test(String(pin))) {
       return res.status(400).json({ error: 'El PIN debe tener entre 4 y 8 dígitos.' });
     }
-    patch.financePinHash = await hashPin(String(pin));
+    nuevoHash = await hashPin(String(pin));
   } else if (clearPin === true) {
-    patch.financePinHash = FieldValue.delete();
+    nuevoHash = null;
   }
-  if (!Object.keys(patch).length) {
+  if (!Object.keys(patch).length && nuevoHash === undefined) {
     return res.status(400).json({ error: 'Nada que cambiar (enabled, pin o clearPin).' });
   }
   try {
-    await db.collection('negocios').doc(negocioId).update(patch);
+    if (Object.keys(patch).length) await db.collection('negocios').doc(negocioId).update(patch);
+    if (nuevoHash !== undefined) await setPinHash(negocioId, nuevoHash);
     return res.status(200).json({
       ok: true,
       negocioId,
       ...(typeof enabled === 'boolean' ? { analyticsPinEnabled: enabled } : {}),
-      pinChanged: !!patch.financePinHash,
+      pinChanged: typeof nuevoHash === 'string',
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

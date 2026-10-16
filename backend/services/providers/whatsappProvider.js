@@ -31,6 +31,13 @@ export async function resolveAccount(phoneNumberId) {
   return data;
 }
 
+// Al conectar o quitar un número desde el panel, se olvida la caché para
+// que el cambio aplique al instante (sin esperar 60 s).
+export function clearAccountCache(phoneNumberId) {
+  if (phoneNumberId) cacheCuentas.delete(String(phoneNumberId));
+  else cacheCuentas.clear();
+}
+
 async function leerCuenta(id) {
   const accSnap = await db.collection('whatsappAccounts').doc(id).get();
   if (accSnap.exists) {
