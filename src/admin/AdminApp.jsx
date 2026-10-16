@@ -1214,10 +1214,17 @@ const { businessSettings } = useBusinessSettings(negocioId);
     ? (dayReservations || []).filter(r => r?.status === 'pending').length
     : pendingBadgeDocsCount;
 
-  const rangeReservations = useMemo(() => {
+    // Citas del período SIN las canceladas (siguen guardadas): Dashboard,
+  // gráfico y comisiones no las cuentan. Las canceladas van aparte.
+  const rangeAllReservations = useMemo(() => {
     if (!Array.isArray(branchReservations)) return [];
     return branchReservations.filter(res => isDateInSelectedRange(res?.date));
   }, [branchReservations, selectedDate, agendaView]);
+  const rangeReservations = useMemo(
+    () => rangeAllReservations.filter(res => res?.status !== 'cancelled'),
+    [rangeAllReservations]
+  );
+  const rangeCancelledCount = rangeAllReservations.length - rangeReservations.length;
 
   const filteredReservations = useMemo(() => {
     if (!Array.isArray(dayReservations)) return [];
@@ -3127,7 +3134,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">{t('appointments')} {g('appointment', 'agendados', 'agendadas')}</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1">{(rangeReservations || []).length}</p>
-                  <p className="text-xs text-nexus-text-muted mt-1">En el periodo</p>
+                  {rangeCancelledCount > 0 ? (
+                    <p className="text-xs font-semibold text-nexus-error-text mt-1 nx-num">{rangeCancelledCount} {rangeCancelledCount === 1 ? g('appointment', 'cancelado', 'cancelada') : g('appointment', 'cancelados', 'canceladas')}</p>
+                  ) : (
+                    <p className="text-xs text-nexus-text-muted mt-1">Sin {g('appointment', 'cancelados', 'canceladas')}</p>
+                  )}
                 </div>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">{t('clients')} {g('client', 'atendidos', 'atendidas')}</p>

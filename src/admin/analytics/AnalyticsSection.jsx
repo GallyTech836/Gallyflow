@@ -170,13 +170,17 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     }
   }
 
-  const citasEnRango = useMemo(() => {
+    // Citas del período. Las canceladas siguen guardadas, pero no cuentan
+  // en reservas, canales ni ingresos: se muestran aparte como "Canceladas".
+  const todasEnRango = useMemo(() => {
     return (reservations || []).filter((r) => {
       if (!isDateInSelectedRange(r?.date, selectedDate, agendaView)) return false;
       if (selectedBranch && r.branch !== selectedBranch) return false;
       return true;
     });
   }, [reservations, selectedDate, agendaView, selectedBranch]);
+  const citasEnRango = useMemo(() => todasEnRango.filter((r) => r.status !== 'cancelled'), [todasEnRango]);
+  const canceladasEnRango = todasEnRango.length - citasEnRango.length;
 
   const completadas = useMemo(() => citasEnRango.filter((r) => r.status === 'completed'), [citasEnRango]);
 
@@ -417,8 +421,12 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
               <p className="text-2xl font-black text-nexus-text">{performance.reservas}</p>
             </div>
             <div>
-              <p className="text-xs text-nexus-text-secondary nx-num">Completadas</p>
+            <p className="text-xs text-nexus-text-secondary nx-num">Completadas</p>
               <p className="text-2xl font-black text-nexus-text">{performance.completadas}</p>
+            </div>
+            <div>
+              <p className="text-xs text-nexus-text-secondary nx-num">Canceladas</p>
+              <p className={`text-2xl font-black ${canceladasEnRango > 0 ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{canceladasEnRango}</p>
             </div>
           </div>
 
