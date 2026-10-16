@@ -415,18 +415,12 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             </div>
           </div>
 
-          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 flex flex-col justify-center gap-3">
-            <div>
-              <p className="text-xs text-nexus-text-secondary nx-num">Reservas</p>
-              <p className="text-2xl font-black text-nexus-text">{performance.reservas}</p>
-            </div>
-            <div>
-            <p className="text-xs text-nexus-text-secondary nx-num">Completadas</p>
-              <p className="text-2xl font-black text-nexus-text">{performance.completadas}</p>
-            </div>
-            <div>
-              <p className="text-xs text-nexus-text-secondary nx-num">Canceladas</p>
-              <p className={`text-2xl font-black ${canceladasEnRango > 0 ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{canceladasEnRango}</p>
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
+            <p className="text-3xl font-black text-nexus-text">{performance.reservas}</p>
+            <p className="text-xs text-nexus-text-secondary nx-num mb-2">Reservas</p>
+            <div className="flex justify-center gap-6 text-sm">
+              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.completadas}</b><span className="text-nexus-text-secondary">Completadas</span></span>
+              <span className="flex flex-col items-center"><b className={`text-lg ${canceladasEnRango > 0 ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{canceladasEnRango}</b><span className="text-nexus-text-secondary">Canceladas</span></span>
             </div>
           </div>
 
