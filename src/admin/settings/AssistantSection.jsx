@@ -3,6 +3,7 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { MessageCircle, ToggleRight, ToggleLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
+import AssistantPersonalitySection from './AssistantPersonalitySection';
 
 // Asistente de reservas por WhatsApp (backend en Railway).
 // Lee/escribe negocios/{negocioId}.assistantConfig:
@@ -186,6 +187,12 @@ export default function AssistantSection({ negocioId }) {
         </div>       
         {error && <p className="mt-2 text-xs text-nexus-error-text">{error}</p>}
       </div>
+
+      <AssistantPersonalitySection
+        negocioId={negocioId}
+        personalidad={config.personalidad}
+        businessName={negocio?.heroConfig?.businessName || ''}
+      />
 
       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
         <h3 className="text-sm font-bold text-nexus-text mb-3">Cómo funciona</h3>

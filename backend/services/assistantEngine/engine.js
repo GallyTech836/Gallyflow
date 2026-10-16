@@ -25,6 +25,7 @@ import { canUse } from '../capabilities/capabilityModel.js';
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
 import { getServicePriceRange, buildCitaServices, formatPriceRange } from '../pricing/professionalPricing.js';
 import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
+import { crearVoz, aplicarVoz } from './personalidad.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -311,8 +312,25 @@ function contextoDeSucursal(ctx, branch) {
 
 // ───────────────────────── Motor ─────────────────────────
 
-export async function assistantEngine({ negocioId, phone, message, messageId, branch = null, referral = null }) {
+// Personalidad (assistantConfig.personalidad): el motor arma la respuesta y
+// aquí se ajusta cómo habla (usted / sin emojis). Sin configurar = como siempre.
+export async function assistantEngine(args) {
+  const resultado = await motor(args);
+  try {
+    const ctx = await getBusinessContext(args.negocioId);
+    return aplicarVoz(resultado, vozDe(ctx));
+  } catch {
+    return resultado;
+  }
+}
+
+function vozDe(ctx) {
+  return crearVoz(ctx?.assistantConfig?.personalidad, { negocio: ctx?.businessName || '', hora: ahoraNegocio().getHours() });
+}
+
+async function motor({ negocioId, phone, message, messageId, branch = null, referral = null }) {
   const context = contextoDeSucursal(await getBusinessContext(negocioId), branch);
+  const voz = vozDe(context);
 
   // Sin la capacidad `asistenteWhatsapp` el bot no responde nada (tampoco
   // gasta mensajes). El webhook ya lo valida; esto cubre cualquier otra
@@ -490,7 +508,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     case 'choosing_service': {
       const servicios = serviciosOfrecidos(context);
       const indices = parsearIndices(texto, servicios.length);
-      if (!indices) return responder(prefijo(`No entendí. \n\n`, mensajeServicios(context)), conversation);
+      if (!indices) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeServicios(context)), conversation);
 
       const elegidos = indices.map((i) => servicios[i]);
       if (profesionalesPara(context, elegidos.map((s) => s.id)).length === 0) {
@@ -505,7 +523,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       const servicios = serviciosOfrecidos(context);
       const idx = parseInt(texto, 10) - 1;
       const extra = serviciosExtraCompatibles().find((s) => s.id === servicios[idx]?.id);
-      if (!extra) return responder(prefijo('No entendí.', mensajeServiciosExtra()), conversation);
+      if (!extra) return responder(prefijo(voz.noEntendi(), mensajeServiciosExtra()), conversation);
 
       conversation = await updateConversation(negocioId, phone, {
         selectedServices: [...serviciosDe(conversation), aServicioCita(extra)],
@@ -534,7 +552,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       const opciones = opcionesCualquiera(pros, context.terms);
       const profesional = pros[idx];
       const cualquiera = opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null);
-      if (!profesional && !cualquiera) return responder(prefijo(`No entendí. \n\n`, mensajeProfesionales(pros)), conversation);
+      if (!profesional && !cualquiera) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeProfesionales(pros)), conversation);
 
       const selectedStaff = profesional
         ? { id: profesional.id, name: profesional.name, branch: profesional.branch || '' }
@@ -548,7 +566,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       const dias = conversation.dateOptionsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const dia = dias[idx];
-      if (!dia) return responder(prefijo(`No entendí. \n\n`, mensajeFechas(dias)), conversation);
+      if (!dia) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeFechas(dias)), conversation);
 
       const slots = await slotsParaFecha(context, prosElegidos(context, conversation), dia.id, totalDuracion(conversation));
       if (slots.length === 0) {
@@ -572,7 +590,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
       const slots = conversation.availableSlotsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const hora = slots[idx];
-      if (!hora) return responder(prefijo(`No entendí. \n\n`, mensajeHoras(slots, conversation.selectedDate)), conversation);
+      if (!hora) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeHoras(slots, conversation.selectedDate)), conversation);
 
             // Reprogramando: no se pide nombre, se confirma el cambio.
             if (conversation.rescheduleCitaId) {
@@ -622,7 +640,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
         conversation = await resetConversation(negocioId, phone);
         return responder('Reserva cancelada. Escribe cuando quieras volver a empezar.', conversation);
       }
-      return responder(prefijo(`No entendí. \n\n`, mensajeResumen(conversation)), conversation);
+      return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeResumen(conversation)), conversation);
     }
 
         
@@ -633,7 +651,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
             conversation = await resetConversation(negocioId, phone);
             return responder(`Listo, no cambié nada. Tu ${context.terms.tl('appointment')} sigue como estaba ✅`, conversation);
           }
-          return responder(prefijo('No entendí.', mensajeResumenReprogramar(conversation)), conversation);
+          return responder(prefijo(voz.noEntendi(), mensajeResumenReprogramar(conversation)), conversation);
         }
     
     default: {
@@ -690,7 +708,7 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     const { t, tl, g } = context.terms;
     const notaPendiente = esPendiente && !conQuien ? `\nEn breve el negocio te asignará ${g('professional', 'un', 'una')} ${tl('professional')}.` : '';
     conversation = await resetConversation(negocioId, phone);
-    return responder(`✅ ${t('appointment')} ${g('appointment', 'confirmado', 'confirmada')} para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ¡Gracias!${notaPendiente}`, conversation);
+    return responder(`✅ ${t('appointment')} ${g('appointment', 'confirmado', 'confirmada')} para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ${voz.gracias()}${notaPendiente}${voz.despedida() ? `\n\n${voz.despedida()}` : ''}`, conversation);
   }
 
   function aServicioCita(s) {
@@ -825,9 +843,8 @@ export async function assistantEngine({ negocioId, phone, message, messageId, br
     conversation = await updateConversation(negocioId, phone, { currentFlow: 'welcome', fromAd: true, citaOptions: [], manageCitaId: null });
     const { tl, g } = context.terms;
     const cita = tl('appointment');
-    const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋 Gracias por escribir a ${context.businessName}.`;
-    const cuerpo = `${saludo}
-¿Qué información te gustaría?`;
+    const saludo = voz.anuncio(nombre ? nombre.split(' ')[0] : '');
+    const cuerpo = `${saludo}\n${voz.preguntaInfo()}`;
     return menuBotones({
       texto: `${cuerpo}
 
@@ -1096,7 +1113,7 @@ ${cierre}`,
       currentFlow: 'human',
       humanUntil: new Date(Date.now() + HUMAN_HANDOFF_MS).toISOString(),
     });
-    return responder('Listo, le avisé al equipo. Una persona te responderá por aquí en breve. 🙌\n\n(Si quieres volver al asistente, escribe "menu".)', conversation);
+    return responder(`${voz.humano()}\n\n(Si quieres volver al asistente, escribe "menu".)`, conversation);
   }
 
   // ── Mensajes ──
@@ -1145,19 +1162,19 @@ ${cierre}`,
   function mensajeBienvenida(ctx, nombre = null, repetir = null) {
     const { tl, g } = ctx.terms;
     const cita = tl('appointment');
-    const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋`;
+    const intro = voz.bienvenida(nombre ? nombre.split(' ')[0] : '');
     if (repetir) {
       const ultima = `${repetir.services.map((x) => x.serviceName).join(' + ')} con ${repetir.staff.name}`;
-      const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?\n\n¿Repetimos tu ${g('appointment', 'último', 'última')} ${cita}?\n${ultima}`;
+      const cuerpo = `${intro} ${voz.ayuda()}\n\n¿Repetimos tu ${g('appointment', 'último', 'última')} ${cita}?\n${ultima}`;
       return menuBotones({
         texto: `${cuerpo}\n\nEscribe "repetir", 1 para agendar ${g('appointment', 'otro', 'otra')} ${cita} o 2 para hablar con alguien.`,
         cuerpo,
         botones: [{ id: 'repetir', title: cabe(`Repetir ${cita}`, 20, 'Repetir') }, { id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
       });
     }
-    const cuerpo = `${saludo} Soy el asistente de ${ctx.businessName}. ¿En qué te ayudo?`;
+    const cuerpo = `${intro} ${voz.ayuda()}`;
     return menuBotones({
-      texto: `${saludo} Soy el asistente de ${ctx.businessName}.\n\n1. Agendar ${g('appointment', 'un', 'una')} ${cita}\n2. Hablar con alguien`,
+      texto: `${intro}\n\n1. Agendar ${g('appointment', 'un', 'una')} ${cita}\n2. Hablar con alguien`,
       cuerpo,
       botones: [{ id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
     });
@@ -1264,7 +1281,7 @@ ${cierre}`,
 
 function mensajeConCitas(nombre, citas) {
   const { tl, g } = context.terms;
-  const saludo = `Hola${nombre ? ` ${nombre.split(' ')[0]}` : ''} 👋 Soy el asistente de ${context.businessName}.`;
+  const saludo = voz.saludo(nombre ? nombre.split(' ')[0] : '');
   if (citas.length === 1) {
     const c = citas[0];
     const cuerpo = `${saludo}\n\nTienes ${g('appointment', 'un', 'una')} ${tl('appointment')} ${describirCita(c)}.`;
