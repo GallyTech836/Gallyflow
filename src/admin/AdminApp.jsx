@@ -31,6 +31,7 @@ import { repriceCitaServices, normalizeCustomPrice, hasCustomPrices } from '../s
 import { getStaffPermissionOptions, getEditPartOptions, getEditMode, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
 import { checkStaffUsername, setStaffPassword, revokeStaffSessions } from '../shared/staff/staffApi';
+import { createProfessional, createBranch } from '../shared/negocioPlan/quotaApi';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
@@ -2174,17 +2175,17 @@ const { businessSettings } = useBusinessSettings(negocioId);
         triggerToast('Sucursal actualizada con éxito.');
         setEditingBranchId(null);
       } else {
-        await addDoc(collection(db, 'negocios', negocioId, 'sucursales'), {
+        // Alta por backend: valida el límite de sucursales del plan.
+        const r = await createBranch({
           name: newBranch.name,
           phone: newBranch.phone || '',
           address: newBranch.address,
           schedule: newBranch.schedule || '',
           lat: newBranch.lat,
           lng: newBranch.lng,
-          mapsUrl: (newBranch.mapsUrl || '').trim(),
-          active: true,
-          createdAt: new Date().toISOString()
+          mapsUrl: (newBranch.mapsUrl || '').trim()
         });
+        if (!r.ok) throw new Error(r.error || 'No se pudo crear la sucursal.');
         triggerToast('Sucursal creada con éxito.');
       }
     } catch (err) {
@@ -2471,33 +2472,22 @@ const { businessSettings } = useBusinessSettings(negocioId);
       }
     } else {
       try {
-        const newRef = doc(collection(db, 'negocios', negocioId, 'profesionales'));
-        const uid = newRef.id;
-
-        await setDoc(doc(db, 'usuarios', uid), {
-          username: newBarber.username,
-          rol: 'barber',
-          negocioId,
-          uidFirebase: uid
-        });
-
-        await setDoc(newRef, {
+        // Alta por backend: valida el límite de profesionales del plan y crea
+        // el perfil + usuarios/{id} en una sola transacción.
+        const created = await createProfessional({
           firstName: newBarber.firstName,
           lastName: newBarber.lastName,
-          name: `${newBarber.firstName} ${newBarber.lastName}`,
           username: newBarber.username,
           branch: newBarber.branch,
           pin: newBarber.pin,
           active: newBarber.active,
-          rating: 5.0,
           avatar: newBarber.avatar,
-          createdDate: new Date().toISOString(),
-          attendance: { in: null, out: null, status: 'inactive' },
-          performance: { servicesCount: 0, totalGenerated: 0 },
           services: savedServices,
           permissions: normalizeStaffPermissions(newBarber.permissions),
           availability: newBarber.availability
         });
+        if (!created.ok) throw new Error(created.error || 'No se pudo crear el perfil.');
+        const uid = created.id;
 
         const r = await setStaffPassword(uid, newBarber.password);
         if (!r.ok) {
@@ -3634,7 +3624,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   onClick={() => {
                     const staffLimit = getFeatureLimit(planFeatures, 'profesionales');
                     if (staffLimit !== null && barbers.length >= staffLimit) {
-                      triggerToast(`Tu plan permite hasta ${staffLimit} ${tl('professionals')}. Cambia de plan para agregar más.`, 'error');
+                      triggerToast(`Tu plan permite hasta ${staffLimit} ${tl('professionals')}. Amplía tu plan o agrega ${tl('professionals')} adicionales para registrar más.`, 'error');
                       return;
                     }
                     resetBarberForm();
@@ -3798,7 +3788,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   onClick={() => {
                     const sucursalesLimit = getFeatureLimit(planFeatures, 'sucursales');
                     if (sucursalesLimit !== null && branches.length >= sucursalesLimit) {
-                      triggerToast(`Tu plan permite hasta ${sucursalesLimit} sucursales. Cambia de plan para agregar más.`, 'error');
+                      triggerToast(`Tu plan permite hasta ${sucursalesLimit} ${sucursalesLimit === 1 ? 'sucursal' : 'sucursales'}. Amplía tu plan para agregar más.`, 'error');
                       return;
                     }
                     setEditingBranchId(null);

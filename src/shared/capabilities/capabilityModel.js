@@ -15,9 +15,12 @@
 //   tipo de negocio (businessProfileModel)   -> SOLO restringe: módulos no
 //                                               relevantes o capabilityDefaults
 //                                               con enabled:false / límite menor
+//   negocios/{id}.addons                     -> complementos contratados
+//                                               (ver ADDONS): se SUMAN al plan
 //   CAPABILITIES[].default                   -> valor si nadie dice nada
-// Prioridad: excepción del negocio > restricción del tipo > plan > default.
+// Prioridad: excepción del negocio > restricción del tipo > plan + complementos > default.
 // El tipo de negocio NUNCA habilita una capacidad que el plan no incluye.
+// Un plan NUNCA activa el Asistente de WhatsApp: es un complemento aparte.
 //
 // Formato de un valor (plan u override), todos opcionales:
 //   true | false                       (atajo de { enabled })
@@ -49,11 +52,11 @@ export const CAPABILITY_MODULES = [
   { key: 'assistance', label: 'Asistencia' },
   { key: 'reports', label: 'Analítica' },
   { key: 'settings', label: 'Configuración y comunicación' },
-    // Vertical restaurante (src/verticals/restaurante)
-    { key: 'orders', label: 'Pedidos y cocina' },
-    { key: 'tables', label: 'Mesas y reservas' },
-    { key: 'menu', label: 'Menú' },
-    { key: 'pos', label: 'Caja' },
+  // Vertical restaurante (src/verticals/restaurante)
+  { key: 'orders', label: 'Pedidos y cocina' },
+  { key: 'tables', label: 'Mesas y reservas' },
+  { key: 'menu', label: 'Menú' },
+  { key: 'pos', label: 'Caja' },
 ];
 
 // module: clave de CAPABILITY_MODULES.
@@ -68,6 +71,9 @@ export const CAPABILITY_MODULES = [
 //   que cada negocio veía ANTES de este sistema (compatibilidad sin migrar).
 // enforcedIn: dónde se valida de verdad ('ui', 'backend', 'rules').
 // limit.usageKey: campo en negocios/{id}/uso/{AAAA-MM} que mide el consumo.
+// limit.noPlanLimit: límite para negocios SIN plan asignado (o con un plan
+//   que ya no existe). Evita que un negocio sin plan quede ilimitado. Los
+//   planes guardados siempre traen su límite explícito, así que no les afecta.
 export const CAPABILITIES = [
   // ── AGENDA Y RESERVAS ──
   { key: 'agenda', module: 'agenda', label: 'Agenda', status: 'implemented', kind: 'toggle', core: true, default: true,
@@ -95,11 +101,11 @@ export const CAPABILITIES = [
 
   // ── EQUIPO / SUCURSALES / COMISIONES / ASISTENCIA ──
   { key: 'profesionales', module: 'barbers', label: 'Profesionales', status: 'implemented', kind: 'quota', default: true,
-    legacyKeys: ['staff'], limit: { unit: 'profesionales', period: null, defaultLimit: null },
-    description: 'Cantidad máxima de profesionales.', enforcedIn: ['ui'] },
+    legacyKeys: ['staff'], limit: { unit: 'profesionales', period: null, defaultLimit: null, noPlanLimit: 2 },
+    description: 'Cantidad máxima de profesionales.', enforcedIn: ['ui', 'backend'] },
   { key: 'sucursales', module: 'branches', label: 'Sucursales', status: 'implemented', kind: 'quota', default: true,
-    limit: { unit: 'sucursales', period: null, defaultLimit: null },
-    description: 'Cantidad máxima de sucursales.', enforcedIn: ['ui'] },
+    limit: { unit: 'sucursales', period: null, defaultLimit: null, noPlanLimit: 1 },
+    description: 'Cantidad máxima de sucursales.', enforcedIn: ['ui', 'backend'] },
   { key: 'comisiones', module: 'commissions', label: 'Comisiones', status: 'implemented', kind: 'toggle', default: false,
     description: 'Liquidación de comisiones del staff.', enforcedIn: ['ui', 'backend'] },
   { key: 'appProfesionales', module: 'barbers', label: 'App para profesionales', status: 'implemented', kind: 'toggle', default: true,
@@ -121,7 +127,7 @@ export const CAPABILITIES = [
   { key: 'asistenteWhatsapp', module: 'settings', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,
     legacyKeys: ['automatizaciones'],
     limit: { unit: 'mensajes/mes', period: 'month', usageKey: 'whatsappMensajes', defaultLimit: null },
-    description: 'Bot de reservas por WhatsApp (Railway). El límite cuenta mensajes enviados por el bot.',
+    description: 'Bot de reservas por WhatsApp (Railway). Complemento aparte (ver ADDONS). El límite cuenta mensajes enviados por el bot.',
     enforcedIn: ['ui', 'backend'] },
   { key: 'recordatoriosPush', module: 'settings', label: 'Recordatorios push al profesional', status: 'implemented', kind: 'toggle', default: true,
     description: 'Aviso push al profesional antes de cada cita.', enforcedIn: ['backend'] },
@@ -135,12 +141,12 @@ export const CAPABILITIES = [
   { key: 'analiticas', module: 'reports', label: 'Analítica financiera', status: 'implemented', kind: 'toggle', default: false,
     description: 'Ingresos, comisiones por profesional y PIN financiero.', enforcedIn: ['ui', 'backend'] },
 
-      // ── RESTAURANTE ──
+  // ── RESTAURANTE ──
   // Solo existen para negocios del vertical 'restaurante': en los demás tipos
   // su módulo no es relevante y quedan apagadas. Default true para que un
   // restaurante funcione con cualquier plan ya guardado (igual que appProfesionales).
   { key: 'pedidos', module: 'orders', label: 'Pedidos y pantalla de cocina', status: 'mock', kind: 'toggle', default: true,
-  description: 'Comandas en tiempo real para cocina y barra.', enforcedIn: ['ui'] },
+    description: 'Comandas en tiempo real para cocina y barra.', enforcedIn: ['ui'] },
   { key: 'appMesero', module: 'orders', label: 'App del mesero', status: 'mock', kind: 'toggle', default: true,
     requires: 'pedidos', description: 'Toma de pedidos desde el celular del mesero.', enforcedIn: ['ui'] },
   { key: 'pedidosWhatsapp', module: 'orders', label: 'Pedidos por WhatsApp', status: 'soon', kind: 'toggle', default: false,
@@ -221,6 +227,175 @@ function readFromMap(map, cap) {
   return null;
 }
 
+// ───────────────────────── Complementos (add-ons) ─────────────────────────
+//
+// Se contratan por negocio, aparte del plan. Se guardan en
+//   negocios/{id}.addons = { profesionalesExtra: number, asistenteWhatsapp: boolean }
+// y el precio de cada uno lo define el plan en
+//   planes/{id}.addons[key] = { available: boolean, price: number }
+// Contratar un plan NO activa ningún complemento.
+//   kind 'quantity' -> suma `businessField` unidades al límite de `capability`
+//   kind 'toggle'   -> activa `capability` (si el tipo de negocio lo permite)
+export const ADDONS = [
+  { key: 'profesionalExtra', label: 'Profesional adicional', kind: 'quantity', capability: 'profesionales',
+    businessField: 'profesionalesExtra', unit: 'profesional', defaultPrice: 45, max: 50 },
+  { key: 'asistenteWhatsapp', label: 'Asistente de WhatsApp', kind: 'toggle', capability: 'asistenteWhatsapp',
+    businessField: 'asistenteWhatsapp', defaultPrice: 350,
+    description: 'Solo para negocios compatibles con la integración de WhatsApp.' },
+];
+
+const ADDON_BY_CAPABILITY = Object.fromEntries(ADDONS.map((a) => [a.capability, a]));
+
+/** Normaliza negocios/{id}.addons. Valores inválidos = sin complemento. */
+export function normalizeAddons(raw) {
+  const out = { profesionalesExtra: 0, asistenteWhatsapp: false };
+  if (!raw || typeof raw !== 'object') return out;
+  const n = Math.floor(Number(raw.profesionalesExtra));
+  if (Number.isFinite(n) && n > 0) out.profesionalesExtra = Math.min(n, ADDONS[0].max);
+  out.asistenteWhatsapp = raw.asistenteWhatsapp === true;
+  return out;
+}
+
+function addonExtraFor(cap, extras) {
+  const addon = ADDON_BY_CAPABILITY[cap.key];
+  if (!addon || addon.kind !== 'quantity') return 0;
+  return Number(extras[addon.businessField]) || 0;
+}
+
+// Complemento tipo toggle contratado: el valor "del plan" pasa a enabled:true
+// (conserva el límite que el plan defina). Las excepciones y el tipo de
+// negocio se siguen aplicando encima.
+function applyAddon(cap, planValue, extras) {
+  const addon = ADDON_BY_CAPABILITY[cap.key];
+  if (!addon || addon.kind !== 'toggle' || extras[addon.businessField] !== true) return planValue;
+  return { ...(planValue || {}), enabled: true, viaAddon: true };
+}
+
+/** Precio y disponibilidad de un complemento en un plan (con valores por defecto). */
+export function getAddonOffer(plan, addonKey) {
+  const addon = ADDONS.find((a) => a.key === addonKey);
+  if (!addon) return null;
+  const raw = plan?.addons?.[addonKey] || {};
+  const price = Number(raw.price);
+  return {
+    ...addon,
+    available: raw.available !== false,
+    price: Number.isFinite(price) && price >= 0 ? price : addon.defaultPrice,
+  };
+}
+
+/**
+ * Total mensual estimado del negocio: plan + complementos contratados.
+ * Solo informativo (los cobros siguen siendo manuales).
+ */
+export function computeMonthlyTotal(plan, addons) {
+  const a = normalizeAddons(addons);
+  const base = Number(plan?.price) || 0;
+  const pro = getAddonOffer(plan, 'profesionalExtra');
+  const wa = getAddonOffer(plan, 'asistenteWhatsapp');
+  const lines = [];
+  if (plan) lines.push({ key: 'plan', label: plan.name || 'Plan', amount: base });
+  if (a.profesionalesExtra > 0) {
+    lines.push({ key: 'profesionalExtra', label: `${a.profesionalesExtra} × ${pro.label}`, amount: a.profesionalesExtra * pro.price });
+  }
+  if (a.asistenteWhatsapp) lines.push({ key: 'asistenteWhatsapp', label: wa.label, amount: wa.price });
+  return { total: lines.reduce((s, l) => s + l.amount, 0), currency: plan?.currency || 'Bs', lines };
+}
+
+// ───────────────────────── Verticales de plan ─────────────────────────
+//
+// planes/{id}.vertical separa los planes comerciales:
+//   'citas'       -> barberías, salones y negocios con agenda (a la venta)
+//   'restaurante' -> futuro módulo de restaurantes (NO está a la venta)
+// Un plan sin `vertical` es un plan anterior: no se toca su configuración.
+export const PLAN_VERTICALS = [
+  { key: 'citas', label: 'Negocios con citas', sellable: true },
+  { key: 'restaurante', label: 'Restaurantes (próximamente)', sellable: false },
+];
+const RESTAURANT_MODULE_KEYS = ['orders', 'tables', 'menu', 'pos'];
+
+/** ¿La capacidad pertenece a la vertical del plan? (sin vertical = todas) */
+export function isCapabilityInVertical(cap, vertical) {
+  if (!vertical) return true;
+  const isRestaurant = RESTAURANT_MODULE_KEYS.includes(cap.module);
+  return vertical === 'restaurante' ? isRestaurant || cap.core : !isRestaurant;
+}
+
+/** ¿Se puede asignar este plan a un negocio de esta vertical (businessProfile.vertical)? */
+export function isPlanCompatible(plan, businessVertical = 'citas') {
+  if (!plan?.vertical) return true; // plan anterior sin vertical
+  return plan.vertical === (businessVertical || 'citas');
+}
+
+/**
+ * Capacidades que se pueden PROMOCIONAR como incluidas: activas y realmente
+ * operativas (implementadas o parciales). Nunca maquetas ni "próximamente",
+ * ni complementos (el WhatsApp activado por complemento no cuenta).
+ */
+export function sellableCapabilities(resolved) {
+  return CAPABILITIES.filter((c) => {
+    const v = resolved?.[c.key];
+    if (!v?.enabled || v.source === 'addon') return false;
+    if (c.status !== 'implemented' && c.status !== 'partial') return false;
+    return c.kind !== 'quota';
+  });
+}
+
+// ───────────────────────── Planes de lanzamiento ─────────────────────────
+//
+// Semilla de los planes comerciales de lanzamiento. Super Admin los crea con
+// estos IDs SOLO si no existen (nunca reemplaza un documento). Después de
+// crearlos, la fuente de verdad es Firestore: precios y límites se editan
+// desde Super Admin, no aquí.
+const ESENCIAL_FEATURES = {
+  reservaPublica: true, linkPersonalProfesional: true,
+  clientes: true, fichaCliente: false, historialCliente: false, preferenciasCliente: false, camposPersonalizados: false,
+  appProfesionales: true, permisosProfesional: false,
+  comisiones: false, analiticas: false, dashboard: true, recordatoriosPush: true,
+  // Maquetas: no se venden.
+  asistencia: false, inventario: false,
+  // Complemento aparte, nunca incluido en el plan.
+  asistenteWhatsapp: { enabled: false, limit: null },
+  // Vertical restaurante: fuera de estos planes.
+  pedidos: false, appMesero: false, mesas: false, menuRestaurante: false, cajaRestaurante: false,
+};
+const PROFESIONAL_FEATURES = {
+  ...ESENCIAL_FEATURES,
+  fichaCliente: true, historialCliente: true, preferenciasCliente: true, camposPersonalizados: true,
+  permisosProfesional: true, comisiones: true, analiticas: true,
+};
+const LAUNCH_ADDONS = {
+  profesionalExtra: { available: true, price: 45 },
+  asistenteWhatsapp: { available: true, price: 350 },
+};
+
+export const LAUNCH_PLAN_PRESETS = [
+  {
+    id: 'esencial', name: 'Esencial', order: 1, price: 150,
+    description: 'Agenda y gestión de citas, link público de reservas, servicios y precios, registro de clientes y app para profesionales.',
+    features: { ...ESENCIAL_FEATURES, profesionales: { limit: 2 }, sucursales: { limit: 1 } },
+  },
+  {
+    id: 'profesional', name: 'Profesional', order: 2, price: 280,
+    description: 'Todo lo de Esencial, más comisiones por profesional, analítica y control financiero, historial de clientes y gestión de permisos.',
+    features: { ...PROFESIONAL_FEATURES, profesionales: { limit: 5 }, sucursales: { limit: 1 } },
+  },
+  {
+    id: 'premium', name: 'Premium', order: 3, price: 450,
+    description: 'Todo lo de Profesional, con mayor capacidad para gestionar el negocio.',
+    features: { ...PROFESIONAL_FEATURES, profesionales: { limit: 10 }, sucursales: { limit: 2 } },
+  },
+].map((p) => ({
+  ...p,
+  currency: 'Bs',
+  billingCycle: 'monthly',
+  vertical: 'citas',
+  trialDays: 14,
+  setupFee: 0, // activación gratuita durante el lanzamiento
+  active: true,
+  addons: LAUNCH_ADDONS,
+}));
+
 // ───────────────────────── Resolución ─────────────────────────
 
 /**
@@ -241,11 +416,13 @@ function readFromMap(map, cap) {
  *   blockedBy?: string
  * }>}
  */
-export function resolveCapabilities({ planFeatures = null, overrides = null, profileDefaults = null, relevantModules = null } = {}) {
+export function resolveCapabilities({ planFeatures = null, overrides = null, profileDefaults = null, relevantModules = null, addons = null } = {}) {
   const result = {};
+  const hasPlan = planFeatures != null;
+  const extras = normalizeAddons(addons);
 
   for (const cap of CAPABILITIES) {
-    const plan = readFromMap(planFeatures, cap);
+    const plan = applyAddon(cap, readFromMap(planFeatures, cap), extras);
     const override = readFromMap(overrides, cap);
     const profile = readFromMap(profileDefaults, cap);
     const moduleOff = Array.isArray(relevantModules) && cap.module && !relevantModules.includes(cap.module);
@@ -262,7 +439,7 @@ export function resolveCapabilities({ planFeatures = null, overrides = null, pro
     } else if (profileRestricts) {
       enabled = false; source = 'profile';
     } else if (plan && typeof plan.enabled === 'boolean') {
-      enabled = plan.enabled; source = 'plan';
+      enabled = plan.enabled; source = plan.viaAddon ? 'addon' : 'plan';
     } else {
       enabled = !!cap.default; source = 'default';
     }
@@ -272,7 +449,16 @@ export function resolveCapabilities({ planFeatures = null, overrides = null, pro
     if (cap.limit) {
       if (override && hasOwn(override, 'limit')) { limit = override.limit; limitSource = 'override'; }
       else if (plan && hasOwn(plan, 'limit')) { limit = plan.limit; limitSource = 'plan'; }
-      else { limit = cap.limit.defaultLimit ?? null; limitSource = 'default'; }
+      else {
+        limit = !hasPlan && cap.limit.noPlanLimit !== undefined ? cap.limit.noPlanLimit : (cap.limit.defaultLimit ?? null);
+        limitSource = 'default';
+      }
+      // Complemento de cantidad (ej. profesionales adicionales): se suma al
+      // límite del plan/default. Una excepción con límite propio manda.
+      const extra = addonExtraFor(cap, extras);
+      if (extra > 0 && limitSource !== 'override' && typeof limit === 'number') {
+        limit += extra;
+      }
       // El tipo de negocio solo puede BAJAR el límite (nunca subirlo).
       const pl = profile && hasOwn(profile, 'limit') ? profile.limit : null;
       if (limitSource !== 'override' && typeof pl === 'number' && (limit === null || pl < limit)) {
@@ -341,11 +527,12 @@ export function usageStatus(limit, used) {
  * configurables quedan explícitas (true/false), así apagar una en el plan
  * de verdad la apaga (antes se borraba la clave y caía al default).
  */
-export function buildPlanFeatures(draft = {}) {
+export function buildPlanFeatures(draft = {}, { vertical = null } = {}) {
   const out = {};
   for (const cap of CAPABILITIES) {
     if (cap.status === 'soon' || cap.core) continue;
-    const v = readFromMap(draft, cap) || {};
+    // Capacidades de otra vertical: quedan apagadas en el plan.
+    const v = isCapabilityInVertical(cap, vertical) ? readFromMap(draft, cap) || {} : { enabled: false };
     if (cap.kind === 'quota') {
       out[cap.key] = { limit: hasOwn(v, 'limit') ? v.limit : null };
     } else if (cap.limit) {

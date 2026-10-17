@@ -73,11 +73,14 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
   };
 
   const statusInfo = STATUS_BADGE[status] || STATUS_BADGE.active;
-  // Lo que el negocio tiene EFECTIVAMENTE (plan + excepciones), con nombres
-  // legibles del catálogo. Las "Próximamente" no se listan.
+  // Lo que el negocio tiene EFECTIVAMENTE (plan + complementos + excepciones),
+  // con nombres legibles del catálogo. No se listan: "Próximamente", maquetas
+  // no activas ni funciones que no aplican a este tipo de negocio.
   const featureEntries = CAPABILITIES
-    .filter((cap) => cap.status !== 'soon' && !cap.core)
-    .map((cap) => [cap, capabilities?.[cap.key]]);
+    .map((cap) => [cap, capabilities?.[cap.key]])
+    .filter(([cap, val]) => cap.status !== 'soon' && !cap.core
+      && !(cap.status === 'mock' && !val?.enabled)
+      && val?.source !== 'profile');
 
   return (
     <div className="space-y-4">
@@ -142,7 +145,7 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
                 {featureEntries.map(([cap, val]) => {
                   const enabled = !!val?.enabled;
                   const limit = typeof val?.limit === 'number' ? val.limit : null;
-                  const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}`) : 'Incluido';
+                  const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}`) : (val?.source === 'addon' ? 'Complemento' : 'Incluido');
                   return (
                     <li key={cap.key} className="flex items-center justify-between gap-3 text-sm py-2">
                       <span className="text-nexus-text-secondary min-w-0">{cap.label}</span>

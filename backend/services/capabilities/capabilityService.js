@@ -36,6 +36,7 @@ export const DENY_MESSAGES = {
   negocio_bloqueado: 'El negocio está suspendido o su suscripción venció.',
   capacidad_no_incluida: 'Esta función no está incluida en el plan del negocio.',
   limite_alcanzado: 'Se alcanzó el límite de uso de esta función para este período.',
+  cupo_alcanzado: 'Se alcanzó el máximo permitido por el plan del negocio.',
 };
 
 export function currentPeriod() {
@@ -63,12 +64,16 @@ async function readAccess(negocioId) {
     isBlocked: isBlockedStatus(status),
     planId,
     planName: plan?.name || null,
+    planActive: plan ? plan.active !== false : null,
+    addons: negocio.addons || null,
     // Para textos (terminología) — no afectan capacidades.
     businessType: negocio.businessType || null,
     terminologyOverrides: negocio.terminologyOverrides || null,
     capabilities: resolveCapabilities({
       planFeatures: plan?.features || null,
       overrides: negocio.capabilityOverrides || null,
+      // Complementos contratados (profesionales extra, Asistente de WhatsApp).
+      addons: negocio.addons || null,
       // El tipo de negocio solo restringe (nunca habilita).
       profileDefaults: profile.capabilityDefaults || null,
       relevantModules: profile.modules || null,

@@ -9,7 +9,7 @@ const EMPTY = {};
 /**
  * Capacidades efectivas del negocio, en tiempo real.
  *
- * Escucha `negocios/{id}` (plan + capabilityOverrides) y `planes/{planId}`,
+ * Escucha `negocios/{id}` (plan + capabilityOverrides + addons) y `planes/{planId}`,
  * y resuelve con el modelo compartido (excepción > restricción del tipo de
  * negocio > plan > default). El tipo nunca habilita nada por sí mismo.
  * Si el Super Admin cambia el plan o una excepción, se refleja solo.
@@ -27,6 +27,7 @@ export function useNegocioPlan(negocioId) {
   const [planId, setPlanId] = useState(null);
   const [overrides, setOverrides] = useState(null);
   const [businessType, setBusinessType] = useState(null);
+  const [addons, setAddons] = useState(null);
   const [planData, setPlanData] = useState(null);
   const [negocioLoaded, setNegocioLoaded] = useState(false);
   const [planLoaded, setPlanLoaded] = useState(false);
@@ -39,6 +40,7 @@ export function useNegocioPlan(negocioId) {
       setPlanId(data.plan || null);
       setOverrides(data.capabilityOverrides || null);
       setBusinessType(data.businessType || null);
+      setAddons(data.addons || null);
       setNegocioLoaded(true);
     }, () => setNegocioLoaded(true));
     return () => unsub();
@@ -66,10 +68,11 @@ export function useNegocioPlan(negocioId) {
     return resolveCapabilities({
       planFeatures: planData?.features || null,
       overrides,
+      addons, // complementos contratados (profesionales extra, WhatsApp)
       profileDefaults: profile.capabilityDefaults || null,
       relevantModules: profile.modules || null,
     });
-  }, [planData, overrides, businessType],
+  }, [planData, overrides, businessType, addons],
   );
   const can = useCallback((key) => canUse(capabilities, key), [capabilities]);
   const limitOf = useCallback((key) => getLimit(capabilities, key), [capabilities]);
