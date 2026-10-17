@@ -99,6 +99,15 @@ describe('planes de lanzamiento (modelo)', () => {
     assert.equal(excepcion.asistenteWhatsapp.enabled, false);
   });
 
+  test('WhatsApp: 1000 mensajes/mes al contratar el complemento; un plan comercial nunca lo incluye', () => {
+    const con = resolvedOf('esencial', { addons: { asistenteWhatsapp: true } });
+    assert.equal(getLimit(con, 'asistenteWhatsapp'), 1000);
+    const forzado = buildPlanFeatures({ asistenteWhatsapp: { enabled: true, limit: 500 } }, { vertical: 'citas' });
+    assert.deepEqual(forzado.asistenteWhatsapp, { enabled: false, limit: 500 });
+    // Plan anterior (sin vertical) que ya incluía WhatsApp: se respeta.
+    assert.equal(buildPlanFeatures({ asistenteWhatsapp: { enabled: true } }).asistenteWhatsapp.enabled, true);
+  });
+
   test('profesional adicional suma al límite; una excepción con límite propio manda', () => {
     assert.equal(getLimit(resolvedOf('esencial', { addons: { profesionalesExtra: 3 } }), 'profesionales'), 5);
     assert.equal(getLimit(resolvedOf('esencial', { addons: { profesionalesExtra: 3 }, overrides: { profesionales: { limit: 4 } } }), 'profesionales'), 4);
@@ -298,6 +307,30 @@ describe('altas validadas en el backend', () => {
     seed({ plan: 'premium' });
     assert.equal((await llamar('POST', '/negocio/profesionales', ADMIN, { firstName: '', username: '' })).status, 400);
     assert.equal((await llamar('POST', '/negocio/sucursales', ADMIN, { name: 'X' })).status, 400);
+  });
+
+  test('WhatsApp: el límite es por cliente; los demás clientes siguen normales', async () => {
+    const { checkCapability, checkClientLimit, incrementClientUsage, currentPeriod } = await import('../services/capabilities/capabilityService.js');
+    seed({ plan: 'esencial', extra: { addons: { asistenteWhatsapp: true } } });
+    await getNegocioAccess('negA', { fresh: true }); // el webhook usa la caché de 60 s
+    const periodo = currentPeriod();
+    // El total del negocio (aunque sea alto) no corta el servicio.
+    db._set(`negocios/negA/uso/${periodo}`, { whatsappMensajes: 50000 });
+    const permiso = await checkCapability('negA', 'asistenteWhatsapp');
+    assert.equal(permiso.allowed, true);
+    assert.equal(permiso.limit, 1000);
+
+    db._set(`negocios/negA/uso/${periodo}/clientes/59170000001`, { enviados: 999 });
+    assert.equal((await checkClientLimit('negA', '+591 70000001', permiso.limit)).allowed, true);
+    await incrementClientUsage('negA', '59170000001', permiso.limit); // llega a 1000
+    assert.equal((await checkClientLimit('negA', '59170000001', permiso.limit)).allowed, false);
+    assert.equal(db._get(`negocios/negA/uso/${periodo}`).clientesAlLimite, 1);
+    // Otro cliente: sin problema.
+    assert.equal((await checkClientLimit('negA', '59170000002', permiso.limit)).allowed, true);
+    await incrementClientUsage('negA', '59170000002', permiso.limit);
+    assert.equal(db._get(`negocios/negA/uso/${periodo}/clientes/59170000002`).enviados, 1);
+    // Sin límite configurado: siempre permitido.
+    assert.equal((await checkClientLimit('negA', '59170000001', null)).allowed, true);
   });
 
   test('GET /negocio/quotas', async () => {

@@ -71,6 +71,9 @@ export const CAPABILITY_MODULES = [
 //   que cada negocio veía ANTES de este sistema (compatibilidad sin migrar).
 // enforcedIn: dónde se valida de verdad ('ui', 'backend', 'rules').
 // limit.usageKey: campo en negocios/{id}/uso/{AAAA-MM} que mide el consumo.
+// limit.perClient: el límite se aplica a CADA cliente (celular) por separado,
+//   en negocios/{id}/uso/{AAAA-MM}/clientes/{celular}. El total del negocio
+//   se sigue contando en usageKey solo como dato (no corta el servicio).
 // limit.noPlanLimit: límite para negocios SIN plan asignado (o con un plan
 //   que ya no existe). Evita que un negocio sin plan quede ilimitado. Los
 //   planes guardados siempre traen su límite explícito, así que no les afecta.
@@ -126,8 +129,8 @@ export const CAPABILITIES = [
   // ── CONFIGURACIÓN Y COMUNICACIÓN ──
   { key: 'asistenteWhatsapp', module: 'settings', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,
     legacyKeys: ['automatizaciones'],
-    limit: { unit: 'mensajes/mes', period: 'month', usageKey: 'whatsappMensajes', defaultLimit: null },
-    description: 'Bot de reservas por WhatsApp (Railway). Complemento aparte (ver ADDONS). El límite cuenta mensajes enviados por el bot.',
+    limit: { unit: 'respuestas/mes por cliente', period: 'month', usageKey: 'whatsappMensajes', perClient: true, defaultLimit: null },
+    description: 'Bot de reservas por WhatsApp (Railway). Complemento aparte (ver ADDONS). El límite es POR CLIENTE: respuestas que el bot le envía a cada celular en el mes.',
     enforcedIn: ['ui', 'backend'] },
   { key: 'recordatoriosPush', module: 'settings', label: 'Recordatorios push al profesional', status: 'implemented', kind: 'toggle', default: true,
     description: 'Aviso push al profesional antes de cada cita.', enforcedIn: ['backend'] },
@@ -271,6 +274,11 @@ function applyAddon(cap, planValue, extras) {
   return { ...(planValue || {}), enabled: true, viaAddon: true };
 }
 
+/** Complemento asociado a una capacidad (o null). */
+export function getAddonForCapability(capKey) {
+  return ADDON_BY_CAPABILITY[capKey] || null;
+}
+
 /** Precio y disponibilidad de un complemento en un plan (con valores por defecto). */
 export function getAddonOffer(plan, addonKey) {
   const addon = ADDONS.find((a) => a.key === addonKey);
@@ -354,8 +362,9 @@ const ESENCIAL_FEATURES = {
   comisiones: false, analiticas: false, dashboard: true, recordatoriosPush: true,
   // Maquetas: no se venden.
   asistencia: false, inventario: false,
-  // Complemento aparte, nunca incluido en el plan.
-  asistenteWhatsapp: { enabled: false, limit: null },
+  // Complemento aparte, nunca incluido en el plan. El límite (mensajes que
+  // envía el bot por mes) aplica cuando el negocio contrata el complemento.
+  asistenteWhatsapp: { enabled: false, limit: 1000 },
   // Vertical restaurante: fuera de estos planes.
   pedidos: false, appMesero: false, mesas: false, menuRestaurante: false, cajaRestaurante: false,
 };
@@ -532,7 +541,10 @@ export function buildPlanFeatures(draft = {}, { vertical = null } = {}) {
   for (const cap of CAPABILITIES) {
     if (cap.status === 'soon' || cap.core) continue;
     // Capacidades de otra vertical: quedan apagadas en el plan.
-    const v = isCapabilityInVertical(cap, vertical) ? readFromMap(draft, cap) || {} : { enabled: false };
+    let v = isCapabilityInVertical(cap, vertical) ? readFromMap(draft, cap) || {} : { enabled: false };
+    // En planes comerciales (con vertical) un complemento nunca va incluido:
+    // queda apagado y solo se guarda su límite de uso.
+    if (vertical && ADDON_BY_CAPABILITY[cap.key]?.kind === 'toggle') v = { ...v, enabled: false };
     if (cap.kind === 'quota') {
       out[cap.key] = { limit: hasOwn(v, 'limit') ? v.limit : null };
     } else if (cap.limit) {

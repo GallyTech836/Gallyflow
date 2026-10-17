@@ -133,6 +133,56 @@ export async function incrementRejected(negocioId, usageKey, amount = 1) {
   }
 }
 
+// ───────────── Límite mensual por cliente (ej. respuestas de WhatsApp) ─────────────
+
+const soloDigitos = (v) => String(v || '').replace(/\D/g, '').slice(0, 20);
+
+function clientUsageRef(negocioId, clientId, period = currentPeriod()) {
+  return usageRef(negocioId, period).collection('clientes').doc(soloDigitos(clientId) || 'desconocido');
+}
+
+/**
+ * ¿Este cliente (celular) todavía tiene respuestas disponibles este mes?
+ * limit null = sin límite. Ante un error de lectura se permite (no cortar el servicio).
+ * @returns {{ allowed: boolean, used: number, limit: number|null }}
+ */
+export async function checkClientLimit(negocioId, clientId, limit) {
+  if (limit === null || limit === undefined) return { allowed: true, used: 0, limit: null };
+  try {
+    const snap = await clientUsageRef(negocioId, clientId).get();
+    const used = snap.exists ? Number(snap.data().enviados) || 0 : 0;
+    return { allowed: used < limit, used, limit };
+  } catch (err) {
+    logger.warn(`[capabilities] No se pudo leer consumo del cliente (${negocioId}):`, err.message);
+    return { allowed: true, used: 0, limit };
+  }
+}
+
+/**
+ * Suma una respuesta enviada a este cliente. Si con esta llega justo al
+ * límite, suma 1 a uso/{AAAA-MM}.clientesAlLimite (se ve en Super Admin).
+ * Nunca lanza.
+ */
+export async function incrementClientUsage(negocioId, clientId, limit) {
+  if (!negocioId || !clientId) return;
+  const period = currentPeriod();
+  try {
+    await db.runTransaction(async (tx) => {
+      const ref = clientUsageRef(negocioId, clientId, period);
+      const snap = await tx.get(ref);
+      const enviados = (snap.exists ? Number(snap.data().enviados) || 0 : 0) + 1;
+      tx.set(ref, { enviados, updatedAt: new Date().toISOString() }, { merge: true });
+      if (typeof limit === 'number' && enviados === limit) {
+        tx.set(usageRef(negocioId, period), {
+          periodo: period, clientesAlLimite: FieldValue.increment(1), updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
+    });
+  } catch (err) {
+    logger.warn(`[capabilities] No se pudo registrar consumo del cliente (${negocioId}):`, err.message);
+  }
+}
+
 /**
  * ¿Puede el negocio usar esta capacidad ahora mismo?
  * Revisa: existe, no bloqueado, capacidad activa y (si tiene límite
@@ -146,7 +196,8 @@ export async function checkCapability(negocioId, key, { checkLimit = true } = {}
 
   const cap = getCapability(key);
   const limit = getLimit(access.capabilities, key);
-  if (checkLimit && cap?.limit?.period === 'month' && limit !== null) {
+  // Límite por cliente: se valida aparte con checkClientLimit (necesita el celular).
+  if (checkLimit && cap?.limit?.period === 'month' && limit !== null && !cap.limit.perClient) {
     const usage = await getUsage(negocioId);
     const used = Number(usage[cap.limit.usageKey]) || 0;
     const st = usageStatus(limit, used);
