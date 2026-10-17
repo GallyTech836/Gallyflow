@@ -333,6 +333,33 @@ describe('altas validadas en el backend', () => {
     assert.equal((await checkClientLimit('negA', '59170000001', null)).allowed, true);
   });
 
+  test('renombrar sucursal mueve profesionales, citas y WhatsApp al nombre nuevo', async () => {
+    seed({ plan: 'premium' });
+    db._set('negocios/negA/sucursales/s1', { name: 'Centro', address: 'Av. 1' });
+    db._set('negocios/negA/sucursales/s2', { name: 'Norte', address: 'Av. 2' });
+    db._set('negocios/negA/profesionales/p1', { name: 'A', branch: 'Centro' });
+    db._set('negocios/negA/profesionales/p2', { name: 'B', branch: 'Norte' });
+    db._set('negocios/negA/citas/c1', { branch: 'Centro' });
+    db._set('negocios/negA/citas/c2', { branch: 'Norte' });
+    db._set('negocios/negB/profesionales/x', { branch: 'Centro' }); // otro negocio: no se toca
+    db._set('whatsappAccounts/w1', { negocioId: 'negA', branch: 'Centro' });
+    const r = await llamar('PUT', '/negocio/sucursales/s1', ADMIN, { name: 'Nexus Tech', address: 'Av. 1' });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.actualizados, { profesionales: 1, citas: 1, whatsapp: 1 });
+    assert.equal(db._get('negocios/negA/sucursales/s1').name, 'Nexus Tech');
+    assert.equal(db._get('negocios/negA/profesionales/p1').branch, 'Nexus Tech');
+    assert.equal(db._get('negocios/negA/profesionales/p2').branch, 'Norte');
+    assert.equal(db._get('negocios/negA/citas/c1').branch, 'Nexus Tech');
+    assert.equal(db._get('negocios/negA/citas/c2').branch, 'Norte');
+    assert.equal(db._get('negocios/negB/profesionales/x').branch, 'Centro');
+    assert.equal(db._get('whatsappAccounts/w1').branch, 'Nexus Tech');
+    // Nombre repetido: no.
+    assert.equal((await llamar('PUT', '/negocio/sucursales/s2', ADMIN, { name: 'nexus tech', address: 'X' })).status, 409);
+    // Solo dirección: no renombra nada.
+    const solo = await llamar('PUT', '/negocio/sucursales/s2', ADMIN, { name: 'Norte', address: 'Nueva' });
+    assert.equal(solo.body.renamed, false);
+  });
+
   test('GET /negocio/quotas', async () => {
     seed({ plan: 'esencial', pros: 3, sucs: 1 });
     const r = await llamar('GET', '/negocio/quotas');

@@ -31,7 +31,7 @@ import { repriceCitaServices, normalizeCustomPrice, hasCustomPrices } from '../s
 import { getStaffPermissionOptions, getEditPartOptions, getEditMode, normalizeStaffPermissions } from '../shared/staffPermissions/staffPermissionsModel';
 import ClientProfileModal from '../shared/clients/ClientProfileModal';
 import { checkStaffUsername, setStaffPassword, revokeStaffSessions } from '../shared/staff/staffApi';
-import { createProfessional, createBranch } from '../shared/negocioPlan/quotaApi';
+import { createProfessional, createBranch, updateBranch } from '../shared/negocioPlan/quotaApi';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
@@ -2163,7 +2163,10 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
     try {
       if (editingBranchId) {
-        await updateDoc(doc(db, 'negocios', negocioId, 'sucursales', editingBranchId), {
+        // Por backend: si cambia el nombre, actualiza profesionales, citas y
+        // WhatsApp que usaban el nombre anterior (la agenda filtra por nombre).
+        const oldName = (branches || []).find(x => x?.id === editingBranchId)?.name;
+        const r = await updateBranch(editingBranchId, {
           name: newBranch.name,
           phone: newBranch.phone || '',
           address: newBranch.address,
@@ -2172,7 +2175,11 @@ const { businessSettings } = useBusinessSettings(negocioId);
           lng: newBranch.lng,
           mapsUrl: (newBranch.mapsUrl || '').trim()
         });
-        triggerToast('Sucursal actualizada con éxito.');
+        if (!r.ok) throw new Error(r.error || 'No se pudo actualizar la sucursal.');
+        if (r.renamed && selectedBranch === oldName) setSelectedBranch(newBranch.name);
+        triggerToast(r.renamed
+          ? `Sucursal actualizada. Se movieron ${r.actualizados?.profesionales || 0} ${tl('professionals')} y ${r.actualizados?.citas || 0} citas al nuevo nombre.`
+          : 'Sucursal actualizada con éxito.');
         setEditingBranchId(null);
       } else {
         // Alta por backend: valida el límite de sucursales del plan.

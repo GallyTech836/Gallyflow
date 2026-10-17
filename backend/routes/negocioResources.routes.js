@@ -8,8 +8,11 @@
 //   GET  /api/negocio/quotas          -> cupos actuales (profesionales, sucursales)
 //   POST /api/negocio/profesionales   -> crea profesional + usuarios/{id}
 //   POST /api/negocio/sucursales      -> crea sucursal
+//   PUT  /api/negocio/sucursales/:id  -> edita sucursal; si cambia el NOMBRE,
+//        actualiza también profesionales, citas y números de WhatsApp que
+//        guardaban el nombre anterior (la agenda filtra por nombre).
 //
-// Editar y eliminar sigue igual (directo en Firestore): no aumenta el uso.
+// Eliminar sigue igual (directo en Firestore): no aumenta el uso.
 
 import { Router } from 'express';
 import { db } from '../config/firebase.js';
@@ -117,6 +120,67 @@ router.post('/negocio/sucursales', ...guard, async (req, res) => {
     return res.status(201).json(result);
   } catch (err) {
     return sendError(res, err, 'crear sucursal');
+  }
+});
+
+// Cambia `branch` de oldName a newName en todos los documentos que lo usan.
+// Sin transacción (pueden ser cientos de citas): se actualiza de a 50.
+async function renombrarSucursalEnDatos(negocioId, oldName, newName) {
+  const negocioRef = db.collection('negocios').doc(negocioId);
+  const [pros, citas, cuentas] = await Promise.all([
+    negocioRef.collection('profesionales').where('branch', '==', oldName).get(),
+    negocioRef.collection('citas').where('branch', '==', oldName).get(),
+    db.collection('whatsappAccounts').where('negocioId', '==', negocioId).get(),
+  ]);
+  const refs = [
+    ...pros.docs.map((d) => d.ref),
+    ...citas.docs.map((d) => d.ref),
+    ...cuentas.docs.filter((d) => d.data().branch === oldName).map((d) => d.ref),
+  ];
+  for (let i = 0; i < refs.length; i += 50) {
+    await Promise.all(refs.slice(i, i + 50).map((ref) => ref.update({ branch: newName })));
+  }
+  return {
+    profesionales: pros.size,
+    citas: citas.size,
+    whatsapp: refs.length - pros.size - citas.size,
+  };
+}
+
+// Body: { name, phone, address, schedule, lat, lng, mapsUrl }
+router.put('/negocio/sucursales/:id', ...guard, async (req, res) => {
+  const b = obj(req.body);
+  const name = texto(b.name, 120);
+  const address = texto(b.address, 300);
+  if (!name || !address) return res.status(400).json({ error: 'Faltan el nombre o la dirección.' });
+
+  try {
+    const negocioRef = db.collection('negocios').doc(req.negocioId);
+    const ref = negocioRef.collection('sucursales').doc(String(req.params.id));
+    const [snap, todas] = await Promise.all([ref.get(), negocioRef.collection('sucursales').get()]);
+    if (!snap.exists) return res.status(404).json({ error: 'Sucursal no encontrada.' });
+    const oldName = snap.data().name || '';
+    const duplicada = todas.docs.some((d) => d.id !== ref.id && (d.data().name || '').trim().toLowerCase() === name.toLowerCase());
+    if (duplicada) return res.status(409).json({ error: 'Ya existe otra sucursal con ese nombre.' });
+
+    await ref.update({
+      name,
+      phone: texto(b.phone, 40),
+      address,
+      schedule: texto(b.schedule, 300),
+      lat: num(b.lat, null),
+      lng: num(b.lng, null),
+      mapsUrl: texto(b.mapsUrl, 1000),
+    });
+
+    let actualizados = null;
+    if (oldName && oldName !== name) {
+      actualizados = await renombrarSucursalEnDatos(req.negocioId, oldName, name);
+      logger.info(`[negocioResources] Sucursal renombrada (negocio=${req.negocioId}): ${JSON.stringify(actualizados)}`);
+    }
+    return res.status(200).json({ ok: true, renamed: !!actualizados, actualizados });
+  } catch (err) {
+    return sendError(res, err, 'editar sucursal');
   }
 });
 

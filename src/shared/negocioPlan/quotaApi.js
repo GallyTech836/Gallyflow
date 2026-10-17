@@ -5,10 +5,10 @@
 import { BASE_URL } from '../notifications/notificationApi';
 import { sessionHeaders } from '../session/sessionStore';
 
-async function post(path, body) {
+async function post(path, body, method = 'POST') {
   try {
     const res = await fetch(BASE_URL + path, {
-      method: 'POST',
+      method,
       headers: await sessionHeaders(),
       body: JSON.stringify(body),
     });
@@ -27,4 +27,11 @@ export function createProfessional(data) {
 // -> { ok, id, quota } | { ok:false, error, code }
 export function createBranch(data) {
   return post('/negocio/sucursales', data);
+}
+
+// Edita una sucursal. Si cambia el nombre, el backend actualiza también
+// profesionales, citas y números de WhatsApp que usaban el nombre anterior.
+// -> { ok, renamed, actualizados: { profesionales, citas, whatsapp } } | { ok:false, error }
+export function updateBranch(id, data) {
+  return post('/negocio/sucursales/' + encodeURIComponent(id), data, 'PUT');
 }
