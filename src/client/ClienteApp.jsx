@@ -815,31 +815,49 @@ export default function App({ negocioSlug } = {}) {
       <main className="relative z-10 max-w-md mx-auto min-h-dvh flex flex-col p-5 sm:p-6 justify-between">
         
         {step > 0 && step < 6 && (
-          <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
-            <button 
-              onClick={() => {
-                setStep(prevStep(step));
-              }}
-              aria-label="Volver"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-nexus-surface-hover hover:bg-nexus-border text-nexus-text-secondary hover:text-nexus-text transition-colors cursor-pointer"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div className="flex gap-1.5">
-            {visibleSteps.map((s) => (
-                <div 
-                  key={s} 
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    step === s 
-                      ? 'w-6 bg-nexus-primary' 
-                      : step > s 
-                        ? 'w-3 bg-nexus-primary/50' 
-                        : 'w-2 bg-nexus-border'
-                  }`} 
-                />
-              ))}
+          // Encabezado de los pasos: flecha para volver + título del paso +
+          // «Paso X/Y» a la derecha; debajo, centrada, la barra de progreso. Sin recuadro.
+          <div className="mb-5 animate-fade-in">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  setStep(prevStep(step));
+                }}
+                aria-label="Volver"
+                className="-ml-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-nexus-text hover:bg-nexus-surface-hover transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <h2 className="min-w-0 flex-1 text-2xl font-extrabold text-nexus-text leading-tight break-words">
+                {({
+                  1: 'Selecciona Sucursal',
+                  2: `Selecciona ${businessProfile.t('professional')}`,
+                  3: `Selecciona ${businessProfile.t('services')}`,
+                  4: 'Fecha & Hora',
+                  5: 'Confirmar Reserva',
+                })[step]}
+              </h2>
+              <span className="shrink-0 pl-2 text-xs text-nexus-text-secondary font-bold nx-num">Paso {visibleSteps.indexOf(step) + 1}/{visibleSteps.length}</span>
             </div>
-            <span className="text-xs text-nexus-text-secondary font-bold nx-num">Paso {visibleSteps.indexOf(step) + 1}/{visibleSteps.length}</span>
+            <div className="mt-4 flex items-center justify-center">
+              <div className="flex gap-1">
+                {visibleSteps.map((s) => (
+                  <div
+                    key={s}
+                    // Todos los pasos son líneas: la actual más larga (16 px), las
+                    // demás de 8 px. Tamaño en línea para no depender de clases nuevas.
+                    style={{ height: 4, width: step === s ? 16 : 8 }}
+                    className={`shrink-0 rounded-full transition-all duration-300 ${
+                      step === s
+                        ? 'bg-nexus-primary'
+                        : step > s
+                          ? 'bg-nexus-primary/50'
+                          : 'bg-nexus-border'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         )}
         
@@ -917,7 +935,6 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona Sucursal</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Elige el local donde quieres realizar tu {terms.tl('appointment')}.</p>
 
       {branches.length === 0 ? (
@@ -991,7 +1008,6 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona {terms.t('services')}</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir múltiples {terms.tl('services')} para tu {terms.tl('appointment')}.</p>
       
       <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
@@ -1081,7 +1097,6 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona {terms.t('professional')}</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Elige {terms.g('professional', 'un', 'una')} {terms.tl('professional')} o selecciona la opción pendiente para agilizar tu turno.</p>
       
       <ul className="divide-y divide-nexus-border border-y border-nexus-border">
@@ -1204,7 +1219,6 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
   return (
     <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
       <div>
-        <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Fecha & Hora</h2>
         <p className="text-xs text-nexus-text-secondary mb-4">Elige la fecha de tu preferencia en el calendario.</p>
         
         <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 mb-4">
@@ -1373,7 +1387,6 @@ const ConfirmStep = ({
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Confirmar Reserva</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Ingresa tus datos personales de contacto para asegurar el agendamiento.</p>
       
       <form onSubmit={onConfirm} className="space-y-4">

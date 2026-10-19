@@ -45,7 +45,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
   );
 
   return (
-    <div className={`w-full flex flex-col items-center text-center ${compact ? 'space-y-5' : 'space-y-7'} animate-scale-up`}>
+    <div className={`w-full flex flex-col items-center text-center ${compact ? 'space-y-5' : 'space-y-6'} animate-scale-up`}>
 
       {/* Logo circular con anillo degradado y glow. Con portada, la portada va
           detrás y el logo queda encima, centrado sobre su borde inferior
@@ -120,7 +120,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
       )}
 
       {/* CTA — botón funcional en ClienteApp, vista previa inerte en Admin */}
-      <div className={`w-full ${compact ? 'pt-1' : 'pt-5'}`}>
+      <div className={`w-full ${compact ? 'pt-1' : 'pt-4'}`}>
         {onReservar ? (
           <button
             type="button"
