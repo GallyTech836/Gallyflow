@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { signInWithCustomToken, signOut } from 'firebase/auth';
+import { useEffect, useRef, useState } from 'react';
+import { signInWithCustomToken, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { BASE_URL } from '../shared/notifications/notificationApi';
 import { getSessionId, setSessionId } from '../shared/session/sessionStore';
@@ -38,12 +38,49 @@ function persistSession(user) {
 }
 
 export function useBarberAuth() {
-  const [barberUser, setBarberUser] = useState(() => readStoredSession());
+  // Datos guardados del profesional (localStorage) y usuario de Firebase.
+  // Al recargar, Firebase tarda un momento en restaurar su sesión: hasta
+  // entonces `fbUser` es undefined y la app espera (restoring) en vez de
+  // llamar al backend sin token (eso devolvía 401 y cerraba la sesión).
+  const [storedUser, setStoredUser] = useState(() => readStoredSession());
+  const [fbUser, setFbUser] = useState(undefined); // undefined = restaurando
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // Si ya hay 2 sesiones abiertas: lista para elegir cuál cerrar.
   const [sessionLimit, setSessionLimit] = useState(null);
   const pendiente = useRef(null); // { username, password } solo mientras elige
+
+  useEffect(() => {
+    let vivo = true;
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) { if (vivo) setFbUser(null); return; }
+      try {
+        // Solo cuenta si es un token de profesional (no el login del admin
+        // abierto en el mismo navegador).
+        const r = await u.getIdTokenResult();
+        if (vivo) setFbUser(r.claims?.rol === 'barber' ? u : null);
+      } catch {
+        // Sin conexión no se puede leer el token: no cerrar la sesión por eso
+        // (el backend la valida igual en cuanto haya conexión).
+        if (vivo) setFbUser(u);
+      }
+    });
+    return () => { vivo = false; unsub(); };
+  }, []);
+
+  // Había datos guardados pero Firebase ya no tiene la sesión del profesional:
+  // limpiar y pedir que vuelva a entrar.
+  useEffect(() => {
+    if (fbUser === null && storedUser && !loading) {
+      setStoredUser(null);
+      persistSession(null);
+      setSessionId(null);
+      setError('Tu sesión se cerró. Ingresa de nuevo.');
+    }
+  }, [fbUser, storedUser, loading]);
+
+  const restoring = !!storedUser && fbUser === undefined;
+  const barberUser = storedUser && fbUser ? storedUser : null;
 
   // El backend valida usuario + contraseña (hash), abre la sesión del
   // servidor y devuelve un token de Firebase.
@@ -71,8 +108,9 @@ export function useBarberAuth() {
       pendiente.current = null;
       setSessionLimit(null);
       setSessionId(data.sid);
-      await signInWithCustomToken(auth, data.token);
-      setBarberUser(data.user);
+      const cred = await signInWithCustomToken(auth, data.token);
+      setFbUser(cred.user);
+      setStoredUser(data.user);
       persistSession(data.user);
     } catch (err) {
       console.error('Error al autenticar barber:', err);
@@ -95,7 +133,7 @@ export function useBarberAuth() {
 
   // message: texto opcional para mostrar en el login (ej. sesión cerrada).
   async function logoutBarber(message) {
-    setBarberUser(null);
+    setStoredUser(null);
     persistSession(null);
     setError(typeof message === 'string' ? message : '');
     await endSession();
@@ -103,7 +141,7 @@ export function useBarberAuth() {
   }
 
   return {
-    barberUser, error, loading, loginBarber, logoutBarber,
+    barberUser, restoring, error, loading, loginBarber, logoutBarber,
     sessionLimit, chooseSessionToClose, cancelSessionLimit,
   };
 }

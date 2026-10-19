@@ -40,28 +40,33 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
       <div className="space-y-4 min-w-0">
         {/* ── Marca ─────────────────────────────────────────────── */}
         <Card padding="none" className="overflow-hidden">
-          <div className="relative h-28 bg-nexus-primary-soft">
-            {heroConfig.cover && (
+          <div className="relative h-28 bg-gradient-to-r from-nexus-primary to-nexus-accent">
+            {heroConfig.cover ? (
               <img src={cloudinaryThumb(heroConfig.cover, 900)} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="absolute right-3 top-3 rounded-md bg-black/25 px-2 py-0.5 text-xs font-medium text-white">Sin portada</span>
             )}
           </div>
-          <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-            <div className="-mt-8 flex items-end gap-3">
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border-4 border-nexus-surface bg-nexus-primary-soft flex items-center justify-center text-lg font-bold text-nexus-primary shadow-sm">
+          <div className="relative z-10 px-4 pb-4 sm:px-5 sm:pb-5">
+            <div className="flex items-start gap-3">
+              <div className="-mt-8 h-16 w-16 shrink-0 overflow-hidden rounded-xl border-4 border-nexus-surface bg-nexus-surface flex items-center justify-center text-lg font-bold text-nexus-primary shadow-sm">
                 {heroConfig.logo
                   ? <img src={cloudinaryThumb(heroConfig.logo, 160)} alt={name} className="h-full w-full object-cover" />
                   : initials(name)}
               </div>
-              <div className="min-w-0 pb-1">
+              <div className="min-w-0 pt-2">
                 <p className="truncate text-base font-semibold text-nexus-text">{name}</p>
                 <p className="text-xs text-nexus-text-muted">Para cambiar el nombre, contacta a soporte.</p>
               </div>
             </div>
-            {onChangeSection && (
-              <Button variant="secondary" size="sm" icon={LayoutTemplate} className="mt-4" onClick={() => onChangeSection('hero')}>
-                Cambiar logo y portada
-              </Button>
-            )}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {onChangeSection && (
+                <Button variant="secondary" size="sm" icon={LayoutTemplate} onClick={() => onChangeSection('hero')}>
+                  {heroConfig.cover && heroConfig.logo ? 'Cambiar logo y portada' : 'Subir logo y portada'}
+                </Button>
+              )}
+              <span className="text-xs text-nexus-text-muted">Se configuran en Link Público y se usan en todo Nexus.</span>
+            </div>
           </div>
         </Card>
 

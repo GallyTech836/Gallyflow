@@ -1,10 +1,11 @@
 // useSessionGuard.js
 // Revisa con el backend que la sesión siga activa: al abrir la app, al volver
 // a la pestaña y cada 5 minutos. Si fue cerrada o venció, llama onInvalid.
-// Sin conexión no hace nada (vuelve a intentar después).
+// Sin conexión o sin usuario de Firebase aún, no hace nada (reintenta después).
 
 import { useEffect, useRef } from 'react';
 import { checkSession } from './sessionApi';
+import { auth } from '../../firebase/config';
 
 const INTERVALO_MS = 5 * 60 * 1000;
 
@@ -18,6 +19,9 @@ export function useSessionGuard(enabled, onInvalid) {
 
     const revisar = async () => {
       if (document.visibilityState !== 'visible') return;
+      // Sin usuario de Firebase (todavía restaurando) no se puede validar:
+      // se espera al próximo intento en vez de dar la sesión por inválida.
+      if (!auth.currentUser) return;
       try {
         const r = await checkSession();
         if (activo && r.status === 401) onInvalidRef.current(r.data?.code);

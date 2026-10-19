@@ -1,26 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutTemplate, Save, Loader as Loader2, Star } from 'lucide-react';
+import { LayoutTemplate, Save, Loader as Loader2, Star, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useHeroConfig } from '../../../shared/heroConfig/useHeroConfig';
+import { ImageUploader } from '../../../shared/ui';
 import { saveHeroConfig } from './businessHeroService';
 import BusinessHeroPreview from './BusinessHeroPreview';
-import HeroLogoUploader from './HeroLogoUploader';
+
+// Link Público: lo que el cliente ve antes de reservar.
+// El logo y la portada se configuran SOLO aquí; "Cuenta y plan", las
+// sucursales sin foto y la página "Más información" los toman de aquí solos.
 
 const inputClass =
   'w-full bg-nexus-background border border-nexus-border text-nexus-text rounded-lg h-10 text-base sm:text-sm px-3 outline-none focus:border-nexus-primary transition-colors placeholder:text-nexus-text-muted';
 
-function SectionCard({ children, className = '' }) {
+function SectionCard({ icon: Icon, title, subtitle, children, className = '' }) {
   return (
-    <div className={`bg-nexus-surface border border-nexus-border rounded-2xl p-5 ${className}`}>
+    <div className={`bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)] ${className}`}>
+      {title && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2.5">
+            {Icon && <Icon className="w-5 h-5 text-nexus-primary shrink-0" aria-hidden="true" />}
+            <h3 className="text-base font-semibold text-nexus-text">{title}</h3>
+          </div>
+          {subtitle && <p className="mt-0.5 text-sm text-nexus-text-secondary">{subtitle}</p>}
+        </div>
+      )}
       {children}
     </div>
   );
 }
 
-function FieldLabel({ children }) {
+function FieldLabel({ children, htmlFor }) {
   return (
-    <span className="block text-xs text-nexus-text-muted nx-num mb-1.5">
+    <label htmlFor={htmlFor} className="block text-xs font-medium text-nexus-text-secondary mb-1.5">
       {children}
-    </span>
+    </label>
   );
 }
 
@@ -30,6 +43,8 @@ export default function BusinessHeroSettings({ negocioId }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const uploading = logoUploading || coverUploading;
 
   const seededRef = useRef(false);
   useEffect(() => {
@@ -45,7 +60,7 @@ export default function BusinessHeroSettings({ negocioId }) {
   };
 
   const handleSave = async () => {
-    if (!negocioId || saving || logoUploading) return;
+    if (!negocioId || saving || uploading) return;
     setSaving(true);
     try {
       const clean = await saveHeroConfig(negocioId, form);
@@ -60,164 +75,166 @@ export default function BusinessHeroSettings({ negocioId }) {
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4 items-start">
 
-      {/* ── Encabezado ──────────────────────────────────────────── */}
-      <SectionCard>
-      <div className="flex items-center gap-2.5 mb-0.5">
-          <LayoutTemplate className="w-4 h-4 text-nexus-primary shrink-0" />
-          <h3 className="text-sm font-bold text-nexus-text">Link Público</h3>
-        </div>
-        <p className="text-xs text-nexus-text-muted ml-6.5">
-          Personaliza lo que tus clientes ven antes de reservar una cita.
-        </p>
-      </SectionCard>
-
-      {/* ── Fila 1: Nombre + Eslogan ─────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SectionCard>
-          <FieldLabel>Nombre del negocio</FieldLabel>
-          <input
-            type="text"
-            value={form.businessName}
-            onChange={(e) => update('businessName', e.target.value)}
-            className={inputClass}
-            placeholder="Nombre de tu negocio"
-          />
-        </SectionCard>
-
-        <SectionCard>
-          <FieldLabel>Eslogan</FieldLabel>
-          <input
-            type="text"
-            value={form.slogan}
-            onChange={(e) => update('slogan', e.target.value)}
-            className={inputClass}
-            placeholder="Tu estilo comienza aquí"
-          />
-        </SectionCard>
-      </div>
-
-      {/* ── Fila 2: Logo + Portada ───────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SectionCard>
-          <FieldLabel>Logo del negocio</FieldLabel>
-          <HeroLogoUploader
-            value={form.logo}
-            onChange={(url) => update('logo', url)}
-            onUploadingChange={setLogoUploading}
-          />
-        </SectionCard>
-
-        <SectionCard>
-        <FieldLabel>Imagen de portada (próximamente)</FieldLabel>
-          {/* Placeholder visual idéntico al uploader pero sin funcionalidad */}
-          <div className="flex items-center gap-4 bg-nexus-background border border-dashed border-nexus-border rounded-xl p-4 opacity-50 select-none cursor-not-allowed min-h-[88px]">
-            <div className="w-14 h-14 rounded-xl bg-nexus-surface border border-nexus-border flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-nexus-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+        {/* ── Formulario ───────────────────────────────────────── */}
+        <div className="space-y-4 min-w-0">
+          <SectionCard
+            icon={LayoutTemplate}
+            title="Identidad"
+            subtitle="Lo primero que ven tus clientes al abrir tu link de reservas."
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <FieldLabel htmlFor="hero-name">Nombre del negocio</FieldLabel>
+                <input
+                  id="hero-name"
+                  type="text"
+                  value={form.businessName}
+                  onChange={(e) => update('businessName', e.target.value)}
+                  className={inputClass}
+                  placeholder="Nombre de tu negocio"
+                  maxLength={60}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="hero-slogan">Eslogan</FieldLabel>
+                <input
+                  id="hero-slogan"
+                  type="text"
+                  value={form.slogan}
+                  onChange={(e) => update('slogan', e.target.value)}
+                  className={inputClass}
+                  placeholder="Tu estilo comienza aquí"
+                  maxLength={140}
+                />
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-nexus-text-muted">Subir imagen de portada</p>
-              <p className="text-xs text-nexus-text-muted mt-0.5">Solo se mostrará en futuras versiones</p>
-            </div>
-          </div>
-        </SectionCard>
-      </div>
+          </SectionCard>
 
-      {/* ── Fila 3: Rating toggle + valor ───────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Toggle */}
-        <SectionCard>
-          <FieldLabel>Mostrar calificación</FieldLabel>
-          <div className="flex items-center justify-between mt-1">
-            <div>
-            <p className="text-xs font-semibold text-nexus-text leading-tight">Activa esta opción</p>
-            <p className="text-xs text-nexus-text-muted mt-0.5">para mostrar estrellas y rating.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => update('showRating', !form.showRating)}
-              className={`w-11 h-6 rounded-full transition-colors relative shrink-0 overflow-hidden ${
-                form.showRating ? 'bg-nexus-primary' : 'bg-nexus-border'
-              }`}
-              aria-pressed={form.showRating}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
-                  form.showRating ? 'translate-x-5' : 'translate-x-0'
-                }`}
+          <SectionCard
+            icon={ImageIcon}
+            title="Logo y portada"
+            subtitle="Se configuran solo aquí. Se usan automáticamente en todo Nexus."
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ImageUploader
+                label="Logo"
+                value={form.logo}
+                onChange={(url) => update('logo', url)}
+                onUploadingChange={setLogoUploading}
+                maxSize={512}
+                hint="Cuadrado, ideal 512×512. Pantalla de inicio y Cuenta y plan."
               />
-            </button>
-          </div>
-        </SectionCard>
+              <ImageUploader
+                label="Portada"
+                shape="wide"
+                value={form.cover}
+                onChange={(url) => update('cover', url)}
+                onUploadingChange={setCoverUploading}
+                maxSize={1600}
+                hint="Horizontal, ideal 1600×600. «Más información» y sucursales sin foto."
+              />
+            </div>
+          </SectionCard>
 
-        {/* Valor del rating */}
-        <SectionCard>
-          <FieldLabel>Rating</FieldLabel>
-          <p className="text-xs text-nexus-text-muted mb-2">Calificación que verán tus clientes.</p>
-          <div className={`flex items-center gap-2 bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 ${!form.showRating ? 'opacity-40 pointer-events-none' : ''}`}>
-            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
-            <input
-              type="number"
-              min="0"
-              max="5"
-              step="0.1"
-              disabled={!form.showRating}
-              value={form.rating}
-              onChange={(e) => update('rating', parseFloat(e.target.value))}
-              className="flex-1 h-9 bg-transparent text-nexus-text text-base sm:text-sm font-semibold outline-none disabled:cursor-not-allowed w-full"
-            />
-          </div>
-        </SectionCard>
+          <SectionCard
+            icon={Sparkles}
+            title="Calificación y texto destacado"
+            subtitle="Opcionales. Aparecen debajo del eslogan."
+          >
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-nexus-border bg-nexus-background px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-nexus-text">Mostrar calificación</p>
+                <p className="text-xs text-nexus-text-muted">Estrellas con el puntaje que elijas.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.showRating}
+                aria-label="Mostrar calificación"
+                onClick={() => update('showRating', !form.showRating)}
+                className={`w-11 h-6 rounded-full transition-colors relative shrink-0 overflow-hidden cursor-pointer ${
+                  form.showRating ? 'bg-nexus-primary' : 'bg-nexus-border'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                    form.showRating ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-[10rem_minmax(0,1fr)] gap-4">
+              <div className={!form.showRating ? 'opacity-40' : ''}>
+                <FieldLabel htmlFor="hero-rating">Puntaje</FieldLabel>
+                <div className="flex items-center gap-2 bg-nexus-background border border-nexus-border rounded-lg px-3">
+                  <Star className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" aria-hidden="true" />
+                  <input
+                    id="hero-rating"
+                    type="number"
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    disabled={!form.showRating}
+                    value={form.rating}
+                    onChange={(e) => update('rating', Math.min(5, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    className="flex-1 h-10 bg-transparent text-nexus-text text-base sm:text-sm font-semibold outline-none disabled:cursor-not-allowed w-full nx-num"
+                  />
+                </div>
+              </div>
+              <div>
+                <FieldLabel htmlFor="hero-highlight">Texto destacado</FieldLabel>
+                <div className="relative">
+                  <input
+                    id="hero-highlight"
+                    type="text"
+                    value={form.highlightText}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 40) update('highlightText', e.target.value);
+                    }}
+                    className={`${inputClass} pr-14`}
+                    placeholder="⚡ Reserva en 1 minuto"
+                    maxLength={40}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-nexus-text-muted nx-num pointer-events-none">
+                    {form.highlightText?.length ?? 0}/40
+                  </span>
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* ── Vista previa (fija al costado en pantallas grandes) ─── */}
+        <div className="xl:sticky xl:top-24 min-w-0">
+          <BusinessHeroPreview config={form} />
+        </div>
       </div>
 
-      {/* ── Texto secundario (full width) ───────────────────────── */}
-      <SectionCard>
-      <FieldLabel>Texto secundario (opcional)</FieldLabel>
-        <p className="text-xs text-nexus-text-muted mb-2">Texto corto que aparecerá debajo del rating.</p>
-        <div className="relative">
-          <input
-            type="text"
-            value={form.highlightText}
-            onChange={(e) => {
-              if (e.target.value.length <= 40) update('highlightText', e.target.value);
-            }}
-            className={inputClass}
-            placeholder="⚡ Reserva en 1 minuto"
-            maxLength={40}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-nexus-text-muted nx-num pointer-events-none">
-            {form.highlightText?.length ?? 0}/40
-          </span>
-        </div>
-      </SectionCard>
-
-      {/* ── Vista Previa (full width) ────────────────────────────── */}
-      <BusinessHeroPreview config={form} />
-
-      {/* ── Botón Guardar (fijo al final) ───────────────────────── */}
-      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border flex justify-end">
-      <button
+      {/* ── Guardar ─────────────────────────────────────────────── */}
+      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border flex items-center justify-end gap-3">
+        {saved && !saving && <span className="hidden sm:inline text-sm text-nexus-success-text" role="status">Cambios guardados</span>}
+        <button
           type="button"
           onClick={handleSave}
-          disabled={saving || logoUploading || !negocioId}
+          disabled={saving || uploading || !negocioId}
           className="w-full sm:w-auto inline-flex h-11 items-center justify-center gap-2 px-6 rounded-lg bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
         >
           {saving
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Save className="w-4 h-4" />}
+            ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            : <Save className="w-4 h-4" aria-hidden="true" />}
           {saving
             ? 'Guardando...'
-            : logoUploading
-              ? 'Esperando logo...'
+            : uploading
+              ? 'Subiendo imagen...'
               : saved
                 ? 'Guardado ✓'
                 : 'Guardar cambios'}
         </button>
       </div>
-
     </div>
   );
 }
+

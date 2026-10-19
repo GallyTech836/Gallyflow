@@ -247,7 +247,7 @@ const MESES_NOMBRES = [
 
 export default function App() {
   const {
-    barberUser, error: authError, loading: authLoading, loginBarber, logoutBarber,
+    barberUser, restoring: authRestoring, error: authError, loading: authLoading, loginBarber, logoutBarber,
     sessionLimit, chooseSessionToClose, cancelSessionLimit,
   } = useBarberAuth();
   // Si la sesión se cierra desde otro dispositivo, por el admin o vence: salir.
@@ -1243,6 +1243,19 @@ const fetchByDate = async (subcollection, date) => {
     setTempSelectedTime(timeStr);
     setIsModalOpenSlot(true); 
   };
+
+  // Al recargar: esperar a que Firebase restaure la sesión antes de decidir
+  // si mostrar la app o el login (evita el falso "tu sesión quedó inválida").
+  if (authRestoring) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-nexus-background">
+        <div className="flex items-center gap-2 text-sm text-nexus-text-secondary">
+          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-nexus-primary border-t-transparent" role="status" aria-label="Cargando" />
+          Cargando…
+        </div>
+      </div>
+    );
+  }
 
   if (!barberUser && sessionLimit) {
     return (
