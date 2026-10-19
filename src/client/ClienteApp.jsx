@@ -14,6 +14,7 @@ import Avatar from '../shared/avatar/Avatar';
 import { buildDirectionsUrl } from '../shared/location/mapsLink';
 import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { compareServicios } from '../firebase/useServicios';
+import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { confirmBookingToClient } from './useClientBookingConfirmation';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
@@ -158,6 +159,7 @@ export default function App({ negocioSlug } = {}) {
           duration: `${data.duration || 30} min`,
           durationMin: Number(data.duration || 30),
           description: data.description || '',
+          image: typeof data.image === 'string' ? data.image : '',
           availableDays: data.availableDays || [],
           createdAt: data.createdAt || 0,
           order: Number.isFinite(data.order) ? data.order : undefined
@@ -706,6 +708,7 @@ export default function App({ negocioSlug } = {}) {
       />;
       case 1: return <BranchStep 
         branches={branches}
+        coverFallback={(heroConfig || DEFAULT_HERO_CONFIG).cover}
         selected={selectedBranch}
         setSelected={setSelectedBranch}
         onNext={() => setStep(2)}
@@ -730,6 +733,7 @@ export default function App({ negocioSlug } = {}) {
         hasVariable={hasVariablePrice}
         professional={chosenPro}
         professionals={realBarbers}
+        showImages={(heroConfig || DEFAULT_HERO_CONFIG).showServiceImages !== false}
       />;
       case 4: return <DateTimeStep 
         hours={availableHours}
@@ -900,7 +904,7 @@ const Home = ({ onNext, onInfo, heroConfig, branches = [], proName = '' }) => {
   );
 };
 
-const BranchStep = ({ branches, selected, setSelected, onNext }) => {
+const BranchStep = ({ branches, selected, setSelected, onNext, coverFallback = '' }) => {
   const terms = useBusinessTerms();
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
@@ -912,44 +916,68 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
         <p className="text-center py-8 text-xs text-nexus-text-muted">No hay sucursales disponibles por el momento.</p>
       ) : (
         <div className="space-y-3.5">
-          {branches.map((b) => (
+          {branches.map((b) => {
+            const foto = b.image || coverFallback;
+            const isSel = selected?.id === b.id;
+            return (
             <div
               key={b.id}
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 setSelected(b);
                 onNext();
               }}
-              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
-                selected?.id === b.id
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(b); onNext(); }
+              }}
+              className={`rounded-2xl border-2 transition-all cursor-pointer overflow-hidden ${
+                isSel
                   ? 'border-nexus-primary bg-nexus-primary-soft'
                   : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/40'
               }`}
             >
-              <div className="w-10 h-10 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary shrink-0">
-                <MapPin size={18} />
-              </div>
-              <div className="text-left flex-1">
-                <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
-                {b.address && (
-                  <p className="text-nexus-text-secondary text-xs mt-0.5">{b.address}</p>
-                )}
-                {b.schedule && (
-                  <p className="text-nexus-primary text-xs font-bold mt-1 flex items-center gap-1">
-                    <Clock3 size={10} /> {b.schedule}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <DirectionsButton branch={b} compact />
-                  <WhatsAppButton phone={b.phone} message={`Hola, quiero consultar sobre ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}.`} compact />
-                </div>
-              </div>
-              {selected?.id === b.id && (
-                <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white shrink-0">
-                  <Check size={12} strokeWidth={3} />
+              {foto && (
+                <div className="relative h-28 w-full bg-nexus-surface-hover">
+                  <img src={cloudinaryThumb(foto, 800)} alt={`Sucursal ${b.name}`} className="h-full w-full object-cover" loading="lazy" />
+                  {isSel && (
+                    <div className="absolute top-2.5 right-2.5 w-6 h-6 bg-nexus-primary rounded-full flex items-center justify-center text-white shadow">
+                      <Check size={14} strokeWidth={3} />
+                    </div>
+                  )}
                 </div>
               )}
+              <div className="p-4 flex items-start gap-3.5">
+                {!foto && (
+                  <div className="w-10 h-10 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary shrink-0">
+                    <MapPin size={18} />
+                  </div>
+                )}
+                <div className="text-left flex-1 min-w-0">
+                  <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
+                  {b.address && (
+                    <p className="text-nexus-text-secondary text-xs mt-0.5">{b.address}</p>
+                  )}
+                  {b.schedule && (
+                    <p className="text-nexus-primary text-xs font-bold mt-1 flex items-center gap-1">
+                      <Clock3 size={10} /> {b.schedule}
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <DirectionsButton branch={b} compact />
+                    <WhatsAppButton phone={b.phone} message={`Hola, quiero consultar sobre ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}.`} compact />
+                  </div>
+                </div>
+                {!foto && isSel && (
+                  <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white shrink-0">
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                )}
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -957,7 +985,7 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
   );
 };
 
-const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [] }) => {
+const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [], showImages = true }) => {
   const terms = useBusinessTerms();
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
@@ -986,8 +1014,11 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                 </div>
               )}
 
-              <div className="flex justify-between items-start">
-                <div className="space-y-0.5 pr-8">
+              <div className="flex justify-between items-start gap-3">
+                {showImages && s.image && (
+                  <img src={cloudinaryThumb(s.image, 200)} alt="" className="w-16 h-16 rounded-xl object-cover border border-nexus-border shrink-0" loading="lazy" />
+                )}
+                <div className="space-y-0.5 pr-8 flex-1 min-w-0">
                   <h3 className={`font-bold text-sm ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</h3>
                   <p className="text-nexus-text-secondary text-xs leading-relaxed line-clamp-2">{s.description}</p>
                 </div>

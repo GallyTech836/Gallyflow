@@ -98,37 +98,38 @@ export default function AssistantSection({ negocioId }) {
 
   if (!negocio) {
     return (
-      <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 text-xs text-nexus-text-muted">
+      <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)] text-xs text-nexus-text-muted">
         Cargando…
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 animate-fadeIn">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start animate-fadeIn">
+     <div className="space-y-4 min-w-0">
       <WhatsAppNumbersPanel negocioId={negocioId} onNumbersChange={onNumbersChange} />
 
-      <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
+      <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)]">
         <div className="flex items-center gap-2.5 mb-1">
-          <MessageCircle className="w-4 h-4 text-nexus-primary" />
-          <h3 className="text-sm font-bold text-nexus-text">Asistente de WhatsApp</h3>
+          <MessageCircle className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+          <h3 className="text-base font-semibold text-nexus-text">Asistente de WhatsApp</h3>
         </div>
-        <p className="text-xs text-nexus-text-muted mb-4">
+        <p className="text-sm text-nexus-text-secondary mb-4">
           Tus {tl('clients')} pueden reservar escribiendo a tu número de WhatsApp. {g('appointment', 'Los', 'Las')} {tl('appointments')} aparecen en la agenda al instante.
         </p>
 
         {conectado && (
-          <p className="text-xs text-nexus-text-muted">
+          <p className="text-sm text-nexus-text-secondary">
             {ultimoMensaje ? `Último mensaje recibido ${ultimoMensaje}.` : 'Aún no se recibieron mensajes.'}
           </p>
         )}
         {!conectado && numeros !== null && (
-          <p className="text-xs text-nexus-text-muted">Conecta tu número arriba para activar el asistente.</p>
+          <p className="text-sm text-nexus-text-secondary">Conecta tu número arriba para activar el asistente.</p>
         )}
 
         <div className={`mt-4 flex items-center justify-between gap-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
           <div className="min-w-0">
-            <p className="text-xs font-bold text-nexus-text">Responder automáticamente</p>
+            <p className="text-sm font-semibold text-nexus-text">Responder automáticamente</p>
             <p className="text-xs text-nexus-text-muted">
               {activo
                 ? `El asistente atiende y agenda ${tl('appointments')}.`
@@ -143,14 +144,14 @@ export default function AssistantSection({ negocioId }) {
             aria-label={activo ? 'Desactivar asistente' : 'Activar asistente'}
           >
             {activo ? (
-              <ToggleRight className="w-8 h-8 text-nexus-success" />
+              <ToggleRight className="w-9 h-9 text-nexus-success" />
             ) : (
-              <ToggleLeft className="w-8 h-8 text-nexus-border" />
+              <ToggleLeft className="w-9 h-9 text-nexus-text-muted" />
             )}
           </button>
         </div>
         <div className={`mt-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
-          <p className="text-xs font-bold text-nexus-text">Reprogramar por WhatsApp</p>
+          <p className="text-sm font-semibold text-nexus-text">Reprogramar por WhatsApp</p>
           <p className="text-xs text-nexus-text-muted mb-2">
             Hasta cuándo {g('client', 'el', 'la')} {tl('client')} puede cambiar su {tl('appointment')} sin hablar con el negocio.
           </p>
@@ -158,7 +159,7 @@ export default function AssistantSection({ negocioId }) {
             value={horasCambio}
             onChange={(e) => guardarHorasCambio(e.target.value)}
             disabled={!conectado || saving}
-            className="w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text disabled:cursor-not-allowed"
+            className="w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text disabled:cursor-not-allowed"
           >
             {OPCIONES_ANTICIPACION.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -168,21 +169,24 @@ export default function AssistantSection({ negocioId }) {
         {error && <p className="mt-2 text-xs text-nexus-error-text">{error}</p>}
       </div>
 
-      <AssistantPersonalitySection
-        negocioId={negocioId}
-        personalidad={config.personalidad}
-        businessName={negocio?.heroConfig?.businessName || ''}
-      />
-
-      <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
-        <h3 className="text-sm font-bold text-nexus-text mb-3">Cómo funciona</h3>
-        <ul className="space-y-2 text-xs text-nexus-text-secondary list-disc pl-4">
+      <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)]">
+        <h3 className="text-base font-semibold text-nexus-text mb-3">Cómo funciona</h3>
+        <ul className="space-y-2 text-sm text-nexus-text-secondary list-disc pl-4">
           <li>{g('client', 'El', 'La')} {tl('client')} elige {g('service', 'uno o varios', 'una o varias')} {tl('services')}, {g('professional', 'el', 'la')} {tl('professional')}, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
           <li>Con «Cualquier {tl('professional')}» {g('appointment', 'el', 'la')} {tl('appointment')} queda como <b>Pendiente</b>: si solo {g('professional', 'un', 'una')} {tl('professional')} está libre se asigna {g('appointment', 'solo', 'sola')}; si hay {g('professional', 'varios', 'varias')}, decides tú.</li>
           <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si {g('client', 'el', 'la')} {tl('client')} escribe «menu», vuelve el asistente.</li>
           <li>Si {g('client', 'el', 'la')} {tl('client')} ya tiene {g('appointment', 'un', 'una')} {tl('appointment')}, el saludo se lo muestra con la opción <b>Reprogramar</b> (día, hora y {tl('professional')}), respetando la anticipación que elijas arriba. Para cancelar, {g('client', 'el', 'la')} {tl('client')} debe hablar con el negocio.</li>
           <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva o reprogramada.</li>
         </ul>
+      </div>
+     </div>
+
+      <div className="min-w-0">
+        <AssistantPersonalitySection
+          negocioId={negocioId}
+          personalidad={config.personalidad}
+          businessName={negocio?.heroConfig?.businessName || ''}
+        />
       </div>
     </div>
   );

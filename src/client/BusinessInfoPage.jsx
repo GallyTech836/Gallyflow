@@ -5,6 +5,7 @@ import DirectionsButton from '../shared/location/DirectionsButton';
 import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { formatServicePriceFor } from '../shared/servicePricing/servicePricing';
 import { useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
+import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import {
   visibleProfessionals,
   visibleServices,
@@ -103,6 +104,9 @@ export default function BusinessInfoPage({
           <ul className="bg-nexus-surface border border-nexus-border rounded-2xl divide-y divide-nexus-border">
             {serviceList.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                {heroConfig?.showServiceImages !== false && s.image && (
+                  <img src={cloudinaryThumb(s.image, 200)} alt="" className="w-14 h-14 rounded-xl object-cover border border-nexus-border shrink-0" loading="lazy" />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-nexus-text">{s.name}</p>
                   {s.description && <p className="mt-1 text-xs text-nexus-text-secondary leading-relaxed line-clamp-2">{s.description}</p>}
@@ -162,11 +166,17 @@ export default function BusinessInfoPage({
             {branchList.map((b) => {
               const propio = String(b.schedule || '').trim();
               return (
-                <div key={b.id} className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
+                <div key={b.id} className="bg-nexus-surface border border-nexus-border rounded-2xl overflow-hidden">
+                  {b.image && (
+                    <img src={cloudinaryThumb(b.image, 800)} alt={`Sucursal ${b.name}`} className="w-full h-32 object-cover" loading="lazy" />
+                  )}
+                  <div className="p-5">
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary shrink-0">
-                      <MapPin size={16} />
-                    </div>
+                    {!b.image && (
+                      <div className="w-9 h-9 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary shrink-0">
+                        <MapPin size={16} />
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-nexus-text">{b.name}</p>
                       {b.address && <p className="mt-0.5 text-xs text-nexus-text-secondary leading-relaxed">{b.address}</p>}
@@ -176,6 +186,7 @@ export default function BusinessInfoPage({
                     </div>
                   </div>
                   <DirectionsButton branch={b} className="mt-3" />
+                  </div>
                 </div>
               );
             })}

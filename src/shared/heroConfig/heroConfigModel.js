@@ -15,6 +15,9 @@ export const DEFAULT_HERO_CONFIG = {
   showRating: false,
   rating: 4.9,
   highlightText: '',
+  // Fotos de los servicios en el link público (interruptor en la pestaña
+  // Servicios del admin). Sin el campo = se muestran si el servicio tiene foto.
+  showServiceImages: true,
 };
 
 /**
@@ -45,5 +48,7 @@ export function normalizeHeroConfig(raw) {
     rating: Number.isFinite(rating) ? rating : DEFAULT_HERO_CONFIG.rating,
     highlightText:
       typeof raw.highlightText === 'string' ? raw.highlightText.trim() : DEFAULT_HERO_CONFIG.highlightText,
+    showServiceImages:
+      typeof raw.showServiceImages === 'boolean' ? raw.showServiceImages : DEFAULT_HERO_CONFIG.showServiceImages,
   };
 }

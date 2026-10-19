@@ -128,12 +128,12 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
   };
 
   return (
-    <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5">
+    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)]">
       <div className="flex items-center gap-2.5 mb-1">
-        <Smartphone className="w-4 h-4 text-nexus-primary" />
-        <h3 className="text-sm font-bold text-nexus-text">Número de WhatsApp</h3>
+        <Smartphone className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+        <h3 className="text-base font-semibold text-nexus-text">Número de WhatsApp</h3>
       </div>
-      <p className="text-xs text-nexus-text-muted mb-4">
+      <p className="text-sm text-nexus-text-secondary mb-4">
         El asistente responde en tu mismo número y tú sigues usando tu app de WhatsApp Business como siempre.
       </p>
 
@@ -165,14 +165,14 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
 
               {n.removable && (variasSucursales || n.branch) && (
                 <div className="mt-3">
-                  <label htmlFor={`wa-branch-${n.id}`} className="text-xs font-bold text-nexus-text">Sucursal</label>
+                  <label htmlFor={`wa-branch-${n.id}`} className="text-sm font-semibold text-nexus-text">Sucursal</label>
                   <p className="text-xs text-nexus-text-muted mb-2">El asistente solo ofrece {tl('professionals')} de esa sucursal.</p>
                   <select
                     id={`wa-branch-${n.id}`}
                     value={n.branch || ''}
                     disabled={busy}
                     onChange={(e) => cambiarSucursal(n.id, e.target.value)}
-                    className="w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text disabled:cursor-not-allowed"
+                    className="w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text disabled:cursor-not-allowed"
                   >
                     <option value="">Todas las sucursales</option>
                     {branches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
@@ -196,7 +196,7 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
                       <button
                         type="button"
                         onClick={() => setConfirmarQuitar(null)}
-                        className="text-xs font-bold text-nexus-text-secondary hover:underline cursor-pointer"
+                        className="text-sm font-semibold text-nexus-text-secondary hover:underline cursor-pointer"
                       >
                         No
                       </button>
@@ -206,7 +206,7 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
                       type="button"
                       disabled={busy}
                       onClick={() => setConfirmarQuitar(n.id)}
-                      className="text-xs font-bold text-nexus-text-secondary hover:underline cursor-pointer disabled:opacity-50"
+                      className="text-sm font-semibold text-nexus-text-secondary hover:underline cursor-pointer disabled:opacity-50"
                     >
                       Quitar número
                     </button>
@@ -218,12 +218,12 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
 
           {/* Conectar un número */}
           <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl">
-            <p className="text-xs font-bold text-nexus-text mb-2">{numbers.length ? 'Conectar otro número' : 'Conectar tu número'}</p>
+            <p className="text-sm font-semibold text-nexus-text mb-2">{numbers.length ? 'Conectar otro número' : 'Conectar tu número'}</p>
             <div className="space-y-1 text-xs text-nexus-text-secondary mb-3">
               <p><b>1.</b> Escribe a soporte de Nexus para habilitar tu número. Lo conectamos contigo y sigues usando tu app de WhatsApp Business.</p>
               <p><b>2.</b> Cuando te avisemos, escribe el número aquí y toca <b>Conectar</b>.</p>
             </div>
-            <label htmlFor="wa-phone" className="text-xs font-bold text-nexus-text">Número</label>
+            <label htmlFor="wa-phone" className="text-sm font-semibold text-nexus-text">Número</label>
             <input
               id="wa-phone"
               type="tel"
@@ -232,16 +232,16 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
               onChange={(e) => { setPhone(e.target.value); setError(''); }}
               placeholder="+591 71234567"
               maxLength={25}
-              className="mt-1 w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text"
+              className="mt-1 w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text"
             />
             {variasSucursales && (
               <div className="mt-3">
-                <label htmlFor="wa-new-branch" className="text-xs font-bold text-nexus-text">Sucursal</label>
+                <label htmlFor="wa-new-branch" className="text-sm font-semibold text-nexus-text">Sucursal</label>
                 <select
                   id="wa-new-branch"
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
-                  className="mt-1 w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-xs text-nexus-text"
+                  className="mt-1 w-full bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text"
                 >
                   <option value="">Todas las sucursales</option>
                   {branches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}

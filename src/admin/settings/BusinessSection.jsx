@@ -1,31 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Building2, LogOut, Clock, Copy, Save, Loader as Loader2, CreditCard, Wallet, Plus, X, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
+import { Clock, Copy, Save, Loader as Loader2, Wallet, Plus, X, CalendarClock } from 'lucide-react';
 import { useBusinessSettings } from '../../shared/businessSettings/useBusinessSettings';
 import { saveBusinessSettings } from '../../shared/businessSettings/businessSettingsService';
-import { useNegocioPlan } from '../../shared/negocioPlan/useNegocioPlan';
-import { useNegocioStatus } from '../../shared/negocioStatus/useNegocioStatus';
-import { CAPABILITIES } from '../../shared/capabilities/capabilityModel';
-import ActiveSessions from '../../shared/session/ActiveSessions';
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 ${className}`}>
+    <div className={`bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)] ${className}`}>
       {children}
     </div>
   );
 }
 
-const STATUS_BADGE = {
-  active: { label: 'Activa', className: 'bg-nexus-success-bg text-nexus-success-text', Icon: ShieldCheck },
-  trial: { label: 'Prueba', className: 'bg-nexus-warning-bg text-nexus-warning-text', Icon: ShieldCheck },
-  suspended: { label: 'Suspendida', className: 'bg-nexus-error-bg text-nexus-error-text', Icon: ShieldX },
-  expired: { label: 'Vencida', className: 'bg-nexus-error-bg text-nexus-error-text', Icon: ShieldAlert },
-};
-
-export default function BusinessSection({ negocioId, businessName, user, onLogout }) {
+// Negocio: horario de atención, anticipación para reservar y métodos de pago.
+// (Marca, plan, cuenta y sesiones están en AccountSection: "Cuenta y plan".)
+export default function BusinessSection({ negocioId }) {
   const { businessSettings, loading: settingsLoading } = useBusinessSettings(negocioId);
-  const { planName, capabilities, loading: planLoading } = useNegocioPlan(negocioId);
-  const { status } = useNegocioStatus(negocioId);
 
   const [form, setForm] = useState(businessSettings);
   const [newMethod, setNewMethod] = useState('');
@@ -72,97 +61,8 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
     }
   };
 
-  const statusInfo = STATUS_BADGE[status] || STATUS_BADGE.active;
-  // Lo que el negocio tiene EFECTIVAMENTE (plan + complementos + excepciones),
-  // con nombres legibles del catálogo. No se listan: "Próximamente", maquetas
-  // no activas ni funciones que no aplican a este tipo de negocio.
-  const featureEntries = CAPABILITIES
-    .map((cap) => [cap, capabilities?.[cap.key]])
-    .filter(([cap, val]) => cap.status !== 'soon' && !cap.core
-      && !(cap.status === 'mock' && !val?.enabled)
-      && val?.source !== 'profile');
-
   return (
     <div className="space-y-4">
-
-      {/* ── Marca activa ─────────────────────────────────────────── */}
-      <Card>
-        <div className="flex items-center gap-2.5 mb-3">
-          <Building2 className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
-          <h3 className="text-base font-semibold text-nexus-text">Marca activa</h3>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center font-bold text-nexus-primary text-sm shrink-0">
-            {(businessName || 'N').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-base font-semibold text-nexus-text truncate">{businessName}</p>
-            <p className="text-sm text-nexus-text-secondary mt-0.5">Para cambiar el nombre, contacta a soporte.</p>
-          </div>
-        </div>
-      </Card>
-
-      {/* ── Cuenta / Sesión ──────────────────────────────────────── */}
-      <Card>
-        <h3 className="text-base font-semibold text-nexus-text mb-1">Cuenta</h3>
-        <p className="text-sm text-nexus-text-secondary mb-3 break-words">
-          {user?.email ? `Sesión activa: ${user.email}` : 'Sesión activa.'}
-        </p>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="inline-flex h-10 items-center gap-2 px-4 rounded-lg text-nexus-error-text hover:bg-nexus-error-bg border border-nexus-error/25 transition-colors text-sm font-semibold cursor-pointer"
-        >
-          <LogOut size={16} aria-hidden="true" />
-          Cerrar sesión
-        </button>
-      </Card>
-      
-      <ActiveSessions />
-
-      {/* ── Suscripción (solo lectura) ───────────────────────────── */}
-      <Card>
-        <div className="flex items-center gap-2.5 mb-3">
-          <CreditCard className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
-          <h3 className="text-base font-semibold text-nexus-text">Suscripción</h3>
-        </div>
-        {planLoading ? (
-          <p className="text-sm text-nexus-text-muted">Cargando...</p>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="min-w-0">
-                <p className="text-xs text-nexus-text-secondary">Plan actual</p>
-                <p className="text-base font-semibold text-nexus-text">{planName || 'Sin plan asignado'}</p>
-              </div>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${statusInfo.className}`}>
-                <statusInfo.Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                {statusInfo.label}
-              </span>
-            </div>
-            {featureEntries.length > 0 ? (
-              <ul className="divide-y divide-nexus-border/70">
-                {featureEntries.map(([cap, val]) => {
-                  const enabled = !!val?.enabled;
-                  const limit = typeof val?.limit === 'number' ? val.limit : null;
-                  const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}${cap.limit.perBranch ? ' por sucursal' : ''}`) : (val?.source === 'addon' ? 'Complemento' : 'Incluido');
-                  return (
-                    <li key={cap.key} className="flex items-center justify-between gap-3 text-sm py-2">
-                      <span className="text-nexus-text-secondary min-w-0">{cap.label}</span>
-                      <span className={`font-semibold shrink-0 nx-num ${enabled ? 'text-nexus-success-text' : 'text-nexus-text-muted'}`}>
-                        {enabled ? limitText : 'No incluido'}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-nexus-text-muted">Este plan no tiene funciones configuradas.</p>
-            )}
-            <p className="text-sm text-nexus-text-muted mt-3">Para cambiar de plan, contacta a soporte.</p>
-          </>
-        )}
-      </Card>
 
       {/* ── Horario del negocio ──────────────────────────────────── */}
       <Card>
@@ -243,9 +143,12 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
 
         {/* ── Anticipación para reservar ───────────────────────────── */}
         <Card>
-          <h3 className="text-base font-semibold text-nexus-text mb-1">
-            Anticipación para reservar
-          </h3>
+          <div className="flex items-center gap-2.5 mb-1">
+            <CalendarClock className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
+            <h3 className="text-base font-semibold text-nexus-text">
+              Anticipación para reservar
+            </h3>
+          </div>
           <p className="text-sm text-nexus-text-secondary mb-3">
             Tiempo mínimo antes de una cita para que un cliente pueda reservarla desde el link
             público. 0 = sin restricción (puede reservar para dentro de un momento).

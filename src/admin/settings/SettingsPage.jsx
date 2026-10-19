@@ -1,12 +1,13 @@
-import React from 'react';
 import BusinessSection from './BusinessSection';
 import BusinessHeroSettings from './business';
 import AutomationSection from './AutomationSection';
+import AccountSection from './AccountSection';
 
 const SECTION_COMPONENTS = {
   business: BusinessSection,
   hero: BusinessHeroSettings,
   automation: AutomationSection,
+  account: AccountSection,
 };
 
 export default function SettingsPage({
@@ -17,12 +18,8 @@ export default function SettingsPage({
   isEditingBusinessName,
   setIsEditingBusinessName,
   onLogout,
+  onChangeSection,
   activeSection = 'business',
-  whatsappSettings,
-  setWhatsappSettings,
-  automationLogs,
-  toggleWhatsAppConnection,
-  handleTestTriggerMessage,
 }) {
   const ActiveComponent = SECTION_COMPONENTS[activeSection] || BusinessSection;
 
@@ -35,11 +32,7 @@ export default function SettingsPage({
       isEditingBusinessName={isEditingBusinessName}
       setIsEditingBusinessName={setIsEditingBusinessName}
       onLogout={onLogout}
-      whatsappSettings={whatsappSettings}
-      setWhatsappSettings={setWhatsappSettings}
-      automationLogs={automationLogs}
-      toggleWhatsAppConnection={toggleWhatsAppConnection}
-      handleTestTriggerMessage={handleTestTriggerMessage}
+      onChangeSection={onChangeSection}
     />
   );
 }

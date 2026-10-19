@@ -94,7 +94,14 @@ router.post('/negocio/profesionales', ...guard, async (req, res) => {
   }
 });
 
-// Body: { name, phone, address, schedule, lat, lng, mapsUrl }
+// Foto de la sucursal: solo URLs https de Cloudinary (las sube el admin con
+// el preset del front). Cualquier otra cosa se guarda vacía.
+function imagenUrl(v) {
+  const url = texto(v, 1000);
+  return /^https:\/\/res\.cloudinary\.com\//.test(url) ? url : '';
+}
+
+// Body: { name, phone, address, schedule, lat, lng, mapsUrl, image }
 router.post('/negocio/sucursales', ...guard, async (req, res) => {
   const b = obj(req.body);
   const name = texto(b.name, 120);
@@ -112,6 +119,7 @@ router.post('/negocio/sucursales', ...guard, async (req, res) => {
         lat: num(b.lat, null),
         lng: num(b.lng, null),
         mapsUrl: texto(b.mapsUrl, 1000),
+        image: imagenUrl(b.image),
         active: true,
         createdAt: new Date().toISOString(),
       },
@@ -147,7 +155,7 @@ async function renombrarSucursalEnDatos(negocioId, oldName, newName) {
   };
 }
 
-// Body: { name, phone, address, schedule, lat, lng, mapsUrl }
+// Body: { name, phone, address, schedule, lat, lng, mapsUrl, image }
 router.put('/negocio/sucursales/:id', ...guard, async (req, res) => {
   const b = obj(req.body);
   const name = texto(b.name, 120);
@@ -171,6 +179,7 @@ router.put('/negocio/sucursales/:id', ...guard, async (req, res) => {
       lat: num(b.lat, null),
       lng: num(b.lng, null),
       mapsUrl: texto(b.mapsUrl, 1000),
+      image: imagenUrl(b.image),
     });
 
     let actualizados = null;

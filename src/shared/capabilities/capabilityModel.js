@@ -124,8 +124,8 @@ export const CAPABILITIES = [
     description: 'Pantalla existente pero no guarda datos reales.', enforcedIn: ['ui'] },
 
   // ── INVENTARIO Y VENTAS ──
-  { key: 'inventario', module: 'inventory', label: 'Inventario y venta de productos', status: 'mock', kind: 'toggle', default: false,
-    description: 'Pantalla existente con productos de ejemplo; no guarda en Firestore.', enforcedIn: ['ui'] },
+  { key: 'inventario', module: 'inventory', label: 'Inventario y venta de productos', status: 'implemented', kind: 'toggle', default: false,
+    description: 'Productos con stock por sucursal, ventas que descuentan stock, ajustes, traspasos y movimientos.', enforcedIn: ['ui'] },
   { key: 'caja', module: 'inventory', label: 'Caja', status: 'soon', kind: 'toggle', default: false },
   { key: 'pagos', module: 'agenda', label: 'Pagos en línea', status: 'soon', kind: 'toggle', default: false },
   { key: 'anticipos', module: 'agenda', label: 'Anticipos', status: 'soon', kind: 'toggle', default: false },

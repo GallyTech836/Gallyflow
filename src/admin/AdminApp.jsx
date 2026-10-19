@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -19,7 +19,7 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
-import { useConfirm, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl } from '../shared/ui';
+import { useConfirm, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl, ImageUploader } from '../shared/ui';
 import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
@@ -37,6 +37,9 @@ import { useNotifications, notify, NotificationType } from '../shared/notificati
 import SettingsPage from './settings';
 import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
 import AnalyticsSection from './analytics/AnalyticsSection';
+import InventoryPage from './inventory/InventoryPage';
+import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
+import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 
 const GEOLOCATIONS_DB = [
   { name: "Equipetrol, Santa Cruz de la Sierra", address: "Av. San Martín, Calle 5 Oeste, Santa Cruz de la Sierra, Bolivia", lat: -17.7732, lng: -63.1821 },
@@ -52,7 +55,6 @@ const GEOLOCATIONS_DB = [
   { name: "El Organismo, Cochabamba", address: "Avenida América y Libertador, Cochabamba, Bolivia", lat: -17.3751, lng: -66.1592 }
 ];
 
-const INITIAL_AUTOMATION_LOGS = [];
 
 // Fase 4: ítems del menú lateral con un solo estilo (40px de alto, texto de 14px).
 // `collapsed` solo aplica en escritorio; en celular el panel muestra siempre los nombres.
@@ -160,198 +162,13 @@ const [activeTab, setActiveTab] = useState('agenda');
   };
   const [agendaView, setAgendaView] = useState('dia');
   const agendaBoxRef = useRef(null);
-  const [inventoryTab, setInventoryTab] = useState('stock');
-  const [showNewProductPanel, setShowNewProductPanel] = useState(false);
-  const [showSaleModal, setShowSaleModal] = useState(false);
-const [sales, setSales] = useState([]);
-const [saleForm, setSaleForm] = useState({
-  date: new Date().toISOString().split('T')[0],
-  clientName: '',
-  items: [{ productId: '', productName: '', price: 0, qty: 1, subtotal: 0 }],
-  paymentMethod: 'Efectivo',
-  status: 'Pagado',
-  notes: '',
-});
-  
-  const [products, setProducts] = useState([
-    {
-      id: 'p1',
-      name: 'Aceite de Argán Premium',
-      category: 'Cuidado Capilar',
-      stock: 24,
-      minStock: 5,
-      price: 180,
-      image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=100&auto=format&fit=crop&q=80',
-      status: 'Disponible'
-    },
-    {
-      id: 'p2',
-      name: 'Cera Fijadora Mate Fuerte',
-      category: 'Fijación',
-      stock: 4,
-      minStock: 5,
-      price: 95,
-      image: 'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=100&auto=format&fit=crop&q=80',
-      status: 'Bajo Stock'
-    },
-    {
-      id: 'p3',
-      name: 'Shampoo Purificante',
-      category: 'Limpieza',
-      stock: 0,
-      minStock: 5,
-      price: 120,
-      image: 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?w=100&auto=format&fit=crop&q=80',
-      status: 'Agotado'
-    }
-  ]);
-
-  const [newProductForm, setNewProductForm] = useState({
-    name: '',
-    category: 'capilar',
-    sku: '',
-    type: 'venta',
-    description: '',
-    stock: 0,
-    minStock: 5,
-    price: 120
-  });
-
-  const handleSaveProduct = (e) => {
-    if (e) e.preventDefault();
-    if (!newProductForm.name.trim()) {
-      triggerToast('Por favor ingrese el nombre del producto', 'error');
-      return;
-    }
-
-    const categoryLabels = {
-      'capilar': 'Cuidado Capilar',
-      'fijacion': 'Fijación',
-      'limpieza': 'Limpieza',
-      'cosmeticos': 'Cosméticos'
-    };
-
-    const currentStock = Number(newProductForm.stock || 0);
-    const minimumStock = Number(newProductForm.minStock || 5);
-
-    let statusVal = 'Disponible';
-    if (currentStock === 0) {
-      statusVal = 'Agotado';
-    } else if (currentStock <= minimumStock) {
-      statusVal = 'Bajo Stock';
-    }
-
-    const newProduct = {
-      id: 'p' + (products.length + 1),
-      name: newProductForm.name,
-      category: categoryLabels[newProductForm.category] || newProductForm.category || 'Otros',
-      stock: currentStock,
-      minStock: minimumStock,
-      price: newProductForm.price || 100,
-      image: 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?w=100&auto=format&fit=crop&q=80',
-      status: statusVal
-    };
-
-    setProducts([newProduct, ...products]);
-    triggerToast('¡Producto registrado con éxito!');
-    setShowNewProductPanel(false);
-
-    setNewProductForm({
-      name: '',
-      category: 'capilar',
-      sku: '',
-      type: 'venta',
-      description: '',
-      stock: 0,
-      minStock: 5,
-      price: 120
-    });
-  };
-  
-
-// ── Handler: Registrar nueva venta ──────────────────────────────────────
-  const handleSaveSale = () => {
-    const validItems = saleForm.items.filter(i => i.productId !== '');
-    if (validItems.length === 0) {
-      triggerToast('Selecciona al menos un producto.', 'error');
-      return;
-    }
-    const total = validItems.reduce((acc, i) => acc + i.subtotal, 0);
-    const newSale = {
-      id: 'sale_' + Date.now(),
-      date: saleForm.date,
-      clientName: saleForm.clientName || 'Cliente general',
-      items: validItems,
-      total,
-      paymentMethod: saleForm.paymentMethod,
-      status: saleForm.status,
-      notes: saleForm.notes,
-      createdAt: new Date().toISOString(),
-    };
-    setSales(prev => [newSale, ...prev]);
-    triggerToast('¡Venta registrada con éxito!');
-    setShowSaleModal(false);
-    setSaleForm({
-      date: new Date().toISOString().split('T')[0],
-      clientName: '',
-      items: [{ productId: '', productName: '', price: 0, qty: 1, subtotal: 0 }],
-      paymentMethod: 'Efectivo',
-      status: 'Pagado',
-      notes: '',
-    });
-  };
-
-  const updateSaleItem = (index, field, value) => {
-    setSaleForm(prev => {
-      const items = [...prev.items];
-      items[index] = { ...items[index], [field]: value };
-      if (field === 'productId') {
-        const found = products.find(p => p.id === value);
-        if (found) {
-          items[index].productName = found.name;
-          items[index].price = found.price;
-          items[index].subtotal = found.price * items[index].qty;
-        }
-      }
-      if (field === 'qty') {
-        const qty = Math.max(1, Number(value));
-        items[index].qty = qty;
-        items[index].subtotal = items[index].price * qty;
-      }
-      return { ...prev, items };
-    });
-  };
-
-  const addSaleItem = () => {
-    setSaleForm(prev => ({
-      ...prev,
-      items: [...prev.items, { productId: '', productName: '', price: 0, qty: 1, subtotal: 0 }],
-    }));
-  };
-
-  const removeSaleItem = (index) => {
-    setSaleForm(prev => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index),
-    }));
-  };
-
-  const saleTotal = saleForm.items.reduce((acc, i) => acc + (i.subtotal || 0), 0);
-
-  const todaySalesMetrics = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const todaySalesList = (sales || []).filter(s => s?.date === today);
-    const count = todaySalesList.length;
-    const totalIncome = todaySalesList.reduce((sum, s) => sum + Number(s?.total || 0), 0);
-    return { count, totalIncome };
-  }, [sales]);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   // En celular el panel abierto siempre muestra los nombres, aunque en escritorio esté contraído.
   const navCollapsed = isSidebarCollapsed && !isMobileSidebarOpen;
   // Pantallas que muestran los controles de periodo y sucursal en la cabecera.
-  const headerHasToolbar = ['agenda', 'dashboard', 'commissions', 'assistance', 'reports', 'automatizaciones'].includes(activeTab);
+  const headerHasToolbar = ['agenda', 'dashboard', 'commissions', 'assistance', 'reports'].includes(activeTab);
 
   const [businessName, setBusinessName] = useState('Mi negocio');
   const [isEditingBusinessName, setIsEditingBusinessName] = useState(false);
@@ -419,24 +236,7 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, planFeatures, planLoading, businessProfile]);
 const { businessSettings } = useBusinessSettings(negocioId);
-  const [whatsappSettings, setWhatsappSettings] = useState({
-    isConnected: true,
-    connectionStatus: 'connected', // connected, disconnected, pairing
-    lastSync: '2026-05-29T20:45:00.000Z',
-    qrGeneratedAt: null,
-    autoConfirmationEnabled: true,
-    autoReminderEnabled: true,
-    autoCancellationEnabled: true,
-    autoThankYouEnabled: true,
-    messageTemplates: {
-      confirmation: "¡Hola {{clientName}}! Tu cita de {{serviceName}} ha sido agendada con éxito para el {{date}} a las {{time}} en {{branchName}}.",
-      cancellation: "Hola {{clientName}}. Te notificamos que tu cita para {{serviceName}} el día {{date}} a las {{time}} ha sido cancelada.",
-      reminder: "Hola {{clientName}}, te recordamos que tienes una cita de {{serviceName}} el día {{date}} a las {{time}}.",
-      thankYou: "¡Gracias por visitarnos hoy, {{clientName}}! Esperamos que hayas tenido una excelente experiencia con nuestro profesional."
-    }
-  });
-
-  const [automationLogs, setAutomationLogs] = useState(INITIAL_AUTOMATION_LOGS);
+const { heroConfig } = useHeroConfig(negocioId);
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterBarberId, setFilterBarberId] = useState('all');
@@ -562,6 +362,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
     lng: -63.1821,
   });
   const [locationSearch, setLocationSearch] = useState('');
+  // Subida de foto en curso (servicio o sucursal): bloquea Guardar.
+  const [imageUploading, setImageUploading] = useState(false);
   const [showLocationList, setShowLocationList] = useState(false);
 
   useEffect(() => {
@@ -1742,38 +1544,14 @@ const { businessSettings } = useBusinessSettings(negocioId);
       updatedAt: nowIso
     };
 
-    let savedReservationId = null;
     try {
       const docRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
       bumpCitasTick();
-      savedReservationId = docRef.id;
       triggerToast(`¡${t('appointment')} ${g('appointment', 'agendado', 'agendada')} con éxito!`);
       notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) {
       triggerToast(`Error al guardar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, 'error');
       return;
-    }
-
-    /* COLA DE AUTOMATIZACIÓN DE PRUEBA (SIMULACIÓN FIRESTORE TRIGGER EN RAILWAY) */
-    if (whatsappSettings.autoConfirmationEnabled) {
-      const parsedText = whatsappSettings.messageTemplates.confirmation
-        .replace("{{clientName}}", reservationObj.clientName)
-        .replace("{{serviceName}}", reservationObj.serviceName)
-        .replace("{{date}}", reservationObj.reservationDate)
-        .replace("{{time}}", reservationObj.startTime)
-        .replace("{{branchName}}", reservationObj.branch);
-
-      const newLog = {
-        id: 'log' + (automationLogs.length + 1),
-        reservationId: savedReservationId,
-        clientId: reservationObj.clientId,
-        phone: `${reservationObj.countryCode} ${reservationObj.clientPhone}`,
-        type: 'confirmation',
-        status: 'sent',
-        createdAt: new Date().toISOString()
-      };
-      setAutomationLogs(prev => [newLog, ...prev]);
-      triggerToast('WhatsApp automático encolado para backend', 'success');
     }
 
     setActiveModal(null);
@@ -2005,19 +1783,6 @@ const { businessSettings } = useBusinessSettings(negocioId);
       return;
     }
 
-    /* SIMULACIÓN DE TRIGGER DE RAILWAY AL CANCELAR O CAMBIAR ESTADO */
-    if (editingReservation.status === 'cancelled' && whatsappSettings.autoCancellationEnabled) {
-      const newLog = {
-        id: 'log' + (automationLogs.length + 1),
-        reservationId: editingReservation.id,
-        clientId: editingReservation.clientId,
-        phone: `${editingReservation.countryCode || '+591'} ${editingReservation.clientPhone || '70000000'}`,
-        type: 'cancellation',
-        status: 'sent',
-        createdAt: new Date().toISOString()
-      };
-      setAutomationLogs(prev => [newLog, ...prev]);
-    }
 
     triggerToast(`¡${t('appointment')} ${g('appointment', 'modificado', 'modificada')} con éxito!`);
     setActiveModal(null);
@@ -2111,20 +1876,6 @@ const { businessSettings } = useBusinessSettings(negocioId);
       return;
     }
 
-    /* SIMULACIÓN DE EVENTO POST-SERVICIO (THANK YOU) */
-    if (status === 'completed' && whatsappSettings.autoThankYouEnabled) {
-      const updated = findCitaById(id);
-      const newLog = {
-        id: 'log' + (automationLogs.length + 1),
-        reservationId: id,
-        clientId: updated?.clientId,
-        phone: `${updated?.countryCode || '+591'} ${updated?.clientPhone || '70000000'}`,
-        type: 'thankYou',
-        status: 'sent',
-        createdAt: new Date().toISOString()
-      };
-      setAutomationLogs(prev => [newLog, ...prev]);
-    }
 
     triggerToast(`Estado actualizado a ${getStatusLabel(status, businessProfile)}`);
   };
@@ -2156,6 +1907,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
   const handleCreateBranch = async (e) => {
     if (e) e.preventDefault();
+    if (imageUploading) return;
     if (!newBranch?.name?.trim() || !newBranch?.address?.trim()) {
       triggerToast('Por favor complete todos los campos obligatorios.', 'error');
       return;
@@ -2173,7 +1925,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
           schedule: newBranch.schedule || '',
           lat: newBranch.lat,
           lng: newBranch.lng,
-          mapsUrl: (newBranch.mapsUrl || '').trim()
+          mapsUrl: (newBranch.mapsUrl || '').trim(),
+          image: (newBranch.image || '').trim()
         });
         if (!r.ok) throw new Error(r.error || 'No se pudo actualizar la sucursal.');
         if (r.renamed && selectedBranch === oldName) setSelectedBranch(newBranch.name);
@@ -2190,7 +1943,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
           schedule: newBranch.schedule || '',
           lat: newBranch.lat,
           lng: newBranch.lng,
-          mapsUrl: (newBranch.mapsUrl || '').trim()
+          mapsUrl: (newBranch.mapsUrl || '').trim(),
+          image: (newBranch.image || '').trim()
         });
         if (!r.ok) throw new Error(r.error || 'No se pudo crear la sucursal.');
         triggerToast('Sucursal creada con éxito.');
@@ -2225,6 +1979,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
 
   const handleCreateService = async (e) => {
     if (e) e.preventDefault();
+    if (imageUploading) return;
     if (!newService.name.trim() || !newService.price) {
       triggerToast(`Por favor completa todos los campos ${g('service', 'del', 'de la')} ${tl('service')}.`, 'error');
       return;
@@ -2237,7 +1992,8 @@ const { businessSettings } = useBusinessSettings(negocioId);
         price: Number(newService.price),
         priceVariable: !!newService.priceVariable,
         duration: durationMin,
-        availableDays: newService.availableDays || []
+        availableDays: newService.availableDays || [],
+        image: (newService.image || '').trim()
       });
       triggerToast(`${t('service')} ${g('service', 'actualizado', 'actualizada')}.`);
     } else {
@@ -2248,18 +2004,30 @@ const { businessSettings } = useBusinessSettings(negocioId);
         promoPrice: null,
         duration: durationMin,
         category: 'Tratamiento',
-        availableDays: newService.availableDays || []
+        availableDays: newService.availableDays || [],
+        image: (newService.image || '').trim()
       });
       triggerToast(`${t('service')} ${g('service', 'creado', 'creada')} con éxito.`);
     }
     setActiveModal(null);
     setEditingServiceId(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+  };
+
+  // Interruptor global: mostrar u ocultar las fotos de servicios en el link público.
+  const handleToggleServiceImages = async () => {
+    const next = heroConfig.showServiceImages === false;
+    try {
+      await setDoc(doc(db, 'negocios', negocioId), { heroConfig: { showServiceImages: next } }, { merge: true });
+      triggerToast(next ? 'Fotos visibles en el link público.' : 'Fotos ocultas en el link público.');
+    } catch (err) {
+      triggerToast('No se pudo guardar: ' + err.message, 'error');
+    }
   };
 
   const openNewServiceModal = () => {
     setEditingServiceId(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
     setActiveModal('add-service');
   };
 
@@ -2272,6 +2040,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
       category: s.category || 'Tratamiento',
       promoPrice: s.promoPrice || '',
       priceVariable: s.priceVariable === true,
+      image: s.image || '',
       availableDays: Array.isArray(s.availableDays) && s.availableDays.length > 0
         ? s.availableDays
         : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -2719,36 +2488,6 @@ const { businessSettings } = useBusinessSettings(negocioId);
     return [...base].sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'es', { sensitivity: 'base' }));
   }, [clients, searchClientQuery]);
 
-  const toggleWhatsAppConnection = () => {
-    setWhatsappSettings(prev => {
-      const nextConnected = !prev.isConnected;
-      return {
-        ...prev,
-        isConnected: nextConnected,
-        connectionStatus: nextConnected ? 'connected' : 'disconnected',
-        lastSync: nextConnected ? new Date().toISOString() : prev.lastSync
-      };
-    });
-    triggerToast(whatsappSettings.isConnected ? 'WhatsApp desconectado' : 'WhatsApp conectado con éxito');
-  };
-
-  const handleTestTriggerMessage = () => {
-    const randomClient = clients[Math.floor(Math.random() * clients.length)];
-    const randomService = services[Math.floor(Math.random() * services.length)];
-    
-    const newLog = {
-      id: 'log' + (automationLogs.length + 1),
-      reservationId: 'r' + Math.floor(Math.random() * 100),
-      clientId: randomClient.id,
-      phone: `+591 ${randomClient.phone}`,
-      type: 'reminder',
-      status: 'sent',
-      createdAt: new Date().toISOString()
-    };
-
-    setAutomationLogs(prev => [newLog, ...prev]);
-    triggerToast(`Mensaje de prueba encolado para ${randomClient.name}`);
-  };
 
   if (isBlocked) {
     return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
@@ -3692,9 +3431,23 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 <h3 className="text-base font-semibold text-nexus-text">
                   {t('services')} disponibles <span className="font-normal text-nexus-text-muted nx-num">({(services || []).length})</span>
                 </h3>
-                <Button icon={Plus} className="w-full sm:w-auto" onClick={openNewServiceModal}>
-                  Agregar {t('service')}
-                </Button>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={heroConfig.showServiceImages !== false}
+                    onClick={handleToggleServiceImages}
+                    className="inline-flex h-10 items-center justify-between sm:justify-start gap-2 rounded-lg border border-nexus-border bg-nexus-surface px-3 text-sm font-medium text-nexus-text-secondary hover:bg-nexus-surface-hover cursor-pointer"
+                  >
+                    <span>Fotos en el link público</span>
+                    {heroConfig.showServiceImages !== false
+                      ? <ToggleRight className="w-7 h-7 text-nexus-success" aria-hidden="true" />
+                      : <ToggleLeft className="w-7 h-7 text-nexus-text-muted" aria-hidden="true" />}
+                  </button>
+                  <Button icon={Plus} className="w-full sm:w-auto" onClick={openNewServiceModal}>
+                    Agregar {t('service')}
+                  </Button>
+                </div>
               </div>
 
               {(services || []).length === 0 ? (
@@ -3706,7 +3459,18 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   {(services || []).map(s => (
                     <div key={s?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 flex flex-col justify-between shadow-sm min-w-0">
                       <div className="flex justify-between items-start gap-2">
-                        <div className="min-w-0 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditService(s)}
+                          aria-label={s?.image ? `Cambiar foto de ${s?.name}` : `Agregar foto a ${s?.name}`}
+                          title={s?.image ? 'Cambiar foto' : 'Agregar foto'}
+                          className="w-14 h-14 shrink-0 overflow-hidden rounded-lg border border-nexus-border bg-nexus-background flex items-center justify-center text-nexus-text-muted hover:border-nexus-primary/50 cursor-pointer"
+                        >
+                          {s?.image
+                            ? <img src={cloudinaryThumb(s.image, 160)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            : <ImagePlus className="w-5 h-5" aria-hidden="true" />}
+                        </button>
+                        <div className="min-w-0 pt-1 flex-1">
                           <h4 className="font-semibold text-nexus-text text-base leading-snug break-words">{s?.name}</h4>
                           <p className="text-sm text-nexus-text-secondary mt-1">
                             Duración: <span className="nx-num">{s?.duration} min</span>
@@ -3815,8 +3579,20 @@ const { businessSettings } = useBusinessSettings(negocioId);
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                   {filteredBranchesList.map(b => (
-                    <div key={b?.id} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 flex flex-col justify-between shadow-sm min-w-0">
-                      <div>
+                    <div key={b?.id} className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden flex flex-col justify-between shadow-sm min-w-0">
+                      <div className="relative h-28 bg-nexus-primary-soft">
+                        {(b?.image || heroConfig.cover) ? (
+                          <img src={cloudinaryThumb(b?.image || heroConfig.cover, 700)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-nexus-primary/60"><Building2 className="w-8 h-8" aria-hidden="true" /></div>
+                        )}
+                        {!b?.image && (
+                          <span className="absolute bottom-2 left-2 rounded-md bg-black/55 px-2 py-0.5 text-xs font-medium text-white">
+                            {heroConfig.cover ? 'Portada del negocio' : 'Sin foto'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-4 sm:p-5 pb-0 sm:pb-0">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h4 className="text-base font-semibold text-nexus-text pt-1.5 break-words min-w-0">{b?.name}</h4>
                           <div className="flex -mr-2 -mt-0.5 shrink-0">
@@ -3832,7 +3608,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                           </p>
                         )}
                       </div>
-                      <div className="border-t border-nexus-border pt-3 flex justify-between items-center gap-3 text-xs text-nexus-text-muted">
+                      <div className="mx-4 sm:mx-5 mb-4 sm:mb-5 border-t border-nexus-border pt-3 flex justify-between items-center gap-3 text-xs text-nexus-text-muted">
                         <span>Coordenadas</span>
                         <span className="nx-num">{typeof b?.lat === 'number' && typeof b?.lng === 'number' ? `${b.lat.toFixed(3)}, ${b.lng.toFixed(3)}` : '—'}</span>
                       </div>
@@ -3844,608 +3620,13 @@ const { businessSettings } = useBusinessSettings(negocioId);
           )}
 
           {activeTab === 'inventory' && (
-            <div className="space-y-6 animate-fadeIn">
-              {/* Navegación de pestañas internas */}
-              <div className="flex border-b border-nexus-border gap-6">
-                <button
-                  type="button"
-                  onClick={() => setInventoryTab('stock')}
-                  className={`h-10 px-1 text-sm font-semibold transition-colors relative cursor-pointer ${
-                    inventoryTab === 'stock'
-                      ? 'text-nexus-primary'
-                      : 'text-nexus-text-secondary hover:text-nexus-text'
-                  }`}
-                >
-                  Stock
-                  {inventoryTab === 'stock' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-nexus-primary rounded-full" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInventoryTab('ventas')}
-                  className={`h-10 px-1 text-sm font-semibold transition-colors relative cursor-pointer ${
-                    inventoryTab === 'ventas'
-                      ? 'text-nexus-primary'
-                      : 'text-nexus-text-secondary hover:text-nexus-text'
-                  }`}
-                >
-                  Ventas
-                  {inventoryTab === 'ventas' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-nexus-primary rounded-full" />
-                  )}
-                </button>
-              </div>
-
-              {/* Contenido dinámico según pestaña activa */}
-              {inventoryTab === 'stock' && (
-                <div className="space-y-6 animate-fadeIn">
-                  {/* Tarjetas Resumen */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-nexus-text-muted">Productos Totales</span>
-                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">42</h3>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary">
-                        <Package className="w-5 h-5" />
-                      </div>
-                    </div>
-
-                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-nexus-text-muted">Stock Total</span>
-                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">284 <span className="text-xs text-nexus-text-muted font-normal">uds</span></h3>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary">
-                        <Sliders className="w-5 h-5" />
-                      </div>
-                    </div>
-
-                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-nexus-text-muted">Bajo Stock</span>
-                        <h3 className="text-xl font-black text-nexus-warning-text nx-num mt-1">5</h3>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-nexus-warning-bg border border-nexus-warning/30 flex items-center justify-center text-nexus-warning-text">
-                        <AlertCircle className="w-5 h-5" />
-                      </div>
-                    </div>
-
-                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-nexus-text-muted">Agotados</span>
-                        <h3 className="text-xl font-black text-nexus-error-text nx-num mt-1">2</h3>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-nexus-error-bg border border-nexus-error/25 flex items-center justify-center text-nexus-error-text">
-                        <XCircle className="w-5 h-5" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Barra Superior */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                      <div className="relative w-full sm:w-64">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Search className="w-4 h-4 text-nexus-text-muted" />
-                        </span>
-                        <input 
-                          type="text" 
-                          placeholder="Buscar producto..." 
-                          className="w-full bg-nexus-background border border-nexus-border rounded-lg pl-9 pr-3 text-nexus-text outline-none focus:border-nexus-primary h-10 text-base sm:text-sm"
-                        />
-                      </div>
-                      <select 
-                        className="bg-nexus-background border border-nexus-border rounded-lg px-3 text-nexus-text outline-none focus:border-nexus-primary cursor-pointer h-10 text-base sm:text-sm"
-                      >
-                        <option value="all">Todas las categorías</option>
-                        <option value="capilar">Cuidado Capilar</option>
-                        <option value="fijacion">Fijación</option>
-                        <option value="limpieza">Limpieza</option>
-                        <option value="cosmeticos">Cosméticos</option>
-                      </select>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowNewProductPanel(true)}
-                      className="w-full sm:w-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Nuevo Producto
-                    </button>
-                  </div>
-
-                  {/* Modal de Nuevo Producto (Centrado y Simple) */}
-                  {showNewProductPanel && (
-                    <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-                      <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-xl p-6 relative shadow-2xl max-h-[92dvh] overflow-y-auto scrollbar-thin animate-fadeIn">
-                        <div className="border-b border-nexus-border pb-3 flex justify-between items-center mb-4">
-                          <div>
-                            <h4 className="text-sm font-bold text-nexus-text uppercase tracking-wider nx-num">Nuevo Producto</h4>
-                            <p className="text-xs text-nexus-text-secondary mt-0.5">Registre las especificaciones y niveles de stock mínimo.</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowNewProductPanel(false)}
-                            className="text-nexus-text-secondary hover:text-nexus-text"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="space-y-4">
-                          {/* Sección: Información Básica */}
-                          <div className="space-y-3">
-                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Información Básica</h5>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre del producto *</label>
-                                <input 
-                                  type="text" 
-                                  placeholder="Ej. Gel Modelador Premium"
-                                  value={newProductForm.name}
-                                  onChange={(e) => setNewProductForm({...newProductForm, name: e.target.value})}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Categoría *</label>
-                                <div className="flex gap-2">
-                                  <select 
-                                    value={newProductForm.category}
-                                    onChange={(e) => setNewProductForm({...newProductForm, category: e.target.value})}
-                                    className="flex-1 bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
-                                  >
-                                    <option value="capilar">Cuidado Capilar</option>
-                                    <option value="fijacion">Fijación</option>
-                                    <option value="limpieza">Limpieza</option>
-                                    <option value="cosmeticos">Cosméticos</option>
-                                  </select>
-                                  <button
-                                    type="button"
-                                    onClick={() => triggerToast("Función para crear categoría en desarrollo", "info")}
-                                    className="px-2.5 bg-nexus-primary-soft hover:bg-nexus-primary-soft border border-nexus-primary/20 rounded-lg text-xs font-bold text-nexus-primary whitespace-nowrap transition-colors"
-                                  >
-                                    Nueva
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">SKU (Código interno)</label>
-                                <input 
-                                  type="text" 
-                                  placeholder="Ej. CAP-001"
-                                  value={newProductForm.sku}
-                                  onChange={(e) => setNewProductForm({...newProductForm, sku: e.target.value})}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Tipo de producto</label>
-                                <select 
-                                  value={newProductForm.type}
-                                  onChange={(e) => setNewProductForm({...newProductForm, type: e.target.value})}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
-                                >
-                                  <option value="venta">Producto para venta</option>
-                                  <option value="insumo">Insumo interno</option>
-                                  <option value="ambos">Ambos</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Descripción</label>
-                              <textarea 
-                                rows="2"
-                                placeholder="Escriba los detalles o componentes del producto..."
-                                value={newProductForm.description}
-                                onChange={(e) => setNewProductForm({...newProductForm, description: e.target.value})}
-                                className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary resize-none"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Sección: Inventario */}
-                          <div className="space-y-3 pt-1">
-                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Inventario & Precios</h5>
-                            
-                            <div className="grid grid-cols-3 gap-3">
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Precio Venta (Bs)</label>
-                                <input 
-                                  type="number" 
-                                  placeholder="120"
-                                  value={newProductForm.price}
-                                  onChange={(e) => setNewProductForm({...newProductForm, price: Number(e.target.value)})}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Stock inicial</label>
-                                <input 
-                                  type="number" 
-                                  placeholder="0"
-                                  value={newProductForm.stock}
-                                  onChange={(e) => setNewProductForm({...newProductForm, stock: Number(e.target.value)})}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Stock mínimo</label>
-                                <input 
-                                  type="number" 
-                                  placeholder="5"
-                                  value={newProductForm.minStock}
-                                  onChange={(e) => setNewProductForm({...newProductForm, minStock: Number(e.target.value)})}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2.5 pt-4 mt-5 border-t border-nexus-border">
-                          <button 
-                            type="button" 
-                            onClick={() => setShowNewProductPanel(false)} 
-                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface-hover border border-nexus-border text-nexus-text text-sm font-semibold rounded-lg hover:bg-nexus-surface-hover transition-colors cursor-pointer"
-                          >
-                            Cancelar
-                          </button>
-                          <button 
-                            type="button" 
-                            onClick={handleSaveProduct}
-                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
-                          >
-                            Guardar
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tabla de Productos (Fase 4: tabla en escritorio y tarjetas en celular) */}
-                  <ResponsiveTable
-                    rows={products}
-                    rowKey={(product) => product.id}
-                    breakpoint="lg"
-                    columns={[
-                      {
-                        key: 'name',
-                        header: 'Producto',
-                        primary: true,
-                        render: (product) => (
-                          <span className="flex items-center gap-3 min-w-0">
-                            <img src={product.image} alt="" className="w-10 h-10 rounded-lg object-cover border border-nexus-border shrink-0 bg-nexus-background" />
-                            <span className="font-semibold text-nexus-text">{product.name}</span>
-                          </span>
-                        ),
-                      },
-                      { key: 'category', header: 'Categoría', render: (product) => product.category },
-                      { key: 'stock', header: 'Stock', render: (product) => <span className="nx-num font-semibold">{product.stock} uds</span> },
-                      { key: 'price', header: 'Precio venta', align: 'right', render: (product) => <span className="nx-num font-semibold text-nexus-primary">{product.price} Bs</span> },
-                      { key: 'status', header: 'Estado', render: (product) => <Badge tone={((st) => (st === 'Disponible' || st === 'Pagado' ? 'success' : st === 'Bajo Stock' || st === 'Pendiente' ? 'warning' : 'danger'))(product.status)}>{product.status}</Badge> },
-                    ]}
-                    actions={(product) => (
-                      <>
-                        <IconButton icon={Edit3} tone="primary" label={`Editar ${product.name}`} onClick={() => triggerToast('Edición en construcción', 'success')} />
-                        <IconButton
-                          icon={Trash2}
-                          tone="danger"
-                          label={`Eliminar ${product.name}`}
-                          onClick={async () => {
-                            const ok = await confirmAction({ title: '¿Eliminar este producto?', subject: product.name });
-                            if (!ok) return;
-                            setProducts(products.filter(p => p.id !== product.id));
-                            triggerToast('¡Producto eliminado!');
-                          }}
-                        />
-                      </>
-                    )}
-                  />
-                </div>
-              )}
-
-              {/* Módulo de Ventas Ampliado */}
-              {inventoryTab === 'ventas' && (
-                <div className="space-y-6 animate-fadeIn">
-
-                  {/* Tarjetas Resumen e Ingresos */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-center">
-                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-nexus-text-muted">Ventas del día</span>
-                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">{todaySalesMetrics.count}</h3>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary">
-                        <Package className="w-5 h-5" />
-                      </div>
-                    </div>
-                    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 shadow-lg flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-nexus-text-muted">Ingresos del día</span>
-                        <h3 className="text-xl font-black text-nexus-text nx-num mt-1">{todaySalesMetrics.totalIncome} Bs</h3>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-nexus-success-bg border border-nexus-success/25 flex items-center justify-center text-nexus-success-text">
-                        <DollarSign className="w-5 h-5" />
-                      </div>
-                    </div>
-                    <div className="flex justify-end w-full lg:w-auto">
-                      <button
-                        type="button"
-                        onClick={() => setShowSaleModal(true)}
-                        className="w-full sm:w-auto inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md flex items-center justify-center gap-1.5 cursor-pointer font-bold transition-all"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Nueva Venta
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Modal Nueva Venta */}
-                  {showSaleModal && (
-                    <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-                      <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-2xl p-6 relative shadow-2xl max-h-[92dvh] overflow-y-auto scrollbar-thin animate-fadeIn">
-
-                        {/* Cabecera */}
-                        <div className="border-b border-nexus-border pb-3 flex justify-between items-center mb-5">
-                          <div>
-                            <h4 className="text-sm font-bold text-nexus-text uppercase tracking-wider nx-num">Nueva Venta</h4>
-                            <p className="text-xs text-nexus-text-secondary mt-0.5">Registra los productos vendidos y el método de pago.</p>
-                          </div>
-                          <button type="button" onClick={() => setShowSaleModal(false)} className="text-nexus-text-secondary hover:text-nexus-text transition-colors">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="space-y-5">
-
-                          {/* ── Sección 1: Datos generales ── */}
-                          <div className="space-y-3">
-                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Datos Generales</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Fecha *</label>
-                                <input
-                                  type="date"
-                                  value={saleForm.date}
-                                  onChange={e => setSaleForm(p => ({ ...p, date: e.target.value }))}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num px-3 h-10 text-base sm:text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">{t('client')} (opcional)</label>
-                                <select
-                                  value={saleForm.clientName}
-                                  onChange={e => setSaleForm(p => ({ ...p, clientName: e.target.value }))}
-                                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
-                                >
-                                  <option value="">{t('client')} general</option>
-                                  {clients.map(c => (
-                                    <option key={c.id} value={c.name}>{c.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* ── Sección 2: Productos ── */}
-                          <div className="space-y-3">
-                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Productos</h5>
-
-                            <div className="space-y-2">
-                              {/* Encabezado columnas */}
-                              <div className="grid grid-cols-12 gap-2 px-1">
-                                <span className="col-span-5 text-xs text-nexus-text-muted font-bold">Producto</span>
-                                <span className="col-span-2 text-xs text-nexus-text-muted font-bold">Cantidad</span>
-                                <span className="col-span-2 text-xs text-nexus-text-muted font-bold">Precio</span>
-                                <span className="col-span-2 text-xs text-nexus-text-muted font-bold">Subtotal</span>
-                                <span className="col-span-1" />
-                              </div>
-
-                              {saleForm.items.map((item, index) => (
-                                <div key={index} className="grid grid-cols-12 gap-2 items-center bg-nexus-surface border border-nexus-border rounded-lg p-2">
-                                  {/* Selector producto */}
-                                  <div className="col-span-5">
-                                    <select
-                                      value={item.productId}
-                                      onChange={e => updateSaleItem(index, 'productId', e.target.value)}
-                                      className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary cursor-pointer px-3 h-10 text-base sm:text-sm"
-                                    >
-                                      <option value="">— Seleccionar —</option>
-                                      {products.filter(p => p.stock > 0).map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  {/* Cantidad */}
-                                  <div className="col-span-2">
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      value={item.qty}
-                                      onChange={e => updateSaleItem(index, 'qty', e.target.value)}
-                                      className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary nx-num text-center px-3 h-10 text-base sm:text-sm"
-                                    />
-                                  </div>
-                                  {/* Precio (solo lectura) */}
-                                  <div className="col-span-2">
-                                    <input
-                                      type="text"
-                                      readOnly
-                                      value={item.price ? `${item.price} Bs` : '—'}
-                                      className="w-full bg-nexus-surface border border-nexus-border rounded-lg text-nexus-text-secondary nx-num text-center cursor-default px-3 h-10 text-base sm:text-sm"
-                                    />
-                                  </div>
-                                  {/* Subtotal (solo lectura) */}
-                                  <div className="col-span-2">
-                                    <input
-                                      type="text"
-                                      readOnly
-                                      value={item.subtotal ? `${item.subtotal} Bs` : '—'}
-                                      className="w-full bg-nexus-surface border border-nexus-border rounded-lg text-nexus-success-text nx-num font-bold text-center cursor-default px-3 h-10 text-base sm:text-sm"
-                                    />
-                                  </div>
-                                  {/* Eliminar fila */}
-                                  <div className="col-span-1 flex justify-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => removeSaleItem(index)}
-                                      disabled={saleForm.items.length === 1}
-                                      className="text-nexus-text-muted hover:text-nexus-error-text transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={addSaleItem}
-                              className="flex items-center gap-1.5 text-xs text-nexus-primary hover:text-nexus-primary-hover font-bold transition-colors"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Agregar producto
-                            </button>
-
-                            {/* Total */}
-                            <div className="flex justify-end pt-2 border-t border-nexus-border">
-                              <div className="bg-nexus-background border border-nexus-border rounded-xl px-5 py-3 flex items-center gap-4">
-                                <span className="text-xs text-nexus-text-secondary font-bold">Total venta</span>
-                                <span className="text-xl font-black text-nexus-success-text nx-num">{saleTotal} Bs</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* ── Sección 3: Pago y estado ── */}
-                          <div className="space-y-3">
-                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Pago & Estado</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {/* Método de pago */}
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1.5">Método de pago *</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                  {['Efectivo', 'Tarjeta', 'QR/Transferencia', 'Pendiente'].map(m => (
-                                    <button
-                                      key={m}
-                                      type="button"
-                                      onClick={() => setSaleForm(p => ({ ...p, paymentMethod: m }))}
-                                      className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${
-                                        saleForm.paymentMethod === m
-                                          ? 'bg-nexus-primary-soft border-nexus-primary text-nexus-primary'
-                                          : 'bg-nexus-background border-nexus-border text-nexus-text-secondary hover:border-nexus-primary/50'
-                                      }`}
-                                    >
-                                      {m}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              {/* Estado */}
-                              <div>
-                                <label className="text-xs text-nexus-text-secondary font-bold block mb-1.5">Estado de la venta *</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                  {[
-                                    { label: 'Pagado',   color: 'bg-nexus-success-bg border-nexus-success/40 text-nexus-success-text' },
-                                    { label: 'Pendiente', color: 'bg-nexus-warning-bg border-nexus-warning/40 text-nexus-warning-text' },
-                                    { label: 'Anulado',  color: 'bg-nexus-error-bg border-nexus-error/40 text-nexus-error-text' },
-                                  ].map(({ label, color }) => (
-                                    <button
-                                      key={label}
-                                      type="button"
-                                      onClick={() => setSaleForm(p => ({ ...p, status: label }))}
-                                      className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${
-                                        saleForm.status === label
-                                          ? color
-                                          : 'bg-nexus-background border-nexus-border text-nexus-text-secondary hover:border-nexus-primary/50'
-                                      }`}
-                                    >
-                                      {label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* ── Sección 4: Observaciones ── */}
-                          <div className="space-y-3">
-                            <h5 className="text-xs text-nexus-primary font-bold nx-num border-b border-nexus-border pb-1">Observaciones</h5>
-                            <textarea
-                              rows="2"
-                              placeholder="Notas internas sobre la venta (opcional)..."
-                              value={saleForm.notes}
-                              onChange={e => setSaleForm(p => ({ ...p, notes: e.target.value }))}
-                              className="w-full bg-nexus-background border border-nexus-border rounded-lg px-3 py-2 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary resize-none"
-                            />
-                          </div>
-
-                        </div>
-
-                        {/* Botones */}
-                        <div className="flex justify-end gap-2.5 pt-4 mt-5 border-t border-nexus-border">
-                          <button
-                            type="button"
-                            onClick={() => setShowSaleModal(false)}
-                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-surface-hover border border-nexus-border text-nexus-text text-sm font-semibold rounded-lg hover:bg-nexus-surface-hover transition-colors cursor-pointer"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleSaveSale}
-                            className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer"
-                          >
-                            Registrar venta
-                          </button>
-                        </div>
-
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tabla de Ventas (Fase 4: tabla en escritorio y tarjetas en celular) */}
-                  <ResponsiveTable
-                    rows={sales}
-                    rowKey={(sale) => sale.id}
-                    breakpoint="lg"
-                    empty={(
-                      <div className="rounded-xl border border-nexus-border bg-nexus-surface">
-                        <EmptyState icon={TrendingUp} title="No existen ventas registradas" />
-                      </div>
-                    )}
-                    columns={[
-                      { key: 'clientName', header: t('client'), primary: true, render: (sale) => <span className="font-semibold text-nexus-text">{sale.clientName}</span> },
-                      { key: 'date', header: 'Fecha', render: (sale) => <span className="nx-num">{sale.date}</span> },
-                      {
-                        key: 'items',
-                        header: 'Productos',
-                        render: (sale) => (
-                          <span className="block whitespace-normal">
-                            {sale.items.map((it, i) => (
-                              <span key={i} className="block">{it.productName} ×{it.qty}</span>
-                            ))}
-                          </span>
-                        ),
-                      },
-                      { key: 'total', header: 'Total', render: (sale) => <span className="nx-num font-bold text-nexus-success-text">{sale.total} Bs</span> },
-                      { key: 'paymentMethod', header: 'Método de pago', render: (sale) => sale.paymentMethod },
-                      { key: 'status', header: 'Estado', render: (sale) => <Badge tone={((st) => (st === 'Disponible' || st === 'Pagado' ? 'success' : st === 'Bajo Stock' || st === 'Pendiente' ? 'warning' : 'danger'))(sale.status)}>{sale.status}</Badge> },
-                    ]}
-                  />
-
-                </div>
-              )}
-
-            </div>
+            <InventoryPage
+              negocioId={negocioId}
+              branches={branches}
+              clients={clients}
+              user={user}
+              onToast={triggerToast}
+            />
           )}
 
           {/* ==========================================
@@ -4604,11 +3785,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
             setIsEditingBusinessName={setIsEditingBusinessName}
             onLogout={logout}
             activeSection={settingsSection === 'automation' && !hasFeature(planFeatures, 'asistenteWhatsapp') ? 'business' : settingsSection}
-            whatsappSettings={whatsappSettings}
-            setWhatsappSettings={setWhatsappSettings}
-            automationLogs={automationLogs}
-            toggleWhatsAppConnection={toggleWhatsAppConnection}
-            handleTestTriggerMessage={handleTestTriggerMessage}
+            onChangeSection={setSettingsSection}
           />
           )}
 
@@ -5585,6 +4762,18 @@ const { businessSettings } = useBusinessSettings(negocioId);
                 />
               </div>
 
+              <ImageUploader
+                label="Foto de la sucursal (opcional)"
+                shape="wide"
+                hint="Ej. la fachada o el interior. Ayuda al cliente a reconocer el local."
+                value={newBranch.image || ''}
+                onChange={(url) => setNewBranch(prev => ({ ...prev, image: url }))}
+                onUploadingChange={setImageUploading}
+                fallback={heroConfig.cover}
+                fallbackLabel="Sin foto propia: se usa la portada del negocio."
+                maxSize={1200}
+              />
+
               <div>
                 <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Teléfono de Sucursal</label>
                 <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg px-2.5 gap-2">
@@ -5720,7 +4909,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   type="submit" 
                   className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
-                  {editingBranchId ? 'Guardar Cambios' : 'Crear Sucursal'}
+                  {imageUploading ? 'Subiendo foto…' : editingBranchId ? 'Guardar Cambios' : 'Crear Sucursal'}
                 </button>
               </div>
             </form>
@@ -5763,6 +4952,15 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
               </div>
+
+              <ImageUploader
+                label={`Foto ${g('service', 'del', 'de la')} ${tl('service')} (opcional)`}
+                hint={heroConfig.showServiceImages === false ? 'Las fotos están ocultas en el link público (puedes activarlas en la pestaña de ' + tl('services') + ').' : 'Se muestra en el link público de reservas.'}
+                value={newService.image || ''}
+                onChange={(url) => setNewService(prev => ({ ...prev, image: url }))}
+                onUploadingChange={setImageUploading}
+                maxSize={900}
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -5877,7 +5075,7 @@ const { businessSettings } = useBusinessSettings(negocioId);
                   type="submit" 
                   className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
-                  {editingServiceId ? 'Guardar Cambios' : `Crear ${t('service')}`}
+                  {imageUploading ? 'Subiendo foto…' : editingServiceId ? 'Guardar Cambios' : `Crear ${t('service')}`}
                 </button>
               </div>
             </form>

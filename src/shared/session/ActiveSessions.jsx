@@ -39,9 +39,9 @@ export default function ActiveSessions() {
   const sesiones = data?.sessions || [];
 
   return (
-    <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 text-left">
-      <h3 className="text-sm font-bold text-nexus-text mb-1">Sesiones activas</h3>
-      <p className="text-xs text-nexus-text-muted mb-3">
+    <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 text-left shadow-[var(--nx-shadow-sm)]">
+      <h3 className="text-base font-semibold text-nexus-text mb-1">Sesiones activas</h3>
+      <p className="text-sm text-nexus-text-secondary mb-3">
         Máximo {data?.maxSessions || 2} dispositivos a la vez. Una sesión sin uso se cierra sola a los {data?.idleDays || 30} días.
       </p>
 
