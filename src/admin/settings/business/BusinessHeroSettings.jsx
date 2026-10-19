@@ -150,7 +150,7 @@ export default function BusinessHeroSettings({ negocioId }) {
                 onChange={(url) => updateImage('cover', url)}
                 onUploadingChange={setCoverUploading}
                 maxSize={1600}
-                hint="Horizontal, ideal 1600×600. Pantalla de inicio y «Más información»."
+                hint="Horizontal, ideal 1600×800 (2:1). Pantalla de inicio y «Más información»."
               />
             </div>
             {imageError && <p className="mt-2 text-xs text-nexus-error-text" role="alert">{imageError}</p>}
