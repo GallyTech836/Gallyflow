@@ -45,7 +45,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
   );
 
   return (
-    <div className={`w-full flex flex-col items-center text-center ${compact ? 'space-y-5' : 'space-y-8'} animate-scale-up`}>
+    <div className={`w-full flex flex-col items-center text-center ${compact ? 'space-y-5' : 'space-y-7'} animate-scale-up`}>
 
       {/* Logo circular con anillo degradado y glow. Con portada, la portada va
           detrás y el logo queda encima, centrado sobre su borde inferior

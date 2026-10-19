@@ -801,7 +801,7 @@ export default function App({ negocioSlug } = {}) {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
-    <div className="min-h-svh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
+    <div className="min-h-dvh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
@@ -809,10 +809,10 @@ export default function App({ negocioSlug } = {}) {
       </div>
       
 
-      {/* min-h-svh: alto real visible en el celular (100vh incluye la barra del
-          navegador y obligaba a deslizar; dvh cambia al ocultarse la barra y
-          hacía saltar el pie). */}
-      <main className="relative z-10 max-w-md mx-auto min-h-svh flex flex-col p-5 sm:p-6 justify-between">
+      {/* min-h-dvh: el pie queda siempre al fondo de lo que se ve (100vh incluye
+          la barra del navegador y obligaba a deslizar; svh dejaba un hueco
+          debajo del pie al ocultarse la barra). */}
+      <main className="relative z-10 max-w-md mx-auto min-h-dvh flex flex-col p-5 sm:p-6 justify-between">
         
         {step > 0 && step < 6 && (
           <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
@@ -849,7 +849,7 @@ export default function App({ negocioSlug } = {}) {
 
         {/* «Más información» tiene su propio pie de página. */}
         {step !== 'info' && (
-          <div className="text-center pt-8 pb-2 text-xs text-nexus-text-muted">
+          <div className="text-center pt-6 pb-1 text-xs text-nexus-text-muted">
             Potenciado por <span className="text-nexus-primary font-semibold">Nexus</span>
           </div>
         )}
@@ -1052,7 +1052,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
     </div>
 
     {/* CONTENEDOR Y BOTÓN: Máxima altura, padding generoso y presencia de pantalla */}
-    <div className="pt-6 border-t border-nexus-border mt-6">
+    <div className="pt-6 mt-2">
       <div className="flex justify-between items-center mb-5 px-1">
         <div>
           <span className="text-nexus-text-secondary text-xs font-bold block">{terms.t('services')} {terms.g('service', 'Seleccionados', 'Seleccionadas')}</span>
@@ -1142,8 +1142,8 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
       </ul>
     </div>
 
-    {/* BOTÓN: Reajustado con el nuevo tamaño dominante */}
-    <div className="pt-6 mt-6 border-t border-nexus-border">
+    {/* BOTÓN: siempre abajo (la lista ya tiene su línea inferior) */}
+    <div className="pt-6 mt-2">
       <button 
         disabled={!selected}
         onClick={onNext}
