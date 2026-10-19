@@ -37,21 +37,17 @@ export default function BusinessHeroPreview({ config }) {
         {/* Portada en «Más información» */}
         <div>
           <p className="text-xs font-medium text-nexus-text-secondary mb-1.5">Portada en «Más información»</p>
-          <div className="rounded-xl border border-nexus-border bg-nexus-surface p-3 space-y-3">
-            {config.cover ? (
-              <img src={config.cover} alt="" className="w-full h-20 object-cover rounded-lg border border-nexus-border" />
-            ) : (
-              <div className="w-full h-20 rounded-lg border border-dashed border-nexus-border flex items-center justify-center text-xs text-nexus-text-muted text-center px-3">
-                Sin portada (no se muestra)
-              </div>
-            )}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 shrink-0 rounded-full bg-nexus-surface border border-nexus-border overflow-hidden flex items-center justify-center">
+          <div className="rounded-xl border border-nexus-border bg-nexus-surface overflow-hidden">
+            <div className="h-20 bg-gradient-to-br from-nexus-primary-soft via-nexus-primary/15 to-nexus-primary/30">
+              {config.cover && <img src={config.cover} alt="" className="w-full h-full object-cover" />}
+            </div>
+            <div className="px-3 pb-3">
+              <div className="-mt-7 w-14 h-14 rounded-full border-[3px] border-nexus-surface bg-nexus-surface overflow-hidden flex items-center justify-center shadow">
                 {config.logo
                   ? <img src={config.logo} alt="" className="w-full h-full object-cover" />
-                  : <Sparkles className="w-4 h-4 text-nexus-primary" aria-hidden="true" />}
+                  : <Sparkles className="w-5 h-5 text-nexus-primary" aria-hidden="true" />}
               </div>
-              <p className="min-w-0 truncate text-sm font-bold text-nexus-text">{config.businessName}</p>
+              <p className="mt-1.5 min-w-0 truncate text-sm font-bold text-nexus-text">{config.businessName}</p>
             </div>
           </div>
         </div>

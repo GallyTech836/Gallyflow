@@ -67,19 +67,23 @@ export default function BusinessInfoPage({
 
       {/* A. Presentación */}
       <header className="space-y-4">
-        {heroConfig?.cover && (
-          <img src={heroConfig.cover} alt="" className="w-full h-32 object-cover rounded-2xl border border-nexus-border" />
-        )}
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 shrink-0 rounded-full bg-nexus-surface border border-nexus-border overflow-hidden flex items-center justify-center">
-            {heroConfig?.logo
-              ? <img src={heroConfig.logo} alt={name} className="w-full h-full object-cover" />
-              : <Sparkles className="text-nexus-primary" size={26} />}
+        {/* Portada + perfil (estilo red social). Sin portada se usa un fondo
+            suave del mismo alto: el perfil queda siempre en el mismo lugar. */}
+        <div className="bg-nexus-surface border border-nexus-border rounded-2xl overflow-hidden shadow-sm">
+          <div className="relative h-32 sm:h-40 bg-gradient-to-br from-nexus-primary-soft via-nexus-primary/15 to-nexus-primary/30">
+            {heroConfig?.cover && (
+              <img src={cloudinaryThumb(heroConfig.cover, 1000)} alt="" className="w-full h-full object-cover" />
+            )}
           </div>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold text-nexus-text leading-tight break-words">{name}</h1>
+          <div className="relative px-5 pb-5">
+            <div className="-mt-12 w-24 h-24 rounded-full border-4 border-nexus-surface bg-nexus-surface overflow-hidden flex items-center justify-center shadow-md">
+              {heroConfig?.logo
+                ? <img src={cloudinaryThumb(heroConfig.logo, 240)} alt={name} className="w-full h-full object-cover" />
+                : <Sparkles className="text-nexus-primary" size={30} />}
+            </div>
+            <h1 className="mt-3 text-2xl font-extrabold text-nexus-text leading-tight break-words">{name}</h1>
             {(heroConfig?.showRating || heroConfig?.highlightText) && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 {heroConfig?.showRating && (
                   <span className="inline-flex items-center gap-1 text-xs font-bold text-nexus-text">
                     <Star size={12} className="text-amber-400 fill-amber-400" />

@@ -18,32 +18,50 @@ import { Sparkles, Star, ChevronRight } from 'lucide-react';
  * `ctaLabel`    → texto del botón, "Reservar ahora" por defecto.
  */
 export default function HeroDisplay({ config, compact = false, onReservar = null, ctaLabel = 'Reservar ahora' }) {
-  const { businessName, slogan, logo, showRating, rating, highlightText } = config;
+  const { businessName, slogan, logo, cover, showRating, rating, highlightText } = config;
+
+  // Logo circular. `onCover`: borde del color de la tarjeta para separarlo de la portada.
+  const renderLogo = (onCover) => (
+    <div className="relative shrink-0">
+      <div
+        className={`absolute inset-0 rounded-full bg-nexus-primary/25 blur-2xl opacity-50 ${
+          compact ? 'scale-100' : 'scale-110'
+        }`}
+      />
+      <div
+        className={`relative rounded-full p-[3px] bg-gradient-to-tr from-nexus-primary via-nexus-accent to-nexus-primary ${
+          onCover ? 'ring-4 ring-nexus-background shadow-lg' : ''
+        } ${compact ? 'w-20 h-20' : 'w-28 h-28 sm:w-32 sm:h-32'}`}
+      >
+        <div className="w-full h-full rounded-full bg-nexus-surface flex items-center justify-center overflow-hidden">
+          {logo ? (
+            <img src={logo} alt={businessName} className="w-full h-full object-cover" />
+          ) : (
+            <Sparkles className="text-nexus-primary" size={compact ? 26 : 40} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className={`w-full flex flex-col items-center text-center ${compact ? 'space-y-5' : 'space-y-8'} animate-scale-up`}>
 
-      {/* Logo circular con anillo degradado y glow, igual a la referencia */}
-      <div className="relative shrink-0">
-        <div
-          className={`absolute inset-0 rounded-full bg-nexus-primary/25 blur-2xl opacity-50 ${
-            compact ? 'scale-100' : 'scale-110'
-          }`}
-        />
-        <div
-          className={`relative rounded-full p-[3px] bg-gradient-to-tr from-nexus-primary via-nexus-accent to-nexus-primary ${
-            compact ? 'w-20 h-20' : 'w-28 h-28 sm:w-32 sm:h-32'
-          }`}
-        >
-          <div className="w-full h-full rounded-full bg-nexus-surface flex items-center justify-center overflow-hidden">
-            {logo ? (
-              <img src={logo} alt={businessName} className="w-full h-full object-cover" />
-            ) : (
-              <Sparkles className="text-nexus-primary" size={compact ? 26 : 40} />
-            )}
+      {/* Logo circular con anillo degradado y glow. Con portada, la portada va
+          detrás y el logo queda encima, centrado sobre su borde inferior
+          (estilo perfil de red social). Sin portada: igual que siempre. */}
+      {cover ? (
+        <div className={`relative w-full ${compact ? 'pb-10' : 'pb-14 sm:pb-16'}`}>
+          <div className={`w-full overflow-hidden rounded-3xl border border-nexus-border shadow-sm bg-nexus-surface-hover ${compact ? 'h-24' : 'h-36 sm:h-44'}`}>
+            <img src={cover} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
+            {renderLogo(true)}
           </div>
         </div>
-      </div>
+      ) : (
+        renderLogo(false)
+      )}
 
       {/* Nombre + separador + eslogan */}
       <div className={compact ? 'space-y-2' : 'space-y-3'}>
