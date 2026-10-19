@@ -120,7 +120,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
       )}
 
       {/* CTA — botón funcional en ClienteApp, vista previa inerte en Admin */}
-      <div className="w-full pt-1">
+      <div className={`w-full ${compact ? 'pt-1' : 'pt-5'}`}>
         {onReservar ? (
           <button
             type="button"

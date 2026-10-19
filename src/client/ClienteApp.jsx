@@ -801,7 +801,7 @@ export default function App({ negocioSlug } = {}) {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
-    <div className="min-h-screen bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
+    <div className="min-h-dvh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
@@ -809,7 +809,9 @@ export default function App({ negocioSlug } = {}) {
       </div>
       
 
-      <main className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col p-5 sm:p-6 justify-between">
+      {/* min-h-dvh: alto real visible en el celular (100vh incluye la barra del
+          navegador y obligaba a deslizar para ver el pie). */}
+      <main className="relative z-10 max-w-md mx-auto min-h-dvh flex flex-col p-5 sm:p-6 justify-between">
         
         {step > 0 && step < 6 && (
           <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
@@ -879,8 +881,11 @@ export default function App({ negocioSlug } = {}) {
 
 const Home = ({ onNext, onInfo, heroConfig, branches = [], proName = '' }) => {
   const terms = useBusinessTerms();
+  // Con portada, todo arranca arriba (la portada toca el borde superior);
+  // sin portada se mantiene centrado como siempre.
+  const hasCover = !!(heroConfig || DEFAULT_HERO_CONFIG).cover;
   return (
-  <div className="flex-1 flex flex-col justify-center items-center text-center py-10 animate-scale-up">
+  <div className={`flex-1 flex flex-col items-center text-center animate-scale-up ${hasCover ? 'justify-start' : 'justify-center py-10'}`}>
     <HeroDisplay
       config={heroConfig || DEFAULT_HERO_CONFIG}
       onReservar={onNext}
