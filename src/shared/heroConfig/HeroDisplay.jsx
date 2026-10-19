@@ -52,7 +52,9 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
           (estilo perfil de red social). Sin portada: igual que siempre. */}
       {cover ? (
         <div className={`relative w-full ${compact ? 'pb-10' : 'pb-14 sm:pb-16'}`}>
-          <div className={`w-full overflow-hidden rounded-3xl border border-nexus-border shadow-sm bg-nexus-surface-hover ${compact ? 'h-24' : 'h-36 sm:h-44'}`}>
+          {/* Portada a todo el ancho, sin bordes redondeados (igual que en
+              «Más información»). La vista previa del admin también tiene px-5. */}
+          <div className={`overflow-hidden bg-nexus-surface-hover ${compact ? '-mx-5 h-24' : '-mx-5 sm:-mx-6 h-36 sm:h-44'}`}>
             <img src={cover} alt="" className="w-full h-full object-cover" />
           </div>
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2">

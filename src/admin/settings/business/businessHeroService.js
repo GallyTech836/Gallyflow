@@ -17,3 +17,14 @@ export async function saveHeroConfig(negocioId, data) {
   await setDoc(ref, { heroConfig: clean }, { merge: true });
   return clean;
 }
+
+/**
+ * Guarda al instante solo el logo o la portada ('' = quitar la foto), sin
+ * tocar los demás campos del formulario que aún no se guardaron.
+ */
+export async function saveHeroImage(negocioId, field, url) {
+  if (!negocioId) throw new Error('negocioId es requerido para guardar heroConfig.');
+  if (field !== 'logo' && field !== 'cover') throw new Error(`Campo de imagen no válido: ${field}`);
+  const ref = doc(db, 'negocios', negocioId);
+  await setDoc(ref, { heroConfig: { [field]: typeof url === 'string' ? url.trim() : '' } }, { merge: true });
+}

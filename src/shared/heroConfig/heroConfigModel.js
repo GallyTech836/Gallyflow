@@ -21,6 +21,17 @@ export const DEFAULT_HERO_CONFIG = {
 };
 
 /**
+ * Descripción pública del negocio: el eslogan que escribió el dueño. Si es
+ * el texto genérico por defecto (o está vacío) devuelve '' y la página no
+ * muestra descripción: nunca se rellena con texto de marketing inventado.
+ */
+export function heroDescription(config) {
+  const slogan = String(config?.slogan || '').trim();
+  if (!slogan || slogan === DEFAULT_HERO_CONFIG.slogan) return '';
+  return slogan;
+}
+
+/**
  * Normaliza cualquier dato crudo proveniente de Firestore (o de un
  * formulario) al shape completo y seguro de heroConfig. Si falta un campo,
  * o viene con un tipo inválido, cae al valor por defecto correspondiente

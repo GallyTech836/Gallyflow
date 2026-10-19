@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { LayoutTemplate, Save, Loader as Loader2, Star, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useHeroConfig } from '../../../shared/heroConfig/useHeroConfig';
 import { ImageUploader } from '../../../shared/ui';
-import { saveHeroConfig } from './businessHeroService';
+import { saveHeroConfig, saveHeroImage } from './businessHeroService';
 import BusinessHeroPreview from './BusinessHeroPreview';
 
 // Link Público: lo que el cliente ve antes de reservar.
@@ -57,6 +57,23 @@ export default function BusinessHeroSettings({ negocioId }) {
   const update = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setSaved(false);
+  };
+
+  // Logo y portada se guardan apenas se suben o se quitan (antes quedaban
+  // solo en el formulario hasta tocar "Guardar cambios" y, al recargar,
+  // volvía a aparecer la imagen anterior).
+  const [imageError, setImageError] = useState('');
+  const updateImage = async (field, url) => {
+    setForm((prev) => ({ ...prev, [field]: url }));
+    setImageError('');
+    if (!negocioId) return;
+    try {
+      await saveHeroImage(negocioId, field, url);
+    } catch (err) {
+      console.error('Error al guardar la imagen:', err);
+      setImageError('No se pudo guardar la imagen. Toca "Guardar cambios" para reintentar.');
+      setSaved(false);
+    }
   };
 
   const handleSave = async () => {
@@ -121,7 +138,7 @@ export default function BusinessHeroSettings({ negocioId }) {
               <ImageUploader
                 label="Logo"
                 value={form.logo}
-                onChange={(url) => update('logo', url)}
+                onChange={(url) => updateImage('logo', url)}
                 onUploadingChange={setLogoUploading}
                 maxSize={512}
                 hint="Cuadrado, ideal 512×512. Pantalla de inicio y Cuenta y plan."
@@ -130,12 +147,13 @@ export default function BusinessHeroSettings({ negocioId }) {
                 label="Portada"
                 shape="wide"
                 value={form.cover}
-                onChange={(url) => update('cover', url)}
+                onChange={(url) => updateImage('cover', url)}
                 onUploadingChange={setCoverUploading}
                 maxSize={1600}
                 hint="Horizontal, ideal 1600×600. Pantalla de inicio y «Más información»."
               />
             </div>
+            {imageError && <p className="mt-2 text-xs text-nexus-error-text" role="alert">{imageError}</p>}
           </SectionCard>
 
           <SectionCard

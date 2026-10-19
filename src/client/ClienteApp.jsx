@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Sparkles, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
+import { Sparkles, Tag, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
@@ -844,9 +844,12 @@ export default function App({ negocioSlug } = {}) {
           {renderStep()}
         </div>
 
-        <div className="text-center pt-8 pb-2 text-xs text-nexus-text-muted">
-          Potenciado por <span className="text-nexus-primary font-semibold">Nexus</span>
-        </div>
+        {/* «Más información» tiene su propio pie de página. */}
+        {step !== 'info' && (
+          <div className="text-center pt-8 pb-2 text-xs text-nexus-text-muted">
+            Potenciado por <span className="text-nexus-primary font-semibold">Nexus</span>
+          </div>
+        )}
       </main>
       <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 max-w-xs">
         {toasts.map(t => (
@@ -914,76 +917,68 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
       {branches.length === 0 ? (
         <p className="text-center py-8 text-xs text-nexus-text-muted">No hay sucursales disponibles por el momento.</p>
       ) : (
-        <div className="space-y-3.5">
+        <ul className="divide-y divide-nexus-border border-y border-nexus-border">
           {branches.map((b) => {
             // Solo la foto propia del local (la portada del negocio no se usa aquí).
             const foto = b.image || '';
             const isSel = selected?.id === b.id;
+            const elegir = () => { setSelected(b); onNext(); };
             return (
-            <div
+            <li
               key={b.id}
               role="button"
               tabIndex={0}
-              onClick={() => {
-                setSelected(b);
-                onNext();
-              }}
+              aria-pressed={isSel}
+              onClick={elegir}
               onKeyDown={(e) => {
                 if (e.target !== e.currentTarget) return;
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(b); onNext(); }
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); elegir(); }
               }}
-              className={`rounded-2xl border-2 transition-all cursor-pointer overflow-hidden ${
-                isSel
-                  ? 'border-nexus-primary bg-nexus-primary-soft'
-                  : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/40'
-              }`}
+              className="flex items-start gap-4 py-4 cursor-pointer transition-colors hover:bg-nexus-surface-hover/60"
             >
-              {foto && (
-                <div className="relative h-28 w-full bg-nexus-surface-hover">
-                  <img src={cloudinaryThumb(foto, 800)} alt={`Sucursal ${b.name}`} className="h-full w-full object-cover" loading="lazy" />
-                  {isSel && (
-                    <div className="absolute top-2.5 right-2.5 w-6 h-6 bg-nexus-primary rounded-full flex items-center justify-center text-white shadow">
-                      <Check size={14} strokeWidth={3} />
-                    </div>
-                  )}
+              {foto ? (
+                <img src={cloudinaryThumb(foto, 300)} alt={`Sucursal ${b.name}`} className="w-20 h-16 rounded-lg object-cover border border-nexus-border shrink-0" loading="lazy" />
+              ) : (
+                <div className="w-20 h-16 rounded-lg bg-nexus-surface-hover border border-nexus-border flex items-center justify-center text-nexus-text-muted shrink-0">
+                  <MapPin size={20} />
                 </div>
               )}
-              <div className="p-4 flex items-start gap-3.5">
-                {!foto && (
-                  <div className="w-10 h-10 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary shrink-0">
-                    <MapPin size={18} />
-                  </div>
+              <div className="text-left flex-1 min-w-0">
+                <h3 className={`text-[15px] font-semibold break-words ${isSel ? 'text-nexus-primary' : 'text-nexus-text'}`}>{b.name}</h3>
+                {b.address && (
+                  <p className="text-nexus-text-secondary text-sm mt-0.5 leading-snug break-words">{b.address}</p>
                 )}
-                <div className="text-left flex-1 min-w-0">
-                  <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
-                  {b.address && (
-                    <p className="text-nexus-text-secondary text-xs mt-0.5">{b.address}</p>
-                  )}
-                  {b.schedule && (
-                    <p className="text-nexus-primary text-xs font-bold mt-1 flex items-center gap-1">
-                      <Clock3 size={10} /> {b.schedule}
-                    </p>
-                  )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <DirectionsButton branch={b} compact />
-                    <WhatsAppButton phone={b.phone} message={`Hola, quiero consultar sobre ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}.`} compact />
-                  </div>
+                {b.schedule && (
+                  <p className="text-nexus-text-secondary text-sm mt-1 flex items-center gap-1.5">
+                    <Clock3 size={14} className="text-nexus-text-muted shrink-0" /> {b.schedule}
+                  </p>
+                )}
+                <div className="mt-2.5 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <DirectionsButton branch={b} compact />
+                  <WhatsAppButton phone={b.phone} message={`Hola, quiero consultar sobre ${terms.g('appointment', 'un', 'una')} ${terms.tl('appointment')}.`} compact />
                 </div>
-                {!foto && isSel && (
-                  <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white shrink-0">
-                    <Check size={12} strokeWidth={3} />
-                  </div>
-                )}
               </div>
-            </div>
+              <SelectMark selected={isSel} className="mt-1" />
+            </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   </div>
   );
 };
+
+/** Círculo de selección de las filas de los pasos de reserva. */
+const SelectMark = ({ selected, className = '' }) => (
+  selected ? (
+    <span className={`w-5 h-5 shrink-0 rounded-full bg-nexus-primary flex items-center justify-center text-white ${className}`}>
+      <Check size={12} strokeWidth={3} />
+    </span>
+  ) : (
+    <span className={`w-5 h-5 shrink-0 rounded-full border-2 border-nexus-border ${className}`} />
+  )
+);
 
 const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [], showImages = true }) => {
   const terms = useBusinessTerms();
@@ -993,63 +988,61 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
       <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona {terms.t('services')}</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir múltiples {terms.tl('services')} para tu {terms.tl('appointment')}.</p>
       
-      <div className="space-y-3 max-h-[44vh] overflow-y-auto pr-1 no-scrollbar pb-4">
+      <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
         {services.map((s) => {
-          const isSelected = selected.find(serv => serv.id === s.id);
-          const isTodayTuesday = new Date().getDay() === 2; 
-          
+          const isSelected = !!selected.find(serv => serv.id === s.id);
+          const isTodayTuesday = new Date().getDay() === 2;
+          const enPromo = isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null);
+
           return (
-            <div 
-              key={s.id} 
-              onClick={() => toggle(s)}
-              className={`p-4 rounded-2xl border-2 transition-all duration-350 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
-                isSelected 
-                  ? 'border-nexus-primary bg-nexus-primary-soft shadow-sm' 
-                  : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/30'
-              }`}
-            >
-              {isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null) && (
-                <div className="absolute top-2.5 right-2.5 bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
-                  Promo Hoy
-                </div>
-              )}
-
-              <div className="flex justify-between items-start gap-3">
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => toggle(s)}
+                aria-pressed={isSelected}
+                className="w-full flex items-center gap-3 py-3.5 text-left cursor-pointer transition-colors hover:bg-nexus-surface-hover/60"
+              >
                 {showImages && s.image && (
-                  <img src={cloudinaryThumb(s.image, 200)} alt="" className="w-16 h-16 rounded-xl object-cover border border-nexus-border shrink-0" loading="lazy" />
+                  <img src={cloudinaryThumb(s.image, 200)} alt="" className="w-12 h-12 rounded-lg object-cover border border-nexus-border shrink-0" loading="lazy" />
                 )}
-                <div className="space-y-0.5 pr-8 flex-1 min-w-0">
-                  <h3 className={`font-bold text-sm ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</h3>
-                  <p className="text-nexus-text-secondary text-xs leading-relaxed line-clamp-2">{s.description}</p>
-                </div>
-                {isSelected ? (
-                  <div className="w-5 h-5 rounded-full bg-nexus-primary flex items-center justify-center text-white">
-                    <Check size={12} strokeWidth={3} />
-                  </div>
-                ) : (
-                  <div className="w-5 h-5 rounded-full border border-nexus-border" />
-                )}
-              </div>
-
-              <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-nexus-border">
-                <span className="text-xs text-nexus-text-muted flex items-center gap-1">
-                  <Clock size={10} /> {s.duration}
-                </span>
-                <div>
-                  {isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null) ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-nexus-text-muted line-through">{s.price} Bs</span>
-                      <span className="text-xs font-bold text-nexus-success-text">{s.promoPrice} Bs</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs font-bold text-nexus-text">{formatServicePriceFor(s, { professional, professionals })}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className={`text-[15px] font-semibold break-words ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</span>
+                    {enPromo && (
+                      <span className="rounded-md bg-nexus-primary-soft px-1.5 py-0.5 text-xs font-bold text-nexus-primary">Promo hoy</span>
+                    )}
+                  </span>
+                  {s.description && (
+                    <span className="block mt-0.5 text-nexus-text-secondary text-xs leading-relaxed line-clamp-2">{s.description}</span>
                   )}
-                </div>
-              </div>
-            </div>
+                  <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-nexus-text-secondary nx-num">
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                      <Tag size={14} className="text-nexus-text-muted" />
+                      {enPromo ? (
+                        <>
+                          <span className="text-nexus-text-muted line-through">{s.price} Bs</span>
+                          <span className="font-semibold text-nexus-success-text">{s.promoPrice} Bs</span>
+                        </>
+                      ) : (
+                        formatServicePriceFor(s, { professional, professionals })
+                      )}
+                    </span>
+                    {s.duration && (
+                      <>
+                        <span aria-hidden="true" className="text-nexus-text-muted">·</span>
+                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                          <Clock size={14} className="text-nexus-text-muted" /> {s.duration}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </span>
+                <SelectMark selected={isSelected} />
+              </button>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
 
     {/* CONTENEDOR Y BOTÓN: Máxima altura, padding generoso y presencia de pantalla */}
@@ -1085,66 +1078,62 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
       <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Selecciona {terms.t('professional')}</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Elige {terms.g('professional', 'un', 'una')} {terms.tl('professional')} o selecciona la opción pendiente para agilizar tu turno.</p>
       
-      <div className="space-y-3.5">
-        {barbers.map((b) => (
-          <div 
-            key={b.id} 
-            onClick={() => setSelected(b)}
-            className={`p-3.5 rounded-2xl border-2 transition-all duration-300 cursor-pointer flex items-center gap-4 ${
-              selected?.id === b.id 
-                ? 'border-nexus-primary bg-nexus-primary-soft' 
-                : 'border-nexus-border bg-nexus-surface hover:border-nexus-primary/40'
-            }`}
-          >
-            {b.isPending ? (
-              <div className="w-14 h-14 rounded-xl bg-nexus-primary-soft border border-nexus-primary/30 flex items-center justify-center text-nexus-primary">
-                <Sparkles size={24} className="animate-pulse" />
-              </div>
-            ) : (
-              <Avatar src={b.image} name={b.name} className="w-14 h-14 rounded-xl object-cover border border-nexus-border" textClassName="text-base" />
-            )}
-            
-            <div className="flex-1 text-left">
-              <h3 className="font-bold text-sm text-nexus-text">{b.name}</h3>
-              {(b.isPending || b.specialty) && (
-                <p className="text-nexus-text-secondary text-xs mt-0.5">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
+      <ul className="divide-y divide-nexus-border border-y border-nexus-border">
+        {barbers.map((b) => {
+          const isSel = selected?.id === b.id;
+          return (
+          <li key={b.id}>
+            <button
+              type="button"
+              onClick={() => setSelected(b)}
+              aria-pressed={isSel}
+              className="w-full flex items-center gap-4 py-3 text-left cursor-pointer transition-colors hover:bg-nexus-surface-hover/60"
+            >
+              {b.isPending ? (
+                <div className="w-16 h-16 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary shrink-0">
+                  <Sparkles size={22} />
+                </div>
+              ) : (
+                <Avatar src={b.image} name={b.name} className="w-16 h-16 aspect-square rounded-lg object-cover border border-nexus-border shrink-0" textClassName="text-lg" />
               )}
-              {(() => {
-                // Precio de sus servicios (en vez de la calificación de ejemplo).
-                const precios = pricesOf(b);
-                if (!precios.length) return null;
-                if (highlightService) {
-                  const p0 = precios[0];
+
+              <div className="flex-1 min-w-0">
+                <h3 className={`text-[15px] font-semibold break-words ${isSel ? 'text-nexus-primary' : 'text-nexus-text'}`}>{b.name}</h3>
+                {(b.isPending || b.specialty) && (
+                  <p className="text-nexus-text-secondary text-sm mt-0.5 leading-snug">{b.isPending ? `Asignar ${terms.g('professional', 'al', 'a la')} ${terms.tl('professional')} disponible más rápido` : b.specialty}</p>
+                )}
+                {(() => {
+                  // Precio de sus servicios (en vez de la calificación de ejemplo).
+                  const precios = pricesOf(b);
+                  if (!precios.length) return null;
+                  if (highlightService) {
+                    const p0 = precios[0];
+                    return (
+                      <p className="mt-1 text-sm text-nexus-text-secondary">
+                        {p0.name}: <span className="nx-num font-semibold text-nexus-primary">{p0.price}</span>
+                      </p>
+                    );
+                  }
+                  const visibles = precios.slice(0, 3);
                   return (
-                    <p className="mt-1 text-xs text-nexus-text-secondary">
-                      {p0.name}: <span className="nx-num font-bold text-nexus-primary">{p0.price}</span>
+                    <p className="mt-1 text-xs text-nexus-text-secondary leading-relaxed">
+                      {visibles.map((x, i) => (
+                        <span key={x.id}>
+                          {i > 0 && ' · '}{x.name} <span className="nx-num font-semibold text-nexus-text">{x.price}</span>
+                        </span>
+                      ))}
+                      {precios.length > visibles.length && <span className="text-nexus-text-muted"> · +{precios.length - visibles.length} más</span>}
                     </p>
                   );
-                }
-                const visibles = precios.slice(0, 3);
-                return (
-                  <p className="mt-1 text-xs text-nexus-text-secondary leading-relaxed">
-                    {visibles.map((x, i) => (
-                      <span key={x.id}>
-                        {i > 0 && ' · '}{x.name} <span className="nx-num font-bold text-nexus-text">{x.price}</span>
-                      </span>
-                    ))}
-                    {precios.length > visibles.length && <span className="text-nexus-text-muted"> · +{precios.length - visibles.length} más</span>}
-                  </p>
-                );
-              })()}
-            </div>
-            
-            {selected?.id === b.id ? (
-              <div className="w-5 h-5 bg-nexus-primary rounded-full flex items-center justify-center text-white">
-                <Check size={12} strokeWidth={3} />
+                })()}
               </div>
-            ) : (
-              <div className="w-5 h-5 rounded-full border border-nexus-border" />
-            )}
-          </div>
-        ))}
-      </div>
+
+              <SelectMark selected={isSel} />
+            </button>
+          </li>
+          );
+        })}
+      </ul>
     </div>
 
     {/* BOTÓN: Reajustado con el nuevo tamaño dominante */}

@@ -7,7 +7,7 @@
 
 import { getServiceAssignment } from '../shared/servicePricing/professionalPricing.js';
 import { buildWhatsAppUrl } from '../shared/location/whatsappLink.js';
-import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel.js';
+import { heroDescription } from '../shared/heroConfig/heroConfigModel.js';
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DIAS_CORTOS = { Lunes: 'Lun', Martes: 'Mar', Miércoles: 'Mié', Jueves: 'Jue', Viernes: 'Vie', Sábado: 'Sáb', Domingo: 'Dom' };
@@ -39,9 +39,7 @@ export function visibleServices(services = [], professionals = []) {
 
 /** Descripción del negocio: el eslogan, salvo que sea el texto genérico por defecto. */
 export function businessDescription(heroConfig) {
-  const slogan = String(heroConfig?.slogan || '').trim();
-  if (!slogan || slogan === DEFAULT_HERO_CONFIG.slogan) return '';
-  return slogan;
+  return heroDescription(heroConfig);
 }
 
 function textoDia(d) {
