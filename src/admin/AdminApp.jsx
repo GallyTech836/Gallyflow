@@ -3581,14 +3581,14 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {filteredBranchesList.map(b => (
                     <div key={b?.id} className="bg-nexus-surface border border-nexus-border rounded-xl overflow-hidden flex flex-col justify-between shadow-sm min-w-0">
                       <div className="relative h-28 bg-nexus-primary-soft">
-                        {(b?.image || heroConfig.cover) ? (
-                          <img src={cloudinaryThumb(b?.image || heroConfig.cover, 700)} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        {b?.image ? (
+                          <img src={cloudinaryThumb(b.image, 700)} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-nexus-primary/60"><Building2 className="w-8 h-8" aria-hidden="true" /></div>
                         )}
                         {!b?.image && (
                           <span className="absolute bottom-2 left-2 rounded-md bg-black/55 px-2 py-0.5 text-xs font-medium text-white">
-                            {heroConfig.cover ? 'Portada del negocio' : 'Sin foto'}
+                            Sin foto del local
                           </span>
                         )}
                       </div>
@@ -4765,12 +4765,10 @@ const { heroConfig } = useHeroConfig(negocioId);
               <ImageUploader
                 label="Foto de la sucursal (opcional)"
                 shape="wide"
-                hint="Ej. la fachada o el interior. Ayuda al cliente a reconocer el local."
+                hint="Foto del local: la fachada o el interior. Ayuda al cliente a reconocerlo."
                 value={newBranch.image || ''}
                 onChange={(url) => setNewBranch(prev => ({ ...prev, image: url }))}
                 onUploadingChange={setImageUploading}
-                fallback={heroConfig.cover}
-                fallbackLabel="Sin foto propia: se usa la portada del negocio."
                 maxSize={1200}
               />
 

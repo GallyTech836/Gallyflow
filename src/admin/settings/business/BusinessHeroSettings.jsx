@@ -7,7 +7,7 @@ import BusinessHeroPreview from './BusinessHeroPreview';
 
 // Link Público: lo que el cliente ve antes de reservar.
 // El logo y la portada se configuran SOLO aquí; "Cuenta y plan", las
-// sucursales sin foto y la página "Más información" los toman de aquí solos.
+// la pantalla de inicio y la página "Más información" los toman de aquí solos.
 
 const inputClass =
   'w-full bg-nexus-background border border-nexus-border text-nexus-text rounded-lg h-10 text-base sm:text-sm px-3 outline-none focus:border-nexus-primary transition-colors placeholder:text-nexus-text-muted';
@@ -133,7 +133,7 @@ export default function BusinessHeroSettings({ negocioId }) {
                 onChange={(url) => update('cover', url)}
                 onUploadingChange={setCoverUploading}
                 maxSize={1600}
-                hint="Horizontal, ideal 1600×600. «Más información» y sucursales sin foto."
+                hint="Horizontal, ideal 1600×600. Pantalla de inicio y «Más información»."
               />
             </div>
           </SectionCard>

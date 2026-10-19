@@ -708,7 +708,6 @@ export default function App({ negocioSlug } = {}) {
       />;
       case 1: return <BranchStep 
         branches={branches}
-        coverFallback={(heroConfig || DEFAULT_HERO_CONFIG).cover}
         selected={selectedBranch}
         setSelected={setSelectedBranch}
         onNext={() => setStep(2)}
@@ -904,7 +903,7 @@ const Home = ({ onNext, onInfo, heroConfig, branches = [], proName = '' }) => {
   );
 };
 
-const BranchStep = ({ branches, selected, setSelected, onNext, coverFallback = '' }) => {
+const BranchStep = ({ branches, selected, setSelected, onNext }) => {
   const terms = useBusinessTerms();
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
@@ -917,7 +916,8 @@ const BranchStep = ({ branches, selected, setSelected, onNext, coverFallback = '
       ) : (
         <div className="space-y-3.5">
           {branches.map((b) => {
-            const foto = b.image || coverFallback;
+            // Solo la foto propia del local (la portada del negocio no se usa aquí).
+            const foto = b.image || '';
             const isSel = selected?.id === b.id;
             return (
             <div
