@@ -801,7 +801,7 @@ export default function App({ negocioSlug } = {}) {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
-    <div className="min-h-dvh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
+    <div className="min-h-svh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
@@ -809,9 +809,10 @@ export default function App({ negocioSlug } = {}) {
       </div>
       
 
-      {/* min-h-dvh: alto real visible en el celular (100vh incluye la barra del
-          navegador y obligaba a deslizar para ver el pie). */}
-      <main className="relative z-10 max-w-md mx-auto min-h-dvh flex flex-col p-5 sm:p-6 justify-between">
+      {/* min-h-svh: alto real visible en el celular (100vh incluye la barra del
+          navegador y obligaba a deslizar; dvh cambia al ocultarse la barra y
+          hacía saltar el pie). */}
+      <main className="relative z-10 max-w-md mx-auto min-h-svh flex flex-col p-5 sm:p-6 justify-between">
         
         {step > 0 && step < 6 && (
           <div className="mb-6 animate-fade-in bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
