@@ -5,7 +5,7 @@ import { runAssistant } from '../services/assistantEngine/router.js';
 import * as whatsappProvider from '../services/providers/whatsappProvider.js';
 import { logger } from '../utils/logger.js';
 import {
-  checkCapability, incrementUsage, incrementRejected, checkClientLimit, incrementClientUsage,
+  checkCapability, incrementUsage, incrementRejected, resolveUsageBranch, checkBranchLimit, incrementBranchUsage, incrementClientUsage,
 } from '../services/capabilities/capabilityService.js';
 import { updateConversation } from '../services/appointments/conversationState.js';
 
@@ -89,19 +89,23 @@ async function procesarMensaje(value, mensaje) {
     if (permiso.reason === 'limite_alcanzado') incrementRejected(cuenta.negocioId, permiso.usageKey);
     return;
   }
-  // Límite POR CLIENTE: respuestas que el bot le envía a este celular en el mes.
-  // Si ya llegó, el bot no le responde (los demás clientes siguen normales).
-  const limiteCliente = permiso.limit ?? null;
-  const porCliente = await checkClientLimit(cuenta.negocioId, from, limiteCliente);
-  if (!porCliente.allowed) {
-    logger.warn(`[whatsappWebhook] Cliente alcanzó ${porCliente.limit} respuestas del mes (${cuenta.negocioId})`);
+  // Límite POR SUCURSAL: respuestas que el bot envía desde el número de esta
+  // sucursal en el mes. Si ya llegó, el bot no responde en ese número (las
+  // demás sucursales siguen normales).
+  const limiteSucursal = permiso.limit ?? null;
+  const sucursal = await resolveUsageBranch(cuenta.negocioId, cuenta.branch);
+  const porSucursal = await checkBranchLimit(cuenta.negocioId, sucursal.id, limiteSucursal);
+  if (!porSucursal.allowed) {
+    logger.warn(`[whatsappWebhook] Sucursal ${sucursal.id} alcanzó ${porSucursal.limit} respuestas del mes (${cuenta.negocioId})`);
     incrementRejected(cuenta.negocioId, 'whatsappMensajes');
     return;
   }
-  // Cada mensaje que el bot envía cuenta: total del negocio (dato) + el del cliente (límite).
+  // Cada mensaje que el bot envía cuenta: total del negocio y por cliente
+  // (datos) + el de la sucursal (límite).
   const contarEnvio = () => Promise.all([
     incrementUsage(cuenta.negocioId, 'whatsappMensajes', 1),
-    incrementClientUsage(cuenta.negocioId, from, limiteCliente),
+    incrementBranchUsage(cuenta.negocioId, sucursal, limiteSucursal),
+    incrementClientUsage(cuenta.negocioId, from),
   ]);
 
   whatsappProvider.markAsRead(mensaje.id, envio); // sin await: no retrasa la respuesta

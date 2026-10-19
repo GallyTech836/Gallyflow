@@ -133,51 +133,115 @@ export async function incrementRejected(negocioId, usageKey, amount = 1) {
   }
 }
 
-// ───────────── Límite mensual por cliente (ej. respuestas de WhatsApp) ─────────────
+// ───────────── Límite mensual por sucursal (respuestas de WhatsApp) ─────────────
+//
+// Cada número de WhatsApp está vinculado a una sucursal (whatsappAccounts.branch
+// guarda su NOMBRE). El consumo se cuenta por el ID de la sucursal, para que
+// renombrarla no parta el conteo del mes:
+//   negocios/{id}/uso/{AAAA-MM}/sucursales/{sucursalId} = { enviados, nombre }
+// Si el número no tiene sucursal y el negocio tiene UNA sola, se usa esa.
+// Si no se puede saber (varias sucursales y número sin vincular, o ninguna),
+// se cuenta en sucursales/sin-sucursal, que también tiene el límite.
+
+export const NO_BRANCH_ID = 'sin-sucursal';
+const SUCURSAL_CACHE_MS = 60 * 1000;
+const cacheSucursales = new Map();
 
 const soloDigitos = (v) => String(v || '').replace(/\D/g, '').slice(0, 20);
 
-function clientUsageRef(negocioId, clientId, period = currentPeriod()) {
-  return usageRef(negocioId, period).collection('clientes').doc(soloDigitos(clientId) || 'desconocido');
+async function sucursalesActivas(negocioId, { fresh = false } = {}) {
+  const enCache = cacheSucursales.get(negocioId);
+  if (!fresh && enCache && Date.now() - enCache.at < SUCURSAL_CACHE_MS) return enCache.data;
+  const snap = await db.collection('negocios').doc(negocioId).collection('sucursales').get();
+  const data = snap.docs
+    .map((d) => ({ id: d.id, name: d.data()?.name || '', active: d.data()?.active !== false }))
+    .filter((s) => s.active);
+  cacheSucursales.set(negocioId, { at: Date.now(), data });
+  return data;
 }
 
 /**
- * ¿Este cliente (celular) todavía tiene respuestas disponibles este mes?
+ * Sucursal a la que se le cuenta el consumo de un número.
+ * Nunca lanza: ante un error de lectura cae en sin-sucursal.
+ * @returns {Promise<{ id: string, name: string }>}
+ */
+export async function resolveUsageBranch(negocioId, branchName) {
+  try {
+    let sucursales = await sucursalesActivas(negocioId);
+    const nombre = String(branchName || '').trim();
+    if (nombre) {
+      let s = sucursales.find((x) => x.name === nombre);
+      // Sucursal recién creada o renombrada: se relee sin esperar la caché.
+      if (!s) {
+        sucursales = await sucursalesActivas(negocioId, { fresh: true });
+        s = sucursales.find((x) => x.name === nombre);
+      }
+      if (s) return { id: s.id, name: s.name };
+    }
+    if (sucursales.length === 1) return { id: sucursales[0].id, name: sucursales[0].name };
+  } catch (err) {
+    logger.warn(`[capabilities] No se pudo leer sucursales (${negocioId}):`, err.message);
+  }
+  return { id: NO_BRANCH_ID, name: 'Sin sucursal asignada' };
+}
+
+function branchUsageRef(negocioId, branchId, period = currentPeriod()) {
+  return usageRef(negocioId, period).collection('sucursales').doc(String(branchId || NO_BRANCH_ID));
+}
+
+/**
+ * ¿Esta sucursal todavía tiene respuestas disponibles este mes?
  * limit null = sin límite. Ante un error de lectura se permite (no cortar el servicio).
  * @returns {{ allowed: boolean, used: number, limit: number|null }}
  */
-export async function checkClientLimit(negocioId, clientId, limit) {
+export async function checkBranchLimit(negocioId, branchId, limit) {
   if (limit === null || limit === undefined) return { allowed: true, used: 0, limit: null };
   try {
-    const snap = await clientUsageRef(negocioId, clientId).get();
+    const snap = await branchUsageRef(negocioId, branchId).get();
     const used = snap.exists ? Number(snap.data().enviados) || 0 : 0;
     return { allowed: used < limit, used, limit };
   } catch (err) {
-    logger.warn(`[capabilities] No se pudo leer consumo del cliente (${negocioId}):`, err.message);
+    logger.warn(`[capabilities] No se pudo leer consumo de la sucursal (${negocioId}):`, err.message);
     return { allowed: true, used: 0, limit };
   }
 }
 
 /**
- * Suma una respuesta enviada a este cliente. Si con esta llega justo al
- * límite, suma 1 a uso/{AAAA-MM}.clientesAlLimite (se ve en Super Admin).
+ * Suma una respuesta enviada desde el número de esta sucursal. Si con esta
+ * llega justo al límite, suma 1 a uso/{AAAA-MM}.sucursalesAlLimite.
  * Nunca lanza.
  */
-export async function incrementClientUsage(negocioId, clientId, limit) {
-  if (!negocioId || !clientId) return;
+export async function incrementBranchUsage(negocioId, branch, limit) {
+  if (!negocioId) return;
   const period = currentPeriod();
+  const id = branch?.id || NO_BRANCH_ID;
   try {
     await db.runTransaction(async (tx) => {
-      const ref = clientUsageRef(negocioId, clientId, period);
+      const ref = branchUsageRef(negocioId, id, period);
       const snap = await tx.get(ref);
       const enviados = (snap.exists ? Number(snap.data().enviados) || 0 : 0) + 1;
-      tx.set(ref, { enviados, updatedAt: new Date().toISOString() }, { merge: true });
+      tx.set(ref, { enviados, nombre: branch?.name || '', updatedAt: new Date().toISOString() }, { merge: true });
       if (typeof limit === 'number' && enviados === limit) {
         tx.set(usageRef(negocioId, period), {
-          periodo: period, clientesAlLimite: FieldValue.increment(1), updatedAt: new Date().toISOString(),
+          periodo: period, sucursalesAlLimite: FieldValue.increment(1), updatedAt: new Date().toISOString(),
         }, { merge: true });
       }
     });
+  } catch (err) {
+    logger.warn(`[capabilities] No se pudo registrar consumo de la sucursal (${negocioId}):`, err.message);
+  }
+}
+
+/**
+ * Respuestas enviadas a cada cliente (celular) en el mes. Solo es un dato
+ * (Super Admin muestra el top 3); no corta el servicio. Nunca lanza.
+ */
+export async function incrementClientUsage(negocioId, clientId) {
+  if (!negocioId || !clientId) return;
+  try {
+    await usageRef(negocioId).collection('clientes').doc(soloDigitos(clientId) || 'desconocido').set({
+      enviados: FieldValue.increment(1), updatedAt: new Date().toISOString(),
+    }, { merge: true });
   } catch (err) {
     logger.warn(`[capabilities] No se pudo registrar consumo del cliente (${negocioId}):`, err.message);
   }
@@ -196,8 +260,8 @@ export async function checkCapability(negocioId, key, { checkLimit = true } = {}
 
   const cap = getCapability(key);
   const limit = getLimit(access.capabilities, key);
-  // Límite por cliente: se valida aparte con checkClientLimit (necesita el celular).
-  if (checkLimit && cap?.limit?.period === 'month' && limit !== null && !cap.limit.perClient) {
+  // Límite por sucursal: se valida aparte con checkBranchLimit (necesita el número que recibió el mensaje).
+  if (checkLimit && cap?.limit?.period === 'month' && limit !== null && !cap.limit.perBranch) {
     const usage = await getUsage(negocioId);
     const used = Number(usage[cap.limit.usageKey]) || 0;
     const st = usageStatus(limit, used);

@@ -309,9 +309,13 @@ describe('altas validadas en el backend', () => {
     assert.equal((await llamar('POST', '/negocio/sucursales', ADMIN, { name: 'X' })).status, 400);
   });
 
-  test('WhatsApp: el límite es por cliente; los demás clientes siguen normales', async () => {
-    const { checkCapability, checkClientLimit, incrementClientUsage, currentPeriod } = await import('../services/capabilities/capabilityService.js');
-    seed({ plan: 'esencial', extra: { addons: { asistenteWhatsapp: true } } });
+  test('WhatsApp: el límite es por sucursal; las demás sucursales siguen normales', async () => {
+    const {
+      checkCapability, resolveUsageBranch, checkBranchLimit, incrementBranchUsage, incrementClientUsage, currentPeriod, NO_BRANCH_ID,
+    } = await import('../services/capabilities/capabilityService.js');
+    seed({ plan: 'premium', extra: { addons: { asistenteWhatsapp: true } } });
+    db._set('negocios/negA/sucursales/s1', { name: 'Centro' });
+    db._set('negocios/negA/sucursales/s2', { name: 'Norte' });
     await getNegocioAccess('negA', { fresh: true }); // el webhook usa la caché de 60 s
     const periodo = currentPeriod();
     // El total del negocio (aunque sea alto) no corta el servicio.
@@ -320,17 +324,41 @@ describe('altas validadas en el backend', () => {
     assert.equal(permiso.allowed, true);
     assert.equal(permiso.limit, 1000);
 
-    db._set(`negocios/negA/uso/${periodo}/clientes/59170000001`, { enviados: 999 });
-    assert.equal((await checkClientLimit('negA', '+591 70000001', permiso.limit)).allowed, true);
-    await incrementClientUsage('negA', '59170000001', permiso.limit); // llega a 1000
-    assert.equal((await checkClientLimit('negA', '59170000001', permiso.limit)).allowed, false);
-    assert.equal(db._get(`negocios/negA/uso/${periodo}`).clientesAlLimite, 1);
-    // Otro cliente: sin problema.
-    assert.equal((await checkClientLimit('negA', '59170000002', permiso.limit)).allowed, true);
-    await incrementClientUsage('negA', '59170000002', permiso.limit);
-    assert.equal(db._get(`negocios/negA/uso/${periodo}/clientes/59170000002`).enviados, 1);
+    // El número se asocia a la sucursal por su nombre; se cuenta por su ID.
+    const centro = await resolveUsageBranch('negA', 'Centro');
+    assert.deepEqual(centro, { id: 's1', name: 'Centro' });
+    db._set(`negocios/negA/uso/${periodo}/sucursales/s1`, { enviados: 999, nombre: 'Centro' });
+    assert.equal((await checkBranchLimit('negA', 's1', permiso.limit)).allowed, true);
+    await incrementBranchUsage('negA', centro, permiso.limit); // llega a 1000
+    assert.equal((await checkBranchLimit('negA', 's1', permiso.limit)).allowed, false);
+    assert.equal(db._get(`negocios/negA/uso/${periodo}`).sucursalesAlLimite, 1);
+    // Otra sucursal: sin problema.
+    const norte = await resolveUsageBranch('negA', 'Norte');
+    assert.equal((await checkBranchLimit('negA', norte.id, permiso.limit)).allowed, true);
+    await incrementBranchUsage('negA', norte, permiso.limit);
+    assert.deepEqual(
+      { enviados: db._get(`negocios/negA/uso/${periodo}/sucursales/s2`).enviados, nombre: db._get(`negocios/negA/uso/${periodo}/sucursales/s2`).nombre },
+      { enviados: 1, nombre: 'Norte' },
+    );
     // Sin límite configurado: siempre permitido.
-    assert.equal((await checkClientLimit('negA', '59170000001', null)).allowed, true);
+    assert.equal((await checkBranchLimit('negA', 's1', null)).allowed, true);
+
+    // Número sin sucursal con varias sucursales: va a sin-sucursal (con límite).
+    assert.equal((await resolveUsageBranch('negA', null)).id, NO_BRANCH_ID);
+    assert.equal((await resolveUsageBranch('negA', 'No existe')).id, NO_BRANCH_ID);
+
+    // Los clientes se siguen contando, solo como dato.
+    await incrementClientUsage('negA', '+591 70000001');
+    await incrementClientUsage('negA', '59170000001');
+    assert.equal(db._get(`negocios/negA/uso/${periodo}/clientes/59170000001`).enviados, 2);
+  });
+
+  test('WhatsApp: con una sola sucursal, un número sin vincular cuenta para esa sucursal', async () => {
+    const { resolveUsageBranch } = await import('../services/capabilities/capabilityService.js');
+    seed({ plan: 'esencial', extra: { addons: { asistenteWhatsapp: true } } });
+    db._set('negocios/negC', { adminUid: 'uidC', plan: 'esencial', status: 'active' });
+    db._set('negocios/negC/sucursales/unica', { name: 'Principal' });
+    assert.deepEqual(await resolveUsageBranch('negC', null), { id: 'unica', name: 'Principal' });
   });
 
   test('renombrar sucursal mueve profesionales, citas y WhatsApp al nombre nuevo', async () => {

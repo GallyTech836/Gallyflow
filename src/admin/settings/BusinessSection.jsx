@@ -145,7 +145,7 @@ export default function BusinessSection({ negocioId, businessName, user, onLogou
                 {featureEntries.map(([cap, val]) => {
                   const enabled = !!val?.enabled;
                   const limit = typeof val?.limit === 'number' ? val.limit : null;
-                  const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}${cap.limit.perClient ? ' por cliente' : ''}`) : (val?.source === 'addon' ? 'Complemento' : 'Incluido');
+                  const limitText = cap.limit ? (limit === null ? 'Ilimitado' : `Hasta ${limit}${cap.limit.period === 'month' ? '/mes' : ''}${cap.limit.perBranch ? ' por sucursal' : ''}`) : (val?.source === 'addon' ? 'Complemento' : 'Incluido');
                   return (
                     <li key={cap.key} className="flex items-center justify-between gap-3 text-sm py-2">
                       <span className="text-nexus-text-secondary min-w-0">{cap.label}</span>

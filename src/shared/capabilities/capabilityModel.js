@@ -71,9 +71,13 @@ export const CAPABILITY_MODULES = [
 //   que cada negocio veía ANTES de este sistema (compatibilidad sin migrar).
 // enforcedIn: dónde se valida de verdad ('ui', 'backend', 'rules').
 // limit.usageKey: campo en negocios/{id}/uso/{AAAA-MM} que mide el consumo.
-// limit.perClient: el límite se aplica a CADA cliente (celular) por separado,
-//   en negocios/{id}/uso/{AAAA-MM}/clientes/{celular}. El total del negocio
-//   se sigue contando en usageKey solo como dato (no corta el servicio).
+// limit.perBranch: el límite se aplica a CADA sucursal (su número de WhatsApp)
+//   por separado, en negocios/{id}/uso/{AAAA-MM}/sucursales/{sucursalId}
+//   = { enviados, nombre }. Si el número no tiene sucursal y el negocio tiene
+//   una sola, se usa esa; si no, se cuenta en sucursales/sin-sucursal (con el
+//   mismo límite). El total del negocio se sigue contando en
+//   usageKey y por cliente en uso/{AAAA-MM}/clientes/{celular}, solo como
+//   dato (no cortan el servicio).
 // limit.noPlanLimit: límite para negocios SIN plan asignado (o con un plan
 //   que ya no existe). Evita que un negocio sin plan quede ilimitado. Los
 //   planes guardados siempre traen su límite explícito, así que no les afecta.
@@ -129,8 +133,8 @@ export const CAPABILITIES = [
   // ── CONFIGURACIÓN Y COMUNICACIÓN ──
   { key: 'asistenteWhatsapp', module: 'settings', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,
     legacyKeys: ['automatizaciones'],
-    limit: { unit: 'respuestas/mes por cliente', period: 'month', usageKey: 'whatsappMensajes', perClient: true, defaultLimit: null },
-    description: 'Bot de reservas por WhatsApp (Railway). Complemento aparte (ver ADDONS). El límite es POR CLIENTE: respuestas que el bot le envía a cada celular en el mes.',
+    limit: { unit: 'respuestas/mes por sucursal', period: 'month', usageKey: 'whatsappMensajes', perBranch: true, defaultLimit: null },
+    description: 'Bot de reservas por WhatsApp (Railway). Complemento aparte (ver ADDONS). El límite es POR SUCURSAL: respuestas que el bot envía desde el número de cada sucursal en el mes.',
     enforcedIn: ['ui', 'backend'] },
   { key: 'recordatoriosPush', module: 'settings', label: 'Recordatorios push al profesional', status: 'implemented', kind: 'toggle', default: true,
     description: 'Aviso push al profesional antes de cada cita.', enforcedIn: ['backend'] },

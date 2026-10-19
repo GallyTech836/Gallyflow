@@ -231,12 +231,12 @@ router.get('/negocios/:negocioId/access', identifyRequester, requireSuperAdmin, 
       const cap = getCapability(key);
       if (cap?.limit?.period !== 'month') continue;
       const used = Number(usage[cap.limit.usageKey]) || 0;
-      // Límite por cliente: el total del negocio no tiene tope.
-      const totalLimit = cap.limit.perClient ? null : val.limit;
+      // Límite por sucursal: el total del negocio no tiene tope.
+      const totalLimit = cap.limit.perBranch ? null : val.limit;
       consumo[key] = {
         ...usageStatus(totalLimit, used),
         rechazados: Number(usage.rechazados?.[cap.limit.usageKey]) || 0,
-        ...(cap.limit.perClient ? { limitePorCliente: val.limit, clientesAlLimite: Number(usage.clientesAlLimite) || 0 } : {}),
+        ...(cap.limit.perBranch ? { limitePorSucursal: val.limit, sucursalesAlLimite: Number(usage.sucursalesAlLimite) || 0 } : {}),
       };
     }
     return res.status(200).json({ ...access, period, usage, consumo });
