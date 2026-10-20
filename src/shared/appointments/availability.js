@@ -11,6 +11,8 @@
 // aparte, para no tocar el flujo del cliente en el mismo paso que se crea
 // esta función.
 
+import { isClosedOn } from '../businessSettings/closedDaysModel';
+
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const SLOT_STEP = 30; // minutos entre cada horario mostrado (09:00, 09:30, ...)
 
@@ -61,9 +63,13 @@ export function getAvailableSlots({
   aplicarAnticipacion = false,
   minAdvanceMinutes = 30,
   businessSchedule = [],
+  closedDays = [],
   ahora = new Date(),
 }) {
   if (!fecha || !profesional) return [];
+
+  // Día cerrado / feriado (de todo el negocio o de la sucursal del profesional).
+  if (isClosedOn(closedDays, fecha, profesional.branch || null)) return [];
 
   const dayName = getDayName(fecha);
   const dayAvailability = (profesional.availability || []).find((a) => a?.day === dayName);

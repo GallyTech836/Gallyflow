@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Copy, Save, Loader as Loader2, Wallet, Plus, X, CalendarClock } from 'lucide-react';
 import { useBusinessSettings } from '../../shared/businessSettings/useBusinessSettings';
 import { saveBusinessSettings } from '../../shared/businessSettings/businessSettingsService';
+import ClosedDaysCard from './business/ClosedDaysCard';
 
 function Card({ children, className = '' }) {
   return (
@@ -139,6 +140,13 @@ export default function BusinessSection({ negocioId }) {
         </div>
       </Card>
 
+      {/* ── Días cerrados / feriados ──────────────────────────────── */}
+      <ClosedDaysCard
+        negocioId={negocioId}
+        value={form.closedDays || []}
+        onChange={(closedDays) => { setForm((prev) => ({ ...prev, closedDays })); setSaved(false); }}
+      />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         {/* ── Anticipación para reservar ───────────────────────────── */}
@@ -254,7 +262,7 @@ export default function BusinessSection({ negocioId }) {
 
       </div>
 
-      {/* ── Guardar (horario + anticipación + métodos de pago) ─────────
+      {/* ── Guardar (horario + días cerrados + anticipación + métodos de pago) ─────────
           Fase 4: barra fija con fondo propio, así el contenido no se ve
           por detrás ni queda tapado. */}
       <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border">

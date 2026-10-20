@@ -7,6 +7,7 @@ import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
+import ClosedDayBanner from '../shared/businessSettings/ClosedDayBanner';
 import { getPendingCandidates, getCitaServiceIds, professionalCanDo } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
 import { describeAppointmentChanges } from '../shared/appointments/changeSummary';
@@ -1463,10 +1464,10 @@ const { heroConfig } = useHeroConfig(negocioId);
   // "Agendar en sobrehorario". Devuelve true si está en horario o si se confirmó.
   const confirmOutsideHours = async ({ date, time, duration, professionalId }) => {
     const professional = professionalId && professionalId !== 'pending' ? barbers.find(b => b?.id === professionalId) : null;
-    const res = checkWorkingHours({ date, time, duration, businessSchedule: businessSettings?.schedule, professional, terms: businessProfile });
+    const res = checkWorkingHours({ date, time, duration, businessSchedule: businessSettings?.schedule, closedDays: businessSettings?.closedDays, branch: professional?.branch || selectedBranch || null, professional, terms: businessProfile });
     if (res.ok) return true;
     return confirmAction({
-      title: 'Está fuera del horario',
+      title: res.closed ? 'Día cerrado' : 'Está fuera del horario',
       subject: res.message,
       message: `¿Quieres agendar ${g('appointment', 'este', 'esta')} ${tl('appointment')} igual, en sobrehorario?`,
       irreversible: false,
@@ -1656,6 +1657,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       citas: reservations,
       bloqueos: blockouts,
       businessSchedule: businessSettings?.schedule || [],
+      closedDays: businessSettings?.closedDays || [],
       ignoreCitaId: editingReservation.id,
     });
   }, [editingReservation, barbers, reservations, blockouts, businessSettings]);
@@ -3004,6 +3006,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 const showNowLine = selectedDate === formatDate(new Date()) && currentTimeMinutes >= GRID_START_MIN && currentTimeMinutes <= GRID_END_MIN;
                 return (
                 <div className="space-y-3">
+                  <ClosedDayBanner closedDays={businessSettings?.closedDays} date={selectedDate} branch={selectedBranch} />
                   {/* Filtro de profesional (solo vista; usa el filtro que ya existía). En
                       celular permite ver una sola columna a pantalla completa. */}
                   {(branchBarbers || []).length > 1 && (

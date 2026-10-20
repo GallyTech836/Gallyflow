@@ -10,6 +10,7 @@
 // todo el día", así que no bloquea nada (igual que antes).
 
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel';
+import { findClosure, closureLabel } from '../businessSettings/closedDaysModel';
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -40,15 +41,24 @@ export function getDayName(dateStr) {
  * @param {Array}  p.businessSchedule   businessSettings.schedule
  * @param {object} [p.professional]     profesional (con availability); null/'pending' = sin profesional
  * @param {object} [p.terms]            términos del negocio (createTerms)
+ * @param {Array}  [p.closedDays]       businessSettings.closedDays (feriados / días cerrados)
+ * @param {string} [p.branch]           sucursal de la cita (por defecto la del profesional)
  * @returns {{ ok: boolean, message?: string }}
  */
-export function checkWorkingHours({ date, time, duration, businessSchedule = [], professional = null, terms = GENERIC_TERMS }) {
+export function checkWorkingHours({ date, time, duration, businessSchedule = [], professional = null, terms = GENERIC_TERMS, closedDays = [], branch = null }) {
   const dayName = getDayName(date);
   const start = toMin(time);
   if (!dayName || start === null) return { ok: true };
   const end = start + (Number(duration) > 0 ? Number(duration) : 30);
   const endLabel = `${String(Math.floor(end / 60) % 24).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
   const range = `${time} – ${endLabel}`;
+
+  // 0) Día cerrado / feriado (de todo el negocio o de la sucursal)
+  const cierre = findClosure(closedDays, date, branch || professional?.branch || null);
+  if (cierre) {
+    const donde = cierre.branch ? `La sucursal ${cierre.branch} está cerrada` : 'El negocio está cerrado';
+    return { ok: false, closed: true, message: `${donde} ese día (${closureLabel(cierre)}).` };
+  }
 
   // 1) Horario del negocio
   const bday = (businessSchedule || []).find((d) => d?.day === dayName);

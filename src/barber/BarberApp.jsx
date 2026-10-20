@@ -3,6 +3,7 @@ import { db, auth } from '../firebase/config';
 import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { getPeriodRange, getMonthGridRange, getPreviousPeriodRange } from '../shared/appointments/dateRanges';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
+import ClosedDayBanner from '../shared/businessSettings/ClosedDayBanner';
 import { signOut } from 'firebase/auth';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { LogOut } from 'lucide-react';
@@ -742,14 +743,14 @@ const fetchByDate = async (subcollection, date) => {
   // Fase 4/5: fuera del horario del negocio o del profesional. Con el permiso
   // "Agendar en sobrehorario" se puede confirmar; sin él, no se guarda.
   const confirmOutsideHours = async ({ date, time, duration }) => {
-    const res = checkWorkingHours({ date, time, duration, businessSchedule: businessSettings?.schedule, professional: activeBarber, terms: businessProfile });
+    const res = checkWorkingHours({ date, time, duration, businessSchedule: businessSettings?.schedule, closedDays: businessSettings?.closedDays, professional: activeBarber, terms: businessProfile });
     if (res.ok) return true;
     if (!staffPerms.overtimeAppointments) {
       triggerToast(`${res.message} No tienes permiso para agendar fuera del horario.`, 'error');
       return false;
     }
     return confirmAction({
-      title: 'Está fuera del horario',
+      title: res.closed ? 'Día cerrado' : 'Está fuera del horario',
       subject: res.message,
       message: `¿Quieres agendar ${g('appointment', 'este', 'esta')} ${tl('appointment')} igual, en sobrehorario?`,
       irreversible: false,
@@ -1367,6 +1368,10 @@ const fetchByDate = async (subcollection, date) => {
                 
                 {/* Header de la Agenda con el selector unificado */}
                 {renderUnifiedSelector(true)}
+
+                {selectedRange === "Día" && (
+                  <ClosedDayBanner closedDays={businessSettings?.closedDays} date={selectedDate} branch={activeBarber?.branch || null} />
+                )}
 
                 {/* VISTA CONTEXTUAL PRINCIPAL */}
                 {selectedRange === "Año" ? (

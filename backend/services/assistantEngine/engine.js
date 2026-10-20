@@ -26,6 +26,7 @@ import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
 import { getServicePriceRange, buildCitaServices, formatPriceRange } from '../pricing/professionalPricing.js';
 import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
 import { crearVoz, aplicarVoz } from './personalidad.js';
+import { findClosure, isClosedOn } from '../appointments/closedDays.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -199,6 +200,7 @@ function opcionesCualquiera(pros, terms = GENERIC_TERMS) {
 // TODOS los servicios se ofrecen ese día.
 function proximosDias(ctx, pros, servicios) {
   const schedule = ctx.businessSettings?.schedule || [];
+  const closedDays = ctx.businessSettings?.closedDays || [];
   const base = ahoraNegocio();
   const dias = [];
   for (let i = 0; i < DIAS_A_BUSCAR && dias.length < DIAS_A_MOSTRAR; i++) {
@@ -207,7 +209,9 @@ function proximosDias(ctx, pros, servicios) {
 
     const negocioDia = schedule.find((x) => x?.day === dayName);
     if (negocioDia && negocioDia.status !== 'Disponible') continue;
+    const iso = isoLocal(d);
     const algunoTrabaja = pros.some((p) => {
+      if (isClosedOn(closedDays, iso, p?.branch || null)) return false; // día cerrado / feriado
       const proDia = (p?.availability || []).find((x) => x?.day === dayName);
       return proDia && proDia.status === 'Disponible';
     });
@@ -247,12 +251,77 @@ async function slotsParaFecha(ctx, pros, fecha, duracion) {
       citasDelNegocio: citas,
       bloqueos,
       businessSchedule: ctx.businessSettings?.schedule || [],
+      closedDays: ctx.businessSettings?.closedDays || [],
       aplicarAnticipacion: true,
       minAdvanceMinutes: ctx.businessSettings?.minAdvanceMinutes || 0,
       ahora,
     }).forEach((h) => todas.add(h));
   }
   return [...todas].sort();
+}
+
+// ───────────────────────── Días cerrados / feriados ─────────────────────────
+
+const DIAS_MIN = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES_MIN = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+// ¿El negocio (o la sucursal de este número) está cerrado en `fecha`? Cuenta
+// el día marcado como cerrado/feriado y el día de la semana cerrado en el horario.
+function cierreDelDia(ctx, branch, fecha) {
+  const cierre = findClosure(ctx.businessSettings?.closedDays || [], fecha, branch || null);
+  if (cierre) return { motivo: cierre.reason || '' };
+  const dayName = DAY_NAMES_MON_FIRST[(new Date(`${fecha}T12:00:00`).getDay() + 6) % 7];
+  const dia = (ctx.businessSettings?.schedule || []).find((x) => x?.day === dayName);
+  if (dia && dia.status !== 'Disponible') return { motivo: '' };
+  return null;
+}
+
+// Cierre de HOY con el día en que se vuelve a atender ("mañana" / "el lunes"),
+// o null si hoy se atiende.
+export function cierreDeHoy(ctx, branch, ahora = ahoraNegocio()) {
+  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 12);
+  const cierre = cierreDelDia(ctx, branch, isoLocal(hoy));
+  if (!cierre) return null;
+  let vuelve = '';
+  for (let i = 1; i <= 60; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i, 12);
+    if (cierreDelDia(ctx, branch, isoLocal(d))) continue;
+    vuelve = i === 1 ? 'mañana'
+      : i <= 6 ? `el ${DIAS_MIN[d.getDay()]}`
+      : `el ${DIAS_MIN[d.getDay()]} ${d.getDate()} de ${MESES_MIN[d.getMonth()]}`;
+    break;
+  }
+  return { ...cierre, vuelve };
+}
+
+// Día cerrado: no se ofrece «Hablar con alguien» (no hay quién responda).
+// Se quitan esos botones/filas si queda al menos otra opción.
+const ES_HABLAR = /hablar con alguien/i;
+function sinHablarConAlguien(resultado) {
+  if (!resultado) return resultado;
+  const limpiar = (i) => {
+    if (!i?.action) return i;
+    const out = JSON.parse(JSON.stringify(i));
+    const btns = out.action.buttons;
+    if (Array.isArray(btns)) {
+      const quedan = btns.filter((b) => !ES_HABLAR.test(b?.reply?.title || ''));
+      if (quedan.length && quedan.length !== btns.length) out.action.buttons = quedan;
+    }
+    for (const sec of out.action.sections || []) {
+      const quedan = (sec.rows || []).filter((r) => !ES_HABLAR.test(r?.title || ''));
+      if (quedan.length && quedan.length !== sec.rows.length) sec.rows = quedan;
+    }
+    if (out.body?.text) out.body.text = out.body.text.replace(/\s*Toca «Hablar con alguien»[^.]*\./g, '').trim();
+    return out;
+  };
+  return {
+    ...resultado,
+    replyText: typeof resultado.replyText === 'string'
+      ? resultado.replyText.replace(/\n?\d\. Hablar con alguien/g, '').replace(/\s*Toca «Hablar con alguien»[^.]*\./g, '').trim()
+      : resultado.replyText,
+    interactive: limpiar(resultado.interactive),
+    preMessages: (resultado.preMessages || []).map((pm) => ({ ...pm, interactive: limpiar(pm.interactive) })),
+  };
 }
 
 // ───────────────────────── Avisos ─────────────────────────
@@ -315,9 +384,10 @@ function contextoDeSucursal(ctx, branch) {
 // Personalidad (assistantConfig.personalidad): el motor arma la respuesta y
 // aquí se ajusta cómo habla (usted / sin emojis). Sin configurar = como siempre.
 export async function assistantEngine(args) {
-  const resultado = await motor(args);
+  let resultado = await motor(args);
   try {
     const ctx = await getBusinessContext(args.negocioId);
+    if (cierreDeHoy(ctx, args.branch || null)) resultado = sinHablarConAlguien(resultado);
     return aplicarVoz(resultado, vozDe(ctx));
   } catch {
     return resultado;
@@ -483,6 +553,8 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       }
       
       if (/^otra$/i.test(texto)) {
+        const cierre = cierreDeHoy(context, branch);
+        if (cierre) return responder(mensajeCerrado(await nombreDelCliente(), cierre, conversation.citaOptions || []), conversation);
         return responder(mensajeBienvenida(context, await nombreDelCliente(), conversation.repeatOption), conversation);
       }
       if (/^info_servicios$/i.test(texto)) return responder(mensajeServiciosYPrecios(), conversation);
@@ -826,6 +898,9 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       citaOptions,
       manageCitaId: citaOptions.length === 1 ? citaOptions[0].id : null,
     });
+    // Hoy cerrado / feriado: saludo + aviso (según la personalidad) + agendar otro día.
+    const cierre = cierreDeHoy(context, branch);
+    if (cierre) return mensajeCerrado(nombre, cierre, citaOptions);
     if (citaOptions.length) return mensajeConCitas(nombre, citaOptions);
     return mensajeBienvenida(context, nombre, repetir);
   }
@@ -839,7 +914,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       nombreDelCliente(),
       findUpcomingCitas(negocioId, phone, ahoraNegocio()),
     ]);
-    if (proximas.length) return bienvenida();
+    if (proximas.length || cierreDeHoy(context, branch)) return bienvenida();
     conversation = await updateConversation(negocioId, phone, { currentFlow: 'welcome', fromAd: true, citaOptions: [], manageCitaId: null });
     const { tl, g } = context.terms;
     const cita = tl('appointment');
@@ -1108,6 +1183,20 @@ ${cierre}`,
   }
 
   async function hablarConAlguien() {
+    // Día cerrado: nadie del equipo puede responder, no se pasa a una persona.
+    const cierre = cierreDeHoy(context, branch);
+    if (cierre) {
+      const { tl } = context.terms;
+      const cuerpo = `${voz.cerrado(cierre)}\n${voz.sinEquipo()}`;
+      return responder(menuBotones({
+        texto: `${cuerpo}\n\n1. Agendar para otro día`,
+        cuerpo,
+        botones: [
+          { id: '1', title: 'Agendar otro día' },
+          { id: 'info_servicios', title: cabe(`${mayuscula(tl('services'))} y precios`, 20, 'Precios') },
+        ],
+      }), conversation);
+    }
     avisarContacto(negocioId, phone, conversation.clientName);
     conversation = await updateConversation(negocioId, phone, {
       currentFlow: 'human',
@@ -1179,6 +1268,29 @@ ${cierre}`,
       botones: [{ id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }],
     });
   }
+  // Hoy cerrado / feriado. Sin «Hablar con alguien»: no hay quién responda.
+  function mensajeCerrado(nombre, cierre, citas = []) {
+    const { tl, g } = context.terms;
+    const saludo = voz.saludo(nombre ? nombre.split(' ')[0] : '');
+    let lineaCitas = '';
+    const botones = [];
+    if (citas.length === 1) {
+      lineaCitas = `\n\nTienes ${g('appointment', 'un', 'una')} ${tl('appointment')} ${describirCita(citas[0])}.`;
+      if (puedeCambiar(citas[0])) botones.push({ id: 'cita_reprogramar', title: 'Reprogramar' });
+    } else if (citas.length > 1) {
+      lineaCitas = `\n\nTienes ${citas.length} ${tl('appointments')} ${g('appointment', 'próximos', 'próximas')}. Escribe "reprogramar" si quieres cambiar alguna.`;
+    }
+    botones.push({ id: '1', title: 'Agendar otro día' });
+    botones.push({ id: 'info_servicios', title: cabe(`${mayuscula(tl('services'))} y precios`, 20, 'Precios') });
+    if (botones.length < 3) botones.push({ id: 'info_ubicacion', title: 'Ubicación y horarios' });
+    const cuerpo = `${saludo}\n\n${voz.cerrado(cierre)}${lineaCitas}\n${voz.cerradoPregunta()}`;
+    return menuBotones({
+      texto: `${cuerpo}\n\n1. Agendar para otro día\n(Escribe "precios" o "ubicación" para más información)`,
+      cuerpo,
+      botones,
+    });
+  }
+
   function mensajeServicios(ctx) {
     const { tl } = ctx.terms;
     const servicios = serviciosOfrecidos(ctx);

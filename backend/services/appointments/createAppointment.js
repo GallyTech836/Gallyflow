@@ -43,7 +43,7 @@ export async function createAppointment({
   const bloqueosRef = negocioRef.collection('horariosBloqueados');
 
   return db.runTransaction(async (tx) => {
-    const profesionalSnap = await tx.get(profesionalRef);
+    const [negocioSnap, profesionalSnap] = await Promise.all([tx.get(negocioRef), tx.get(profesionalRef)]);
     if (!profesionalSnap.exists) {
       throw new Error('Profesional no encontrado.');
     }
@@ -62,6 +62,8 @@ export async function createAppointment({
       profesional,
       citasDelNegocio,
       bloqueos,
+      // Días cerrados / feriados: nunca se reserva (link público ni WhatsApp).
+      closedDays: negocioSnap.data()?.businessSettings?.closedDays || [],
     });
 
     if (!slotsLibres.includes(time)) {
@@ -148,6 +150,7 @@ export async function createPendingAppointment({
       citas: citasSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
       bloqueos: bloqSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
       businessSchedule: negocioSnap.data()?.businessSettings?.schedule || [],
+      closedDays: negocioSnap.data()?.businessSettings?.closedDays || [],
     });
     if (candidatos.length === 0) {
       throw new Error('El horario ya no está disponible. Elige otro horario.');

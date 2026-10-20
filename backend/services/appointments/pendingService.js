@@ -39,6 +39,7 @@ async function evaluateOne(negocioId, citaId) {
     ]);
 
     const businessSchedule = negocioSnap.data()?.businessSettings?.schedule || [];
+    const closedDays = negocioSnap.data()?.businessSettings?.closedDays || [];
     const professionals = prosSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const citas = citasSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const bloqueos = bloqSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -52,6 +53,7 @@ async function evaluateOne(negocioId, citaId) {
       citas,
       bloqueos,
       businessSchedule,
+      closedDays,
       ignoreCitaId: cita.id,
     });
 

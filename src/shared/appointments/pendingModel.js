@@ -9,6 +9,8 @@
 // backend/services/appointments/pendingModel.js (mismo patrón que
 // availability.js). Si cambias una, cambia la otra en el mismo cambio.
 
+import { isClosedOn } from '../businessSettings/closedDaysModel';
+
 export const PENDING_ID = 'pending';
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -70,9 +72,11 @@ export function isProfessionalFreeAt({
   citas = [],
   bloqueos = [],
   businessSchedule = [],
+  closedDays = [],
   ignoreCitaId = null,
 }) {
   if (!professional || !fecha || !time) return false;
+  if (isClosedOn(closedDays, fecha, professional.branch || null)) return false;
 
   const dayName = getDayName(fecha);
   const dayAvailability = (professional.availability || []).find((a) => a?.day === dayName);
@@ -125,6 +129,7 @@ export function getPendingCandidates({
   citas = [],
   bloqueos = [],
   businessSchedule = [],
+  closedDays = [],
   ignoreCitaId = null,
 }) {
   return professionals.filter((p) => {
@@ -132,7 +137,7 @@ export function getPendingCandidates({
     const hacesServicio =
       serviceIds.length > 0 ? professionalCanDo(p, serviceIds) : getProfessionalServiceIds(p).size > 0;
     if (!hacesServicio) return false;
-    return isProfessionalFreeAt({ professional: p, fecha, time, duration, citas, bloqueos, businessSchedule, ignoreCitaId });
+    return isProfessionalFreeAt({ professional: p, fecha, time, duration, citas, bloqueos, businessSchedule, closedDays, ignoreCitaId });
   });
 }
 

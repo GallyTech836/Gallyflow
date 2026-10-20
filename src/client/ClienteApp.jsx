@@ -20,6 +20,7 @@ import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
+import { findClosure, isClosedOn, closureLabel } from '../shared/businessSettings/closedDaysModel';
 import BusinessInfoPage from './BusinessInfoPage';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
@@ -322,9 +323,16 @@ export default function App({ negocioSlug } = {}) {
     return services.filter(service => assignedIds.has(String(service.id)));
   }, [services, selectedBarber, branchPros]);
 
-  // Días del calendario: cerrado si el negocio no atiende ese día o si algún
-  // servicio elegido no se ofrece ese día (availableDays vacío = todos).
+  // Días cerrados / feriados: con profesional elegido cuenta su sucursal; con
+  // "Pendiente", la sucursal elegida (sin sucursal: solo cierres de todo el negocio).
+  const closureBranch = (selectedBarber && !selectedBarber.isPending ? selectedBarber.branch : null) || selectedBranch?.name || null;
+  const closureOf = (dateStr) => findClosure(businessSettings?.closedDays, dateStr, closureBranch);
+
+  // Días del calendario: cerrado si el negocio no atiende ese día (horario o
+  // día cerrado/feriado) o si algún servicio elegido no se ofrece ese día
+  // (availableDays vacío = todos).
   const isDayDisabled = (dateStr) => {
+    if (closureOf(dateStr)) return true;
     const dayName = DAY_NAMES_MON_FIRST[(new Date(dateStr + "T12:00:00").getDay() + 6) % 7];
     const businessDay = (businessSettings?.schedule || []).find(d => d?.day === dayName);
     if (businessDay && businessDay.status !== 'Disponible') return true;
@@ -356,6 +364,7 @@ export default function App({ negocioSlug } = {}) {
         const pendingDayName = DAY_NAMES_MON_FIRST[(pendingDate.getDay() + 6) % 7];
         const pendingBusinessDay = (businessSettings?.schedule || []).find(d => d?.day === pendingDayName);
         if (pendingBusinessDay && pendingBusinessDay.status !== 'Disponible') return [];
+        if (closureOf(selectedDate)) return [];
       }
       return DEFAULT_HOURS.filter(cumpleAnticipacion);
     }
@@ -373,6 +382,7 @@ export default function App({ negocioSlug } = {}) {
 
     // Horas libres de UN profesional ese día.
     const freeHoursOf = (barber) => {
+      if (isClosedOn(businessSettings?.closedDays, selectedDate, barber.branch || null)) return [];
       const dayAvailability = (barber.availability || []).find(a => a?.day === dayName);
       if (!dayAvailability || dayAvailability.status !== 'Disponible') return [];
 
@@ -435,7 +445,7 @@ export default function App({ negocioSlug } = {}) {
 
     // Profesional elegido: sus horas libres.
     return freeHoursOf(selectedBarber).filter(cumpleAnticipacion);
-  }, [selectedBarber, branchPros, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings]);
+  }, [selectedBarber, branchPros, selectedDate, selectedServices, citasNegocio, blockouts, citasFecha, bloqueosFecha, businessSettings, selectedBranch]);
 
     // === PRECIO POR PROFESIONAL ===
     const realBarbers = branchPros;
@@ -458,6 +468,7 @@ export default function App({ negocioSlug } = {}) {
         citas: citasNegocio,
         bloqueos: blockouts,
         businessSchedule: businessSettings?.schedule || [],
+        closedDays: businessSettings?.closedDays || [],
       });
       return candidates.length ? candidates : canDoAll;
     }, [chosenPro, selectedServices, realBarbers, selectedDate, selectedHour, citasFecha, bloqueosFecha, citasNegocio, blockouts, businessSettings]);
@@ -549,6 +560,7 @@ export default function App({ negocioSlug } = {}) {
             citas: citasNegocio,
             bloqueos: blockouts,
             businessSchedule: businessSettings?.schedule || [],
+            closedDays: businessSettings?.closedDays || [],
           });
           if (candidates.length === 0) {
             triggerToast('Ese horario ya no está disponible. Elige otro horario.', 'error');
@@ -740,6 +752,7 @@ export default function App({ negocioSlug } = {}) {
         hour={selectedHour} setHour={setSelectedHour} 
         isTuesday={isTuesday}
         isDayDisabled={isDayDisabled}
+        closedLabelOf={(d) => { const c = closureOf(d); return c ? closureLabel(c) : null; }}
         currentMonth={currentCalendarMonth}
         setCurrentMonth={setCurrentCalendarMonth}
         onNext={() => setStep(5)} 
@@ -1172,7 +1185,7 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
   );
 };
 
-const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, currentMonth, setCurrentMonth }) => {
+const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, currentMonth, setCurrentMonth }) => {
   const terms = useBusinessTerms();
   
   const handlePrevMonth = () => {
@@ -1255,11 +1268,15 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
               const isSelected = date === cell.dateString;
               // Pasado, o día en que el negocio no atiende / el servicio no se ofrece.
               const isPast = cell.isPast || isDayDisabled(cell.dateString);
+              // Día cerrado / feriado (no pasado): se marca para que el cliente sepa por qué.
+              const closedLabel = !cell.isPast ? closedLabelOf(cell.dateString) : null;
 
               return (
                 <button
                   key={cell.dateString}
                   disabled={isPast}
+                  title={closedLabel ? `${closedLabel}: no hay atención` : undefined}
+                  aria-label={closedLabel ? `${cell.dayNum}, ${closedLabel}, no disponible` : undefined}
                   onClick={() => {
                     setDate(cell.dateString);
                     setHour(null); 
@@ -1267,13 +1284,15 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
                   className={`py-2 rounded-lg text-xs font-bold flex flex-col items-center justify-center relative transition-all duration-200 ${
                     isSelected 
                       ? 'bg-nexus-primary text-white shadow-md scale-[1.05]' 
-                      : isPast
+                      : closedLabel
+                        ? 'text-nexus-error-text bg-nexus-error-bg cursor-not-allowed opacity-70'
+                        : isPast
                         ? 'text-nexus-text-muted cursor-not-allowed opacity-30'
                         : 'bg-nexus-background hover:bg-nexus-surface-hover text-nexus-text-secondary'
                   }`}
                 >
-                  <span>{cell.dayNum}</span>
-                  
+                  <span className={closedLabel ? 'line-through' : ''}>{cell.dayNum}</span>
+                  {closedLabel && <span className="text-[8px] leading-none font-semibold mt-0.5">Cerrado</span>}
                 </button>
               );
             })}

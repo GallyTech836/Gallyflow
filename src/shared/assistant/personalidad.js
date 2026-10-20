@@ -19,6 +19,9 @@
 //     saludo: '',                    // saludo propio; {nombre} y {negocio} opcionales
 //     despedida: '',                 // texto extra al confirmar una cita
 //   }
+//
+// Días cerrados / feriados (businessSettings.closedDays): cada tono tiene su
+// forma de avisar que hoy no se atiende (cerrado / cerradoPregunta / sinEquipo).
 
 export const TONO_POR_DEFECTO = 'amigable';
 const MAX_TEXTO = 300;
@@ -45,6 +48,9 @@ export const TONOS = {
     anuncio: ({ negocio }) => `Gracias por escribir a ${negocio}.`,
     preguntaInfo: '¿Qué información te gustaría?',
     humano: 'Listo, le avisé al equipo. Una persona te responderá por aquí en breve. 🙌',
+    cerrado: ({ motivo, vuelve }) => `Hoy no estamos atendiendo${motivo} 🙏${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
+    cerradoPregunta: '¿Quieres agendar para otro día?',
+    sinEquipo: 'Hoy no hay nadie del equipo para responderte por aquí, pero puedo ayudarte a agendar para otro día.',
   },
   formal: {
     label: 'Formal',
@@ -59,6 +65,9 @@ export const TONOS = {
     anuncio: ({ negocio }) => `Gracias por comunicarse con ${negocio}.`,
     preguntaInfo: '¿Qué información desea conocer?',
     humano: 'Con gusto. Ya informé a nuestro equipo y una persona le atenderá por este medio en breve.',
+    cerrado: ({ motivo, vuelve }) => `Le informamos que hoy no estamos atendiendo${motivo}.${vuelve ? ` Retomamos la atención ${vuelve}.` : ''}`,
+    cerradoPregunta: '¿Desea agendar para otro día?',
+    sinEquipo: 'Hoy no contamos con personal para atenderle por este medio, pero con gusto puedo ayudarle a agendar para otro día.',
   },
   profesional: {
     label: 'Profesional',
@@ -73,6 +82,9 @@ export const TONOS = {
     anuncio: ({ negocio }) => `Gracias por contactar a ${negocio}.`,
     preguntaInfo: '¿Qué información necesitas?',
     humano: 'Listo, avisé al equipo. Una persona te responderá por aquí en breve.',
+    cerrado: ({ motivo, vuelve }) => `Hoy no tenemos atención${motivo}.${vuelve ? ` Volvemos a atender ${vuelve}.` : ''}`,
+    cerradoPregunta: '¿Quieres reservar para otro día?',
+    sinEquipo: 'Hoy el equipo no está disponible por aquí. Puedo ayudarte a reservar para otro día.',
   },
   cercano: {
     label: 'Cercano',
@@ -87,6 +99,9 @@ export const TONOS = {
     anuncio: ({ negocio }) => `¡Qué bueno que escribiste a ${negocio}! 🙌`,
     preguntaInfo: '¿Qué te gustaría saber?',
     humano: '¡Hecho! Ya le avisé al equipo y alguien te escribe por aquí en un ratito 🙌',
+    cerrado: ({ motivo, vuelve }) => `¡Hoy estamos cerrados${motivo}! 😴${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
+    cerradoPregunta: '¿Te agendo para otro día?',
+    sinEquipo: 'Hoy no hay nadie del equipo por aquí 😅 pero te puedo agendar para otro día.',
   },
   entusiasta: {
     label: 'Entusiasta',
@@ -101,6 +116,9 @@ export const TONOS = {
     anuncio: ({ negocio }) => `¡Gracias por escribir a ${negocio}! ✨`,
     preguntaInfo: '¿Qué te gustaría conocer?',
     humano: '¡Perfecto! Ya avisé al equipo y una persona te responderá por aquí muy pronto 🙌',
+    cerrado: ({ motivo, vuelve }) => `¡Hoy nos tomamos el día${motivo}! 🎈${vuelve ? ` Volvemos ${vuelve} con todo ✨` : ''}`,
+    cerradoPregunta: '¿Te gustaría agendar para otro día?',
+    sinEquipo: 'Hoy el equipo está descansando 😊 pero yo te ayudo a agendar para otro día ✨',
   },
   breve: {
     label: 'Breve',
@@ -115,6 +133,9 @@ export const TONOS = {
     anuncio: ({ negocio }) => `Reservas de ${negocio}.`,
     preguntaInfo: '¿Qué quieres saber?',
     humano: 'Listo, avisé al equipo. Te responderán por aquí.',
+    cerrado: ({ motivo, vuelve }) => `Hoy cerrado${motivo}.${vuelve ? ` Abrimos ${vuelve}.` : ''}`,
+    cerradoPregunta: '¿Agendas para otro día?',
+    sinEquipo: 'Hoy no hay atención del equipo. Puedo agendarte para otro día.',
   },
 };
 
@@ -243,6 +264,13 @@ export function crearVoz(rawPersonalidad, { negocio = '', hora = 12 } = {}) {
     },
     preguntaInfo: () => frase(t.preguntaInfo),
     humano: () => frase(t.humano),
+    /**
+     * Día cerrado / feriado: "Hoy no estamos atendiendo (Feriado) 🙏 Volvemos mañana."
+     * `motivo` = businessSettings.closedDays[].reason (opcional); `vuelve` = "mañana" / "el lunes".
+     */
+    cerrado: ({ motivo = '', vuelve = '' } = {}) => frase(t.cerrado({ motivo: motivo ? ` (${motivo})` : '', vuelve })),
+    cerradoPregunta: () => frase(t.cerradoPregunta),
+    sinEquipo: () => frase(t.sinEquipo),
     despedida: () => (p.despedida ? frase(rellenar(p.despedida, { nombre: '', negocio })) : ''),
     /** Post-proceso de TODO lo que envía el bot. */
     texto: (s) => (typeof s === 'string' ? frase(s) : s),

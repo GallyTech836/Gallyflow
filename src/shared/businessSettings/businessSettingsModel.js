@@ -4,6 +4,8 @@
 // así que un negocio que nunca toque esta pantalla sigue funcionando
 // exactamente igual que antes de que existiera esta función.
 
+import { normalizeClosedDays } from './closedDaysModel';
+
 export const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const DEFAULT_PAYMENT_METHODS = ['Efectivo', 'Tarjeta', 'Transferencia'];
 
@@ -11,6 +13,7 @@ export const DEFAULT_BUSINESS_SETTINGS = {
   schedule: DAY_NAMES.map((day) => ({ day, status: 'Disponible', start: '00:00', end: '23:59' })),
   minAdvanceMinutes: 0,
   paymentMethods: [...DEFAULT_PAYMENT_METHODS],
+  closedDays: [], // días cerrados / feriados (ver closedDaysModel.js)
 };
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -35,5 +38,6 @@ export function normalizeBusinessSettings(raw) {
     ? raw.paymentMethods.map((m) => (typeof m === 'string' ? m.trim() : '')).filter(Boolean)
     : [];
   const paymentMethods = rawMethods.length > 0 ? [...new Set(rawMethods)] : [...DEFAULT_PAYMENT_METHODS];
-  return { schedule, minAdvanceMinutes, paymentMethods };
+  const closedDays = normalizeClosedDays(raw?.closedDays);
+  return { schedule, minAdvanceMinutes, paymentMethods, closedDays };
 }

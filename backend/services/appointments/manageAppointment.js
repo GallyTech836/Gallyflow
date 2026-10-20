@@ -102,11 +102,12 @@ export async function rescheduleAppointment({
   const ref = negocioRef.collection('citas').doc(citaId);
 
   return db.runTransaction(async (tx) => {
-    const [citaSnap, prosSnap, citasSnap, bloqSnap] = await Promise.all([
+    const [citaSnap, prosSnap, citasSnap, bloqSnap, negocioSnap] = await Promise.all([
       tx.get(ref),
       tx.get(negocioRef.collection('profesionales')),
       tx.get(negocioRef.collection('citas').where('date', '==', date)),
       tx.get(negocioRef.collection('horariosBloqueados').where('date', '==', date)),
+      tx.get(negocioRef),
     ]);
     const cita = validarCita(citaSnap, phone, ahora, minHours);
 
@@ -128,6 +129,7 @@ export async function rescheduleAppointment({
         profesional: p,
         citasDelNegocio: citasDelDia,
         bloqueos,
+        closedDays: negocioSnap.data()?.businessSettings?.closedDays || [],
       }).includes(time));
     if (!elegido) throw new Error('El horario ya no está disponible. Elige otro horario.');
 
