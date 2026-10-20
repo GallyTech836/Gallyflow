@@ -26,7 +26,7 @@ import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
 import { getServicePriceRange, buildCitaServices, formatPriceRange } from '../pricing/professionalPricing.js';
 import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
 import { crearVoz, aplicarVoz } from './personalidad.js';
-import { findClosure, isClosedOn } from '../appointments/closedDays.js';
+import { findClosure, findSpecialHours, isClosedOn } from '../appointments/closedDays.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -277,11 +277,17 @@ function cierreDelDia(ctx, branch, fecha) {
 }
 
 // Cierre de HOY con el día en que se vuelve a atender ("mañana" / "el lunes"),
-// o null si hoy se atiende.
+// o null si hoy se atiende. Un día con horario especial (ej. 08:00–12:00)
+// cuenta como cerrado solo cuando ya pasó su hora de cierre (`ya: true`).
 export function cierreDeHoy(ctx, branch, ahora = ahoraNegocio()) {
   const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 12);
-  const cierre = cierreDelDia(ctx, branch, isoLocal(hoy));
-  if (!cierre) return null;
+  let cierre = cierreDelDia(ctx, branch, isoLocal(hoy));
+  if (!cierre) {
+    const especial = findSpecialHours(ctx.businessSettings?.closedDays || [], isoLocal(hoy), branch || null);
+    const [h, m] = String(especial?.openEnd || '').split(':').map(Number);
+    if (!especial || ahora.getHours() * 60 + ahora.getMinutes() < h * 60 + m) return null;
+    cierre = { motivo: especial.reason || '', ya: true };
+  }
   let vuelve = '';
   for (let i = 1; i <= 60; i++) {
     const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + i, 12);

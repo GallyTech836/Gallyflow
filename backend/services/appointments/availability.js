@@ -8,7 +8,7 @@
 // apunta a backend/. Si cambias la regla de negocio de disponibilidad,
 // actualiza este archivo Y el de src/shared/ en el mismo cambio.
 
-import { isClosedOn } from './closedDays.js';
+import { isClosedOn, findSpecialHours } from './closedDays.js';
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const SLOT_STEP = 30; // minutos entre cada horario mostrado (09:00, 09:30, ...)
@@ -57,8 +57,13 @@ export function getAvailableSlots({
   const businessStartMin = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
   const businessEndMin = businessDay ? timeToMin(businessDay.end || '23:59') : 24 * 60 - 1;
 
-  const startOfDayMin = Math.max(timeToMin(dayAvailability.start || '00:00'), businessStartMin);
-  const endOfDayMin = Math.min(timeToMin(dayAvailability.end || '00:00'), businessEndMin);
+  // Horario especial de ese día (ej. solo 08:00–12:00): recorta igual que el del negocio.
+  const especial = findSpecialHours(closedDays, fecha, profesional.branch || null);
+  const especialStart = especial ? timeToMin(especial.openStart) : 0;
+  const especialEnd = especial ? timeToMin(especial.openEnd) : 24 * 60;
+
+  const startOfDayMin = Math.max(timeToMin(dayAvailability.start || '00:00'), businessStartMin, especialStart);
+  const endOfDayMin = Math.min(timeToMin(dayAvailability.end || '00:00'), businessEndMin, especialEnd);
   if (Number.isNaN(startOfDayMin) || Number.isNaN(endOfDayMin) || endOfDayMin <= startOfDayMin) {
     return [];
   }

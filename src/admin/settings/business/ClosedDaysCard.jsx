@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { CalendarOff, Plus, Trash2 } from 'lucide-react';
+import { CalendarOff, Plus, Trash2, Clock } from 'lucide-react';
 import { db } from '../../../firebase/config';
 import { newClosureId, closureRangeLabel } from '../../../shared/businessSettings/closedDaysModel';
 
@@ -23,6 +23,10 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
   const [end, setEnd] = useState('');
   const [reason, setReason] = useState('Feriado');
   const [branch, setBranch] = useState('');
+  // Horario especial: ese día solo se atiende de openStart a openEnd (no cierra todo el día).
+  const [parcial, setParcial] = useState(false);
+  const [openStart, setOpenStart] = useState('08:00');
+  const [openEnd, setOpenEnd] = useState('12:00');
   const [error, setError] = useState('');
   const [verPasados, setVerPasados] = useState(false);
 
@@ -47,6 +51,10 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
     if (!start) { setError('Elige la fecha.'); return; }
     const fin = end && end >= start ? end : start;
     if (end && end < start) { setError('La fecha "Hasta" no puede ser anterior a "Desde".'); return; }
+    if (parcial && !(openStart && openEnd && openEnd > openStart)) {
+      setError('En el horario especial, la hora de cierre debe ser después de la de apertura.');
+      return;
+    }
     const suc = branches.find((b) => b.id === branch);
     const repetido = value.some((c) => c.start === start && (c.end || c.start) === fin && (c.branchId || '') === (suc?.id || ''));
     if (repetido) { setError('Ese día ya está en la lista.'); return; }
@@ -57,9 +65,12 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
       reason: reason.trim().slice(0, 60),
       branch: suc?.name || '',
       branchId: suc?.id || '',
+      openStart: parcial ? openStart : '',
+      openEnd: parcial ? openEnd : '',
     }].sort((a, b) => a.start.localeCompare(b.start)));
     setStart('');
     setEnd('');
+    setParcial(false);
   };
 
   const quitar = (id) => onChange(value.filter((c) => c.id !== id));
@@ -71,7 +82,10 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-nexus-text nx-num">{closureRangeLabel(c)}</p>
         <p className="text-xs text-nexus-text-secondary truncate">
-          {c.reason || 'Cerrado'}{variasSucursales || c.branch ? ` · ${c.branch || 'Todas las sucursales'}` : ''}
+          {c.openStart && c.openEnd
+            ? `${c.reason ? `${c.reason} · ` : ''}Atiende solo ${c.openStart} – ${c.openEnd}`
+            : (c.reason || 'Cerrado todo el día')}
+          {variasSucursales || c.branch ? ` · ${c.branch || 'Todas las sucursales'}` : ''}
         </p>
       </div>
       <button
@@ -94,7 +108,8 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
       </div>
       <p className="text-sm text-nexus-text-secondary mb-4">
         Esos días el link público no muestra horarios y el asistente de WhatsApp avisa que
-        no se atiende. En la agenda solo se puede agendar en sobrehorario.
+        no se atiende. Con «Horario especial» el día no se cierra: solo se atiende entre las
+        horas que elijas (ej. 08:00 a 12:00). En la agenda, fuera de eso solo se agenda en sobrehorario.
       </p>
 
       <form onSubmit={agregar} className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1.2fr_auto] gap-3 items-end">
@@ -130,6 +145,30 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
             </select>
           </label>
         )}
+        <div className="col-span-2 md:col-span-4 md:order-last flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-nexus-border bg-nexus-background px-3 py-2.5">
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={parcial}
+              onChange={(e) => setParcial(e.target.checked)}
+              className="h-4 w-4 accent-[var(--nx-primary)] cursor-pointer"
+            />
+            <Clock className="w-4 h-4 text-nexus-primary" aria-hidden="true" />
+            <span className="text-sm font-medium text-nexus-text">Horario especial (atiende solo unas horas)</span>
+          </label>
+          {parcial && (
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5">
+                <span className="text-xs text-nexus-text-secondary">De</span>
+                <input type="time" value={openStart} onChange={(e) => setOpenStart(e.target.value)} aria-label="Abre a las" className="h-9 w-28 bg-nexus-surface border border-nexus-border rounded-lg px-2 text-base sm:text-sm text-nexus-text nx-num outline-none focus:border-nexus-primary" />
+              </label>
+              <label className="flex items-center gap-1.5">
+                <span className="text-xs text-nexus-text-secondary">a</span>
+                <input type="time" value={openEnd} onChange={(e) => setOpenEnd(e.target.value)} aria-label="Cierra a las" className="h-9 w-28 bg-nexus-surface border border-nexus-border rounded-lg px-2 text-base sm:text-sm text-nexus-text nx-num outline-none focus:border-nexus-primary" />
+              </label>
+            </div>
+          )}
+        </div>
         <button
           type="submit"
           className="col-span-2 md:col-span-1 inline-flex h-10 items-center justify-center gap-1.5 px-4 rounded-lg bg-nexus-primary-soft text-nexus-primary border border-nexus-primary/25 hover:opacity-80 text-sm font-semibold cursor-pointer"

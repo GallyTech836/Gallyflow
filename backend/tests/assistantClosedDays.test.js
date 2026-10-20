@@ -17,7 +17,8 @@ mock.module('../services/capabilities/capabilityService.js', {
     requireCapability: () => (a, b, n) => n(),
   },
 });
-const { assistantEngine } = await import('../services/assistantEngine/engine.js');
+const { assistantEngine, cierreDeHoy } = await import('../services/assistantEngine/engine.js');
+const { getAvailableSlots } = await import('../services/appointments/availability.js');
 const { createAppointment } = await import('../services/appointments/createAppointment.js');
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -123,5 +124,37 @@ describe('Días cerrados al crear la cita', () => {
     await assert.rejects(createAppointment({ ...base, date: '2030-05-01' }), /no está disponible/);
     const ok = await createAppointment({ ...base, date: '2030-05-02' });
     assert.equal(ok.date, '2030-05-02');
+  });
+});
+
+describe('Horario especial (atiende solo unas horas)', () => {
+  const especial = [{ id: 'h', start: '2030-05-03', openStart: '08:00', openEnd: '12:00' }];
+  const pro = { id: 'a', availability: allDay };
+
+  test('solo ofrece horas dentro del horario especial', () => {
+    const slots = getAvailableSlots({ fecha: '2030-05-03', serviceDuration: 30, profesional: pro, closedDays: especial });
+    assert.equal(slots[0], '08:00');
+    assert.equal(slots[slots.length - 1], '11:30');
+    const normal = getAvailableSlots({ fecha: '2030-05-04', serviceDuration: 30, profesional: pro, closedDays: especial });
+    assert.equal(normal[0], '00:00');
+  });
+
+  test('no deja reservar fuera del horario especial', async () => {
+    seed({ closedDays: especial });
+    const base = {
+      negocioId: neg, professionalId: 'a', date: '2030-05-03', serviceDuration: 30,
+      services: [{ serviceId: 's1', serviceName: 'Corte', duration: 30 }], clientName: 'Juan',
+    };
+    await assert.rejects(createAppointment({ ...base, time: '14:00' }), /no está disponible/);
+    const ok = await createAppointment({ ...base, time: '09:00' });
+    assert.equal(ok.time, '09:00');
+  });
+
+  test('el bot avisa «por hoy ya no» solo después de la hora de cierre', () => {
+    const ctx = { businessSettings: { schedule: allDay, closedDays: [{ id: 'h', start: '2030-05-03', openStart: '08:00', openEnd: '12:00' }] } };
+    assert.equal(cierreDeHoy(ctx, null, new Date(2030, 4, 3, 10, 0)), null);
+    const r = cierreDeHoy(ctx, null, new Date(2030, 4, 3, 12, 30));
+    assert.equal(r.ya, true);
+    assert.equal(r.vuelve, 'mañana');
   });
 });

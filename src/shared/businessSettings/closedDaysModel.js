@@ -15,9 +15,13 @@
 //     reason: 'Feriado',     // opcional
 //     branch: '',            // '' = todo el negocio; si no, nombre de la sucursal
 //     branchId: '',          // id de la sucursal (opcional, por si cambia el nombre)
+//     openStart: '', openEnd: '', // opcional: HORARIO ESPECIAL. Si están los dos, ese
+//                                 // día NO está cerrado: solo se atiende de openStart a
+//                                 // openEnd (ej. 08:00–12:00). Vacíos = cerrado todo el día.
 //   }]
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_DIAS_CERRADOS = 200;
 const MAX_RANGO_DIAS = 62; // un rango no puede durar más de ~2 meses
 
@@ -43,6 +47,13 @@ export function normalizeClosedDays(raw) {
     let end = texto(r?.end, 10);
     if (!FECHA_RE.test(end) || end < start) end = start;
     if (diasEntre(start, end) > MAX_RANGO_DIAS) continue;
+    // Horario especial: válido solo si las dos horas existen y fin > inicio.
+    let openStart = texto(r?.openStart, 5);
+    let openEnd = texto(r?.openEnd, 5);
+    if (!HORA_RE.test(openStart) || !HORA_RE.test(openEnd) || openEnd <= openStart) {
+      openStart = '';
+      openEnd = '';
+    }
     out.push({
       id: texto(r?.id, 40) || nuevoId(),
       start,
@@ -50,6 +61,8 @@ export function normalizeClosedDays(raw) {
       reason: texto(r?.reason, 60),
       branch: texto(r?.branch, 120),
       branchId: texto(r?.branchId, 80),
+      openStart,
+      openEnd,
     });
   }
   out.sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
@@ -63,23 +76,47 @@ function aplicaASucursal(cierre, branch) {
   return cierre.branch === branch || (!!cierre.branchId && cierre.branchId === branch);
 }
 
+/** ¿La entrada es un horario especial (atiende solo unas horas) y no un cierre total? */
+export function isSpecialHours(c) {
+  return !!(c && c.openStart && c.openEnd);
+}
+
+function entradasDelDia(closedDays, fecha, branch) {
+  if (!Array.isArray(closedDays) || !closedDays.length || !FECHA_RE.test(String(fecha || ''))) return [];
+  return closedDays.filter((c) => c && c.start <= fecha && fecha <= (c.end || c.start) && aplicaASucursal(c, branch));
+}
+
 /**
- * Cierre que afecta a `fecha` ('YYYY-MM-DD') para `branch` (nombre o id de la
- * sucursal; null = solo cuentan los cierres de todo el negocio).
- * Devuelve el cierre o null.
+ * Cierre de DÍA COMPLETO que afecta a `fecha` ('YYYY-MM-DD') para `branch`
+ * (nombre o id de la sucursal; null = solo cuentan los de todo el negocio).
+ * Devuelve el cierre o null. Un horario especial no cuenta como cerrado.
  */
 export function findClosure(closedDays, fecha, branch = null) {
-  if (!Array.isArray(closedDays) || !closedDays.length || !FECHA_RE.test(String(fecha || ''))) return null;
-  return closedDays.find((c) => c && c.start <= fecha && fecha <= (c.end || c.start) && aplicaASucursal(c, branch)) || null;
+  return entradasDelDia(closedDays, fecha, branch).find((c) => !isSpecialHours(c)) || null;
+}
+
+/**
+ * Horario especial de `fecha` (solo se atiende de openStart a openEnd), o null.
+ * Si el día además tiene un cierre completo, manda el cierre (devuelve null).
+ */
+export function findSpecialHours(closedDays, fecha, branch = null) {
+  const del = entradasDelDia(closedDays, fecha, branch);
+  if (del.some((c) => !isSpecialHours(c))) return null;
+  const esp = del.filter(isSpecialHours);
+  if (!esp.length) return null;
+  // Varios en el mismo día: se toma el más restrictivo (intersección).
+  const openStart = esp.reduce((m, c) => (c.openStart > m ? c.openStart : m), '00:00');
+  const openEnd = esp.reduce((m, c) => (c.openEnd < m ? c.openEnd : m), '23:59');
+  return { ...esp[0], openStart, openEnd };
 }
 
 export function isClosedOn(closedDays, fecha, branch = null) {
   return findClosure(closedDays, fecha, branch) !== null;
 }
 
-/** Texto corto del cierre: "Feriado" / "Cerrado". */
+/** Texto corto: "Feriado" / "Cerrado" / "Horario especial". */
 export function closureLabel(cierre) {
-  return cierre?.reason || 'Cerrado';
+  return cierre?.reason || (isSpecialHours(cierre) ? 'Horario especial' : 'Cerrado');
 }
 
 /** "20 oct" o "24 – 26 dic" para listas. */

@@ -20,7 +20,7 @@ import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
-import { findClosure, isClosedOn, closureLabel } from '../shared/businessSettings/closedDaysModel';
+import { findClosure, findSpecialHours, isClosedOn, closureLabel } from '../shared/businessSettings/closedDaysModel';
 import BusinessInfoPage from './BusinessInfoPage';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
@@ -366,7 +366,10 @@ export default function App({ negocioSlug } = {}) {
         if (pendingBusinessDay && pendingBusinessDay.status !== 'Disponible') return [];
         if (closureOf(selectedDate)) return [];
       }
-      return DEFAULT_HOURS.filter(cumpleAnticipacion);
+      const especialSinPros = selectedDate ? findSpecialHours(businessSettings?.closedDays, selectedDate, closureBranch) : null;
+      return DEFAULT_HOURS
+        .filter(h => !especialSinPros || (h >= especialSinPros.openStart && h < especialSinPros.openEnd))
+        .filter(cumpleAnticipacion);
     }
 
     if (!selectedDate) return [];
@@ -391,8 +394,10 @@ export default function App({ negocioSlug } = {}) {
       const businessStartMin = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
       const businessEndMin = businessDay ? timeToMin(businessDay.end || '23:59') : (24 * 60 - 1);
 
-      const startOfDayMin = Math.max(barberStartMin, businessStartMin);
-      const endOfDayMin = Math.min(barberEndMin, businessEndMin);
+      // Horario especial de ese día (ej. solo 08:00–12:00).
+      const especial = findSpecialHours(businessSettings?.closedDays, selectedDate, barber.branch || null);
+      const startOfDayMin = Math.max(barberStartMin, businessStartMin, especial ? timeToMin(especial.openStart) : 0);
+      const endOfDayMin = Math.min(barberEndMin, businessEndMin, especial ? timeToMin(especial.openEnd) : 24 * 60);
       if (isNaN(startOfDayMin) || isNaN(endOfDayMin) || endOfDayMin <= startOfDayMin) return [];
 
       const citasDelBarbero = citasNegocio.filter(c =>

@@ -35,6 +35,18 @@ describe('closedDays', () => {
     assert.ok(m.isClosedOn(cierres, '2026-11-02', 'Norte'), 'cierre de todo el negocio aplica a toda sucursal');
   });
 
+  test('horario especial: no cierra el día, solo limita las horas', () => {
+    const c = m.normalizeClosedDays([
+      { id: 'h', start: '2026-11-05', openStart: '08:00', openEnd: '12:00' },
+      { id: 'mal', start: '2026-11-06', openStart: '12:00', openEnd: '08:00' }, // horas al revés => día completo
+    ]);
+    assert.ok(!m.isClosedOn(c, '2026-11-05'));
+    assert.deepEqual([m.findSpecialHours(c, '2026-11-05').openStart, m.findSpecialHours(c, '2026-11-05').openEnd], ['08:00', '12:00']);
+    assert.ok(m.isClosedOn(c, '2026-11-06'));
+    assert.equal(m.findSpecialHours(c, '2026-11-06'), null);
+    assert.equal(m.closureLabel(c[0]), 'Horario especial');
+  });
+
   test('la copia del backend es igual', async () => {
     const cuerpo = (t) => t.slice(t.indexOf('const FECHA_RE'));
     const a = await readFile(new URL('../src/shared/businessSettings/closedDaysModel.js', import.meta.url), 'utf8');

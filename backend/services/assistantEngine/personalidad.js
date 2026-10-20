@@ -46,6 +46,7 @@ export const TONOS = {
     preguntaInfo: '¿Qué información te gustaría?',
     humano: 'Listo, le avisé al equipo. Una persona te responderá por aquí en breve. 🙌',
     cerrado: ({ vuelve }) => `Hoy no estamos atendiendo 🙏${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
+    cerradoYa: ({ vuelve }) => `Por hoy ya no estamos atendiendo 🙏${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Quieres agendar para otro día?',
     sinEquipo: 'Hoy no hay nadie del equipo para responderte por aquí, pero puedo ayudarte a agendar para otro día.',
   },
@@ -63,6 +64,7 @@ export const TONOS = {
     preguntaInfo: '¿Qué información desea conocer?',
     humano: 'Con gusto. Ya informé a nuestro equipo y una persona le atenderá por este medio en breve.',
     cerrado: ({ vuelve }) => `Le informamos que hoy no estamos atendiendo.${vuelve ? ` Retomamos la atención ${vuelve}.` : ''}`,
+    cerradoYa: ({ vuelve }) => `Le informamos que por hoy ya no estamos atendiendo.${vuelve ? ` Retomamos la atención ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Desea agendar para otro día?',
     sinEquipo: 'Hoy no contamos con personal para atenderle por este medio, pero con gusto puedo ayudarle a agendar para otro día.',
   },
@@ -80,6 +82,7 @@ export const TONOS = {
     preguntaInfo: '¿Qué información necesitas?',
     humano: 'Listo, avisé al equipo. Una persona te responderá por aquí en breve.',
     cerrado: ({ vuelve }) => `Hoy no tenemos atención.${vuelve ? ` Volvemos a atender ${vuelve}.` : ''}`,
+    cerradoYa: ({ vuelve }) => `Por hoy ya terminó nuestra atención.${vuelve ? ` Volvemos a atender ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Quieres reservar para otro día?',
     sinEquipo: 'Hoy el equipo no está disponible por aquí. Puedo ayudarte a reservar para otro día.',
   },
@@ -97,6 +100,7 @@ export const TONOS = {
     preguntaInfo: '¿Qué te gustaría saber?',
     humano: '¡Hecho! Ya le avisé al equipo y alguien te escribe por aquí en un ratito 🙌',
     cerrado: ({ vuelve }) => `¡Hoy estamos cerrados! 😴${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
+    cerradoYa: ({ vuelve }) => `¡Por hoy ya cerramos! 😴${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Te agendo para otro día?',
     sinEquipo: 'Hoy no hay nadie del equipo por aquí 😅 pero te puedo agendar para otro día.',
   },
@@ -114,6 +118,7 @@ export const TONOS = {
     preguntaInfo: '¿Qué te gustaría conocer?',
     humano: '¡Perfecto! Ya avisé al equipo y una persona te responderá por aquí muy pronto 🙌',
     cerrado: ({ vuelve }) => `¡Hoy nos tomamos el día! 🎈${vuelve ? ` Volvemos ${vuelve} con todo ✨` : ''}`,
+    cerradoYa: ({ vuelve }) => `¡Por hoy ya cerramos! 🎈${vuelve ? ` Volvemos ${vuelve} con todo ✨` : ''}`,
     cerradoPregunta: '¿Te gustaría agendar para otro día?',
     sinEquipo: 'Hoy el equipo está descansando 😊 pero yo te ayudo a agendar para otro día ✨',
   },
@@ -131,6 +136,7 @@ export const TONOS = {
     preguntaInfo: '¿Qué quieres saber?',
     humano: 'Listo, avisé al equipo. Te responderán por aquí.',
     cerrado: ({ vuelve }) => `Hoy cerrado.${vuelve ? ` Abrimos ${vuelve}.` : ''}`,
+    cerradoYa: ({ vuelve }) => `Hoy ya cerrado.${vuelve ? ` Abrimos ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Agendas para otro día?',
     sinEquipo: 'Hoy no hay atención del equipo. Puedo agendarte para otro día.',
   },
@@ -264,8 +270,9 @@ export function crearVoz(rawPersonalidad, { negocio = '', hora = 12 } = {}) {
     /**
      * Día cerrado / feriado: "Hoy no estamos atendiendo 🙏 Volvemos mañana."
      * `vuelve` = "mañana" / "el lunes". El motivo (Feriado, Vacaciones...) no se le dice al cliente.
+     * `ya` = día con horario especial que ya terminó: "Por hoy ya no estamos atendiendo".
      */
-    cerrado: ({ vuelve = '' } = {}) => frase(t.cerrado({ vuelve })),
+    cerrado: ({ vuelve = '', ya = false } = {}) => frase((ya ? t.cerradoYa : t.cerrado)({ vuelve })),
     cerradoPregunta: () => frase(t.cerradoPregunta),
     sinEquipo: () => frase(t.sinEquipo),
     despedida: () => (p.despedida ? frase(rellenar(p.despedida, { nombre: '', negocio })) : ''),

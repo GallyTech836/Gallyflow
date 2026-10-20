@@ -10,7 +10,7 @@
 // todo el día", así que no bloquea nada (igual que antes).
 
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel';
-import { findClosure, closureLabel } from '../businessSettings/closedDaysModel';
+import { findClosure, findSpecialHours, closureLabel } from '../businessSettings/closedDaysModel';
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -58,6 +58,16 @@ export function checkWorkingHours({ date, time, duration, businessSchedule = [],
   if (cierre) {
     const donde = cierre.branch ? `La sucursal ${cierre.branch} está cerrada` : 'El negocio está cerrado';
     return { ok: false, closed: true, message: `${donde} ese día (${closureLabel(cierre)}).` };
+  }
+
+  // 0b) Horario especial de ese día (ej. solo 08:00–12:00)
+  const especial = findSpecialHours(closedDays, date, branch || professional?.branch || null);
+  if (especial) {
+    const es = toMin(especial.openStart);
+    const ee = toEndMin(especial.openEnd);
+    if (es !== null && ee !== null && (start < es || end > ee)) {
+      return { ok: false, message: `${range} queda fuera del horario especial de ese día (${especial.openStart} – ${especial.openEnd}).` };
+    }
   }
 
   // 1) Horario del negocio

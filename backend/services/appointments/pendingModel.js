@@ -10,7 +10,7 @@
 //
 // Funciones puras, sin React ni Firebase.
 
-import { isClosedOn } from './closedDays.js';
+import { isClosedOn, findSpecialHours } from './closedDays.js';
 
 export const PENDING_ID = 'pending';
 
@@ -90,8 +90,10 @@ export function isProfessionalFreeAt({
   const proEnd = timeToMin(dayAvailability.end || '00:00');
   const bizStart = businessDay ? timeToMin(businessDay.start || '00:00') : 0;
   const bizEnd = businessDay ? timeToMin(businessDay.end || '23:59') : 24 * 60 - 1;
-  const dayStart = Math.max(proStart, bizStart);
-  const dayEnd = Math.min(proEnd, bizEnd);
+  // Horario especial de ese día (ej. solo 08:00–12:00).
+  const especial = findSpecialHours(closedDays, fecha, professional.branch || null);
+  const dayStart = Math.max(proStart, bizStart, especial ? timeToMin(especial.openStart) : 0);
+  const dayEnd = Math.min(proEnd, bizEnd, especial ? timeToMin(especial.openEnd) : 24 * 60);
   if (Number.isNaN(dayStart) || Number.isNaN(dayEnd) || dayEnd <= dayStart) return false;
 
   const slotStart = timeToMin(time);
