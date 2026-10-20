@@ -1187,7 +1187,7 @@ ${cierre}`,
     const cierre = cierreDeHoy(context, branch);
     if (cierre) {
       const { tl } = context.terms;
-      const cuerpo = `${voz.cerrado(cierre)}\n${voz.sinEquipo()}`;
+      const cuerpo = voz.sinEquipo(); // directo, sin repetir que hoy está cerrado
       return responder(menuBotones({
         texto: `${cuerpo}\n\n1. Agendar para otro día`,
         cuerpo,

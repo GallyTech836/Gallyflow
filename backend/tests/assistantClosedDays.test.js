@@ -68,7 +68,8 @@ describe('Días cerrados en el asistente', () => {
     const r = await say('hola');
     const body = r.interactive.body.text;
     assert.match(body, /^Hola Juan 👋 Soy el asistente de Royal Barber\./);
-    assert.match(body, /Hoy no estamos atendiendo \(Feriado\) 🙏 Volvemos mañana\./);
+    assert.match(body, /Hoy no estamos atendiendo 🙏 Volvemos mañana\./);
+    assert.doesNotMatch(body, /Feriado/);
     assert.ok(!titulos(r).some((t) => /hablar/i.test(t)), titulos(r).join(','));
     assert.ok(titulos(r).includes('Agendar otro día'));
   });
@@ -76,15 +77,20 @@ describe('Días cerrados en el asistente', () => {
   test('la respuesta sigue la personalidad (formal)', async () => {
     seed({ closedDays: [{ id: 'x', start: HOY, reason: 'Feriado' }], personalidad: { tono: 'formal' } });
     const r = await say('hola');
-    assert.match(r.interactive.body.text, /Le informamos que hoy no estamos atendiendo \(Feriado\)\. Retomamos la atención mañana\./);
+    assert.match(r.interactive.body.text, /Le informamos que hoy no estamos atendiendo\. Retomamos la atención mañana\./);
     assert.match(r.interactive.body.text, /¿Desea agendar para otro día\?/);
   });
 
   test('pedir hablar con alguien en día cerrado: avisa que no hay equipo', async () => {
+    seed({ closedDays: [{ id: 'x', start: HOY }], personalidad: { tono: 'formal' } });
+    await say('hola');
+    const f = await say('hablar con alguien');
+    assert.match(f.interactive.body.text, /^Hoy no contamos con personal/);
+    assert.doesNotMatch(f.interactive.body.text, /Le informamos/);
     seed({ closedDays: [{ id: 'x', start: HOY }] });
     await say('hola');
     const r = await say('hablar con alguien');
-    assert.match(r.interactive.body.text, /Hoy no hay nadie del equipo/);
+    assert.match(r.interactive.body.text, /^Hoy no hay nadie del equipo/);
     const conv = db._get(`negocios/${neg}/assistantConversations/${phone}`);
     assert.notEqual(conv?.currentFlow, 'human');
   });
