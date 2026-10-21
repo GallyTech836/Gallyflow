@@ -22,6 +22,10 @@ const DEFAULT_STATE = {
   citaOptions: null,
   manageCitaId: null,
   rescheduleCitaId: null,
+  // Mensajes seguidos que el bot no entendió en el inicio (al 2.º ofrece una persona)
+  welcomeMisses: 0,
+  // Profesional que el cliente nombró ("¿Se encuentra Martín?"): se agenda con él
+  preferredStaffId: null,
 };
 
 function conversationsRef(negocioId) {

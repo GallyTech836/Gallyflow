@@ -194,6 +194,37 @@ function opcionesCualquiera(pros, terms = GENERIC_TERMS) {
   }));
 }
 
+// ───────────────────────── Texto libre ─────────────────────────
+
+const sinAcentos = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// "Hola", "buenas tardes", "hola qué tal"... (mensaje corto que solo saluda)
+const PALABRAS_SALUDO = new Set(['hola', 'holaa', 'holaaa', 'holi', 'ola', 'buenas', 'buenos', 'buena', 'buen', 'dia', 'dias',
+  'tardes', 'noches', 'hey', 'que', 'tal', 'saludos', 'como', 'esta', 'estas', 'estan', 'todo', 'bien']);
+function esSaludo(texto) {
+  const palabras = sinAcentos(texto).replace(/[^a-z ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  return palabras.length > 0 && palabras.length <= 5 && palabras.every((w) => PALABRAS_SALUDO.has(w))
+    && /^(hola|holi|ola|buen|hey|saludos|que tal)/.test(palabras.join(' '));
+}
+// "Gracias", "ok", "listo"...
+const ES_AGRADECIMIENTO = /^(muchas\s+)?(gracias|grax|ok+|okey|oki|vale|listo|perfecto|genial|excelente|de acuerdo|dale|👍|🙏|🙌|👌)[\s!.]*$/i;
+
+// Profesional nombrado en el mensaje ("¿Se encuentra Martín?", "cita con Martín").
+// Primero por nombre completo, después por primer nombre; solo si hay UNO.
+// "soy Martín" / "me llamo Martín" no cuenta (es el nombre del cliente).
+function profesionalNombrado(pros, texto) {
+  if (/\b(soy|me llamo|mi nombre es)\b/i.test(texto)) return null;
+  const t = ` ${sinAcentos(texto).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ')} `;
+  const nombre = (p) => sinAcentos(p?.name).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const completos = pros.filter((p) => nombre(p).length >= 3 && t.includes(` ${nombre(p)} `));
+  if (completos.length === 1) return completos[0];
+  const porNombre = pros.filter((p) => {
+    const primero = nombre(p).split(' ')[0];
+    return primero.length >= 3 && t.includes(` ${primero} `);
+  });
+  return porNombre.length === 1 ? porNombre[0] : null;
+}
+
 // ───────────────────────── Días y horas ─────────────────────────
 
 // Próximos días en que: el negocio abre, al menos uno de `pros` trabaja y
@@ -571,20 +602,24 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       if (/repetir/i.test(texto) && conversation.repeatOption) {
         return repetirUltimaCita();
       }
-      if (/^1$|agendar|reservar/i.test(texto)) {
-        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null });
+      const nombrado = profesionalNombrado(context.profesionales, texto);
+      if (/^1$|agendar|reservar|\b(una|otra)\s+(cita|reserva|turno)\b/i.test(texto)) {
+        if (nombrado) return agendarCon(nombrado);
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null, preferredStaffId: null });
         return responder(mensajeServicios(context), conversation);
       }
       // Preguntas escritas: "¿cuánto cuesta?", "¿dónde están?", "horario"...
       if (pideServicios(texto)) return responder(mensajeServiciosYPrecios(), conversation);
       if (pideUbicacion(texto)) return responder(mensajeUbicacion(), conversation);
-      return responder(await bienvenida(), conversation);
+      // "¿Se encuentra Martín?" / "cita con Martín": agendar con ese profesional.
+      if (nombrado) return agendarCon(nombrado);
+      return respuestaSinEntender(texto);
     }
 
     // ── Agendar ──
 
     case 'choosing_service': {
-      const servicios = serviciosOfrecidos(context);
+      const servicios = serviciosDelPaso();
       const indices = parsearIndices(texto, servicios.length);
       if (!indices) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeServicios(context)), conversation);
 
@@ -806,6 +841,15 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   async function irAProfesionales() {
     const pros = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
 
+    // El cliente nombró a un profesional al empezar: si hace estos servicios, va directo con él.
+    const preferido = pros.find((p) => p.id === conversation.preferredStaffId);
+    if (preferido) {
+      conversation = await updateConversation(negocioId, phone, {
+        selectedStaff: { id: preferido.id, name: preferido.name, branch: preferido.branch || '' },
+      });
+      return ofrecerHorarios(`Te atenderá ${preferido.name}.`);
+    }
+
     // Un solo profesional posible y nada más que agregar: se elige solo.
     if (pros.length === 1 && serviciosExtraCompatibles().length === 0) {
       const p = pros[0];
@@ -903,12 +947,99 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       repeatOption: repetir || null,
       citaOptions,
       manageCitaId: citaOptions.length === 1 ? citaOptions[0].id : null,
+      greetedAt: new Date().toISOString(), // el saludo completo no se repite al rato
+      welcomeMisses: 0,
     });
     // Hoy cerrado / feriado: saludo + aviso (según la personalidad) + agendar otro día.
     const cierre = cierreDeHoy(context, branch);
     if (cierre) return mensajeCerrado(nombre, cierre, citaOptions);
     if (citaOptions.length) return mensajeConCitas(nombre, citaOptions);
     return mensajeBienvenida(context, nombre, repetir);
+  }
+
+  // ── Texto libre en el inicio (sin repetir el saludo) ──
+
+  // Servicios de la lista: si el cliente nombró a un profesional, solo los suyos.
+  function serviciosDelPaso() {
+    const todos = serviciosOfrecidos(context);
+    const pro = context.profesionales.find((p) => p.id === conversation.preferredStaffId);
+    if (!pro) return todos;
+    const suyos = todos.filter((s) => professionalCanDo(pro, [s.id]));
+    return suyos.length ? suyos : todos;
+  }
+
+  // "¿Se encuentra Martín?": el bot no sabe si está en el local, pero ofrece
+  // agendar con él. Con un solo servicio posible, va directo a los horarios.
+  async function agendarCon(pro) {
+    const suyos = serviciosOfrecidos(context).filter((s) => professionalCanDo(pro, [s.id]));
+    if (suyos.length === 0) return respuestaSinEntender('');
+    const aviso = `Agendemos con ${pro.name}.`;
+    if (suyos.length === 1) {
+      conversation = await updateConversation(negocioId, phone, {
+        selectedServices: [aServicioCita(suyos[0])],
+        selectedStaff: { id: pro.id, name: pro.name, branch: pro.branch || '' },
+        preferredStaffId: pro.id,
+        welcomeMisses: 0,
+      });
+      return ofrecerHorarios(aviso);
+    }
+    conversation = await updateConversation(negocioId, phone, {
+      currentFlow: 'choosing_service',
+      selectedServices: null,
+      preferredStaffId: pro.id,
+      welcomeMisses: 0,
+    });
+    return responder(prefijo(aviso, mensajeServicios(context)), conversation);
+  }
+
+  // Mensaje que el bot no entiende en el inicio. El saludo completo sale una
+  // sola vez (30 min); después: "hola" => saludo corto, "gracias" => de nada,
+  // otra cosa => "no logré entender" y, al 2.º seguido, ofrecer una persona.
+  // En día cerrado nunca se ofrece «Hablar con alguien».
+  async function respuestaSinEntender(textoCliente) {
+    const reciente = Date.now() - (Date.parse(conversation.greetedAt || '') || 0) < CONVERSATION_TIMEOUT_MS;
+    if (!reciente || /^(menu|menú|inicio|0)$/i.test(String(textoCliente).trim())) return responder(await bienvenida(), conversation);
+
+    const cierre = cierreDeHoy(context, branch);
+    const { tl } = context.terms;
+    const botonesBase = cierre
+      ? [{ id: '1', title: 'Agendar otro día' }, { id: 'info_servicios', title: cabe(`${mayuscula(tl('services'))} y precios`, 20, 'Precios') }]
+      : [{ id: '1', title: cabe(`Agendar ${tl('appointment')}`, 20, 'Agendar') }, { id: '2', title: 'Hablar con alguien' }];
+    const textoBase = cierre ? '1. Agendar para otro día\n(Escribe "precios" para ver los precios)' : '1. Agendar\n2. Hablar con alguien';
+
+    if (ES_AGRADECIMIENTO.test(textoCliente)) {
+      conversation = await updateConversation(negocioId, phone, { welcomeMisses: 0 });
+      return responder(voz.deNada(), conversation);
+    }
+
+    if (esSaludo(textoCliente)) {
+      conversation = await updateConversation(negocioId, phone, { welcomeMisses: 0 });
+      const cuerpo = cierre
+        ? `${voz.holaDeNuevo()} ${voz.cerrado(cierre)}\n${voz.cerradoPregunta()}`
+        : `${voz.holaDeNuevo()} ${voz.ayuda()}`;
+      const repetir = !cierre && conversation.repeatOption
+        ? [{ id: 'repetir', title: cabe(`Repetir ${tl('appointment')}`, 20, 'Repetir') }]
+        : [];
+      return responder(menuBotones({ texto: `${cuerpo}\n\n${textoBase}`, cuerpo, botones: [...repetir, ...botonesBase] }), conversation);
+    }
+
+    const fallos = (Number(conversation.welcomeMisses) || 0) + 1;
+    if (fallos >= 2) {
+      conversation = await updateConversation(negocioId, phone, { welcomeMisses: 0 });
+      if (cierre) {
+        const cuerpo = voz.sinEquipo();
+        return responder(menuBotones({ texto: `${cuerpo}\n\n${textoBase}`, cuerpo, botones: botonesBase }), conversation);
+      }
+      const cuerpo = voz.ofrecerPersona();
+      return responder(menuBotones({
+        texto: `${cuerpo}\n\n2. Sí, avisar al equipo\n1. Agendar`,
+        cuerpo,
+        botones: [{ id: '2', title: 'Sí, avisar al equipo' }, botonesBase[0]],
+      }), conversation);
+    }
+    conversation = await updateConversation(negocioId, phone, { welcomeMisses: fallos });
+    const cuerpo = voz.noEntiendo();
+    return responder(menuBotones({ texto: `${cuerpo}\n\n${textoBase}`, cuerpo, botones: botonesBase }), conversation);
   }
 
   // ── Clientes que llegan desde un anuncio ──
@@ -921,7 +1052,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       findUpcomingCitas(negocioId, phone, ahoraNegocio()),
     ]);
     if (proximas.length || cierreDeHoy(context, branch)) return bienvenida();
-    conversation = await updateConversation(negocioId, phone, { currentFlow: 'welcome', fromAd: true, citaOptions: [], manageCitaId: null });
+    conversation = await updateConversation(negocioId, phone, { currentFlow: 'welcome', fromAd: true, citaOptions: [], manageCitaId: null, greetedAt: new Date().toISOString(), welcomeMisses: 0 });
     const { tl, g } = context.terms;
     const cita = tl('appointment');
     const saludo = voz.anuncio(nombre ? nombre.split(' ')[0] : '');
@@ -1299,7 +1430,7 @@ ${cierre}`,
 
   function mensajeServicios(ctx) {
     const { tl } = ctx.terms;
-    const servicios = serviciosOfrecidos(ctx);
+    const servicios = serviciosDelPaso();
     if (servicios.length === 0) return `Por ahora no hay ${tl('services')} disponibles para reservar.`;
     const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s, context.profesionales)}`);
     const pregunta = `¿Qué ${tl('service')} deseas?`;
