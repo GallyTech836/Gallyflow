@@ -70,3 +70,9 @@ Plan-based feature gating lives in `src/shared/negocioPlan/`. Check plan limits 
 - `FINANCE_SESSION_SECRET`
 
 Firebase client config is hardcoded in `src/firebase/config.js` (project: `gally-flow`).
+
+## Git
+
+- Por defecto: trabajar directo en main. Al terminar, commit y push a origin main.
+- Si el cambio es grande (muchos archivos, rediseños, cambios de datos o de lógica importante), preguntarme antes si quiero una rama aparte.
+- Si uso rama: al terminar, push de la rama y avisarme para revisar la preview de Vercel antes del merge.
