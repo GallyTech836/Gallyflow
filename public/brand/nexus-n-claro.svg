@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 45 176 160" width="176" height="160">
+  <title>Nexus</title>
+  <defs>
+    <linearGradient id="nx-izq" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D4D4D8"/>
+      <stop offset="1" stop-color="#A1A1AA"/>
+    </linearGradient>
+    <linearGradient id="nx-banda" x1="47" y1="62" x2="208" y2="198" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4E4E7"/>
+    </linearGradient>
+    <linearGradient id="nx-der" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4F4F5"/>
+      <stop offset="1" stop-color="#A1A1AA"/>
+    </linearGradient>
+    <linearGradient id="nx-pliegue" x1="186" y1="157" x2="200" y2="138" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#09090B" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#09090B" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- pierna izquierda -->
+  <path fill="url(#nx-izq)" d="M47 88 L90.5 122 L90.5 164 Q89.5 180 77 187 L47 202 Z"/>
+  <!-- pierna derecha -->
+  <path fill="url(#nx-der)" d="M164 136 L164 86 Q165 74 177 68 L208 52 L208 177 Z"/>
+  <!-- banda diagonal -->
+  <path fill="url(#nx-banda)" d="M47 88 Q47 80 52 76 L68 64 Q74 60 82 62 Q86 63 90 66 L208 177 Q207.5 181 203 185 L190 194.5 Q183 199 174 198 Q169.5 197 166 194 L90.5 122 Z"/>
+  <!-- sombra del pliegue sobre la pierna derecha -->
+  <path fill="url(#nx-pliegue)" d="M164 136 L208 177 L208 132 Z"/>
+</svg>
