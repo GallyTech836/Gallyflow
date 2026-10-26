@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase/config';
 import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { getPeriodRange, getMonthGridRange, getPreviousPeriodRange } from '../shared/appointments/dateRanges';
+import { paymentStampFields } from '../shared/appointments/paymentStamp';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import ClosedDayBanner from '../shared/businessSettings/ClosedDayBanner';
 import { signOut } from 'firebase/auth';
@@ -684,7 +685,8 @@ const fetchByDate = async (subcollection, date) => {
     if (!canEditPart(staffPerms, 'editFinish')) { triggerToast(`No tienes permiso para cambiar el estado de ${g('appointment', 'los', 'las')} ${tl('appointments')}.`, 'error'); return; }
     try {
       const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
-      const payload = { status: nextStatus, updatedAt: new Date().toISOString() };
+      const before = appointments.find(a => a.id === apptId);
+      const payload = { status: nextStatus, updatedAt: new Date().toISOString(), ...paymentStampFields(before, nextStatus) };
       if (paymentMethod) payload.paymentMethod = paymentMethod;
       await updateDoc(docRef, payload);
       triggerToast(`${t('appointment')} ${g('appointment', 'marcado', 'marcada')} como ${normalizeStatus(nextStatus)}`);
@@ -725,7 +727,7 @@ const fetchByDate = async (subcollection, date) => {
     if ((timeChanged || durationChanged) && !(await confirmOutsideHours({ date: managingAppt.date, time: managingAppt.time, duration: Number(managingAppt.duration) || 30 }))) return;
     const changes = describeAppointmentChanges(before, { ...before, ...payload }, { terms: businessProfile });
     try {
-      await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, updatedAt: new Date().toISOString() });
+      await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, ...('status' in payload ? paymentStampFields(before, payload.status) : {}), updatedAt: new Date().toISOString() });
       triggerToast(`${t('appointment')} ${g('appointment', 'actualizado', 'actualizada')}`);
       notify(
         payload.status === 'cancelled' ? NotificationType.RESERVA_CANCELADA : NotificationType.RESERVA_MODIFICADA,

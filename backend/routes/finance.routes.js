@@ -8,7 +8,8 @@ import { hashPin, verifyPin } from '../services/finance/pin.js';
 import { getPinHash, setPinHash } from '../services/finance/pinStore.js';
 import { createSessionToken, verifySessionToken } from '../services/finance/financeSession.js';
 import { requireCapability } from '../services/capabilities/capabilityService.js';
-import { getFinanceSummary, getFinanceOverview, getComisionesPorProfesional, getDetalleComisionesBarbero, registrarPagoComision } from '../services/finance/financeData.js';
+import { getFinanceSummary, getFinanceOverview, getComisionesPorProfesional, getDetalleComisionesBarbero } from '../services/finance/financeData.js';
+import { CashError, registerCommissionPayment } from '../services/cash/cashService.js';
 
 const router = Router();
 
@@ -133,12 +134,18 @@ router.get('/finance/commissions/:barberId', requireAuth, requireComisiones, req
   }
 });
 
+// Mismo pago que /cash/commission-payments (transacción, método de pago y
+// salida de caja si es efectivo). Se mantiene esta ruta para Analítica.
 router.post('/finance/commissions/:barberId/pay', requireAuth, requireComisiones, requireFinanceSession, async (req, res) => {
+  if (req.actor?.rol === 'barber') return res.status(401).json({ error: 'No autenticado.' });
   try {
-    const { startDate, endDate } = req.body || {};
-    const data = await registrarPagoComision(req.negocioId, req.params.barberId, { startDate, endDate });
+    const { startDate, endDate, method, branchId } = req.body || {};
+    const data = await registerCommissionPayment(req.negocioId, {
+      barberId: req.params.barberId, startDate, endDate, method, branchId, actor: req.actor,
+    });
     res.status(200).json(data);
   } catch (err) {
+    if (err instanceof CashError) return res.status(err.status).json({ error: err.message, code: err.code });
     logger.error('[finance]', err.message); res.status(500).json({ error: 'Error interno.' });
   }
 });

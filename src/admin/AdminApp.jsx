@@ -6,6 +6,10 @@ import { useServicios } from '../firebase/useServicios';
 import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
+import { paymentStampFields } from '../shared/appointments/paymentStamp';
+import CashCard from './cash/CashCard';
+import CommissionPayModal from './cash/CommissionPayModal';
+import { payCommission } from './cash/cashApi';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import ClosedDayBanner from '../shared/businessSettings/ClosedDayBanner';
 import { getPendingCandidates, getCitaServiceIds, professionalCanDo } from '../shared/appointments/pendingModel';
@@ -1322,20 +1326,15 @@ const { heroConfig } = useHeroConfig(negocioId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchBarbers, rangeReservations, services, businessProfile]);
 
-  const handleLiquidarComisiones = async (barb) => {
-    const pendientes = (barb?.detalle || []).filter(d => !d.paid);
-    if (pendientes.length === 0) {
+  // Pago de comisiones: lo registra el backend (método de pago, salida de caja
+  // si es efectivo, sin pagos dobles). Antes se marcaba commissionPaid desde aquí.
+  const [payingBarber, setPayingBarber] = useState(null);
+  const handleLiquidarComisiones = (barb) => {
+    if (!(barb?.comisionPendiente > 0)) {
       triggerToast('No hay comisiones pendientes', 'error');
       return;
     }
-    try {
-      await Promise.all(
-        pendientes.map(d => updateDoc(doc(db, 'negocios', negocioId, 'citas', d.id), { commissionPaid: true }))
-      );
-      triggerToast(`Comisiones liquidadas para ${barb?.name}`);
-    } catch (err) {
-      triggerToast('Error al liquidar comisiones: ' + err.message, 'error');
-    }
+    setPayingBarber(barb);
   };
 
   const [commissionDetailBarberId, setCommissionDetailBarberId] = useState(null);
@@ -1751,6 +1750,7 @@ const { heroConfig } = useHeroConfig(negocioId);
   
     // Foto de la cita ANTES de guardar, para decir qué cambió en la notificación.
     const before = findCitaById(editingReservation.id);
+    Object.assign(updatedRecord, paymentStampFields(before, updatedRecord.status, updatedRecord.updatedAt));
 
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', editingReservation.id), updatedRecord);
@@ -1858,9 +1858,9 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const handleUpdateStatus = async (id, status, paymentMethod) => {
     try {
-      const payload = { status, updatedAt: new Date().toISOString() };
-      if (paymentMethod) payload.paymentMethod = paymentMethod;
       const targetReservation = findCitaById(id); // antes de guardar: estado anterior
+      const payload = { status, updatedAt: new Date().toISOString(), ...paymentStampFields(targetReservation, status) };
+      if (paymentMethod) payload.paymentMethod = paymentMethod;
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', id), payload);
       bumpCitasTick();
       const changes = targetReservation
@@ -2934,6 +2934,13 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
               </div>
 
+              <CashCard
+                branchId={branches.find(b => b?.name === selectedBranch)?.id || null}
+                branchName={branches.length > 1 ? selectedBranch : ''}
+                userEmail={user?.email}
+                onToast={triggerToast}
+              />
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
                   <h3 className="text-base font-semibold text-nexus-text mb-3">{paymentsLabel}</h3>
@@ -3709,6 +3716,23 @@ const { heroConfig } = useHeroConfig(negocioId);
                   </Modal>
                 );
               })()}
+
+              {payingBarber && (
+                <CommissionPayModal
+                  professional={payingBarber}
+                  amount={payingBarber.comisionPendiente}
+                  periodLabel={periodStart === periodEnd ? periodStart : `${periodStart} al ${periodEnd}`}
+                  paymentMethods={businessSettings.paymentMethods}
+                  onClose={() => setPayingBarber(null)}
+                  onPay={(method) => payCommission({
+                    barberId: payingBarber.id,
+                    startDate: periodStart,
+                    endDate: periodEnd,
+                    method,
+                    branchId: branches.find(b => b?.name === payingBarber.branch)?.id || null,
+                  })}
+                />
+              )}
             </div>
           )}
 
@@ -3775,6 +3799,8 @@ const { heroConfig } = useHeroConfig(negocioId);
            selectedDate={selectedDate}
            selectedBranch={selectedBranch}
            negocioId={negocioId}
+           paymentMethods={businessSettings.paymentMethods}
+           branches={branches}
            />
          )}
 
