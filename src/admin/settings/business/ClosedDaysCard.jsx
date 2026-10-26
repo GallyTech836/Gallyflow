@@ -107,9 +107,7 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
         <h3 className="text-base font-semibold text-nexus-text">Días cerrados y feriados</h3>
       </div>
       <p className="text-sm text-nexus-text-secondary mb-4">
-        Esos días el link público no muestra horarios y el asistente de WhatsApp avisa que
-        no se atiende. Con «Horario especial» el día no se cierra: solo se atiende entre las
-        horas que elijas (ej. 08:00 a 12:00). En la agenda, fuera de eso solo se agenda en sobrehorario.
+        Esos días no se puede reservar ni por el link ni por WhatsApp.
       </p>
 
       <form onSubmit={agregar} className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1.2fr_auto] gap-3 items-end">
@@ -129,7 +127,7 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
             maxLength={60}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Ej: Feriado, Vacaciones..."
+            placeholder="Ej: Feriado"
             className={inputCls}
           />
           <datalist id="nx-closed-reasons">
@@ -154,7 +152,7 @@ export default function ClosedDaysCard({ negocioId, value = [], onChange }) {
               className="h-4 w-4 accent-[var(--nx-primary)] cursor-pointer"
             />
             <Clock className="w-4 h-4 text-nexus-primary" aria-hidden="true" />
-            <span className="text-sm font-medium text-nexus-text">Horario especial (atiende solo unas horas)</span>
+            <span className="text-sm font-medium text-nexus-text">Abre solo unas horas</span>
           </label>
           {parcial && (
             <div className="flex items-center gap-2">

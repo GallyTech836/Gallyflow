@@ -99,7 +99,6 @@ export default function BusinessHeroSettings({ negocioId }) {
           <SectionCard
             icon={LayoutTemplate}
             title="Identidad"
-            subtitle="Lo primero que ven tus clientes al abrir tu link de reservas."
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -132,7 +131,6 @@ export default function BusinessHeroSettings({ negocioId }) {
           <SectionCard
             icon={ImageIcon}
             title="Logo y portada"
-            subtitle="Se configuran solo aquí. Se usan automáticamente en todo Nexus."
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ImageUploader
@@ -141,7 +139,7 @@ export default function BusinessHeroSettings({ negocioId }) {
                 onChange={(url) => updateImage('logo', url)}
                 onUploadingChange={setLogoUploading}
                 maxSize={512}
-                hint="Cuadrado, ideal 512×512. Pantalla de inicio y Cuenta y plan."
+                hint="Cuadrado, 512×512."
               />
               <ImageUploader
                 label="Portada"
@@ -150,7 +148,7 @@ export default function BusinessHeroSettings({ negocioId }) {
                 onChange={(url) => updateImage('cover', url)}
                 onUploadingChange={setCoverUploading}
                 maxSize={1600}
-                hint="Horizontal, ideal 1600×800 (2:1). Pantalla de inicio y «Más información»."
+                hint="Horizontal, 1600×800."
               />
             </div>
             {imageError && <p className="mt-2 text-xs text-nexus-error-text" role="alert">{imageError}</p>}
@@ -159,12 +157,11 @@ export default function BusinessHeroSettings({ negocioId }) {
           <SectionCard
             icon={Sparkles}
             title="Calificación y texto destacado"
-            subtitle="Opcionales. Aparecen debajo del eslogan."
+            subtitle="Opcional."
           >
             <div className="flex items-center justify-between gap-3 rounded-lg border border-nexus-border bg-nexus-background px-3 py-2.5">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-nexus-text">Mostrar calificación</p>
-                <p className="text-xs text-nexus-text-muted">Estrellas con el puntaje que elijas.</p>
               </div>
               <button
                 type="button"
@@ -233,7 +230,6 @@ export default function BusinessHeroSettings({ negocioId }) {
 
       {/* ── Guardar ─────────────────────────────────────────────── */}
       <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border flex items-center justify-end gap-3">
-        {saved && !saving && <span className="hidden sm:inline text-sm text-nexus-success-text" role="status">Cambios guardados</span>}
         <button
           type="button"
           onClick={handleSave}
@@ -244,11 +240,11 @@ export default function BusinessHeroSettings({ negocioId }) {
             ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
             : <Save className="w-4 h-4" aria-hidden="true" />}
           {saving
-            ? 'Guardando...'
+            ? 'Guardando…'
             : uploading
               ? 'Subiendo imagen...'
               : saved
-                ? 'Guardado ✓'
+                ? 'Guardado'
                 : 'Guardar cambios'}
         </button>
       </div>
