@@ -3,6 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { db } from '../config/firebase.js';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { logger } from '../utils/logger.js';
+import { isReservedSlug } from '../utils/reservedSlugs.js';
 import { getNegocioAccess, getUsage, currentPeriod } from '../services/capabilities/capabilityService.js';
 import { getCapability, usageStatus } from '../services/capabilities/capabilityModel.js';
 import { hashPin } from '../services/finance/pin.js';
@@ -70,6 +71,11 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
   const slug = getNegocioSlug(ownerEmail);
   if (!slug) {
     return res.status(400).json({ error: 'Correo inválido.' });
+  }
+  if (isReservedSlug(slug)) {
+    return res.status(400).json({
+      error: `"${slug}" es una ruta reservada de la app y no puede usarse como negocio. Usa otro correo.`,
+    });
   }
 
   // Tipo de negocio (businessProfileModel). Vacío = 'otro' (terminología genérica).

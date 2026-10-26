@@ -13,7 +13,7 @@ const firebaseConfig = {
 
 // /barber usa su propia instancia de Firebase: así la sesión del profesional
 // no reemplaza la del administrador si ambos usan el mismo navegador.
-const isStaffRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/barber');
+const isStaffRoute = typeof window !== 'undefined' && /^\/barber(\/|$)/.test(window.location.pathname);
 const app = isStaffRoute ? initializeApp(firebaseConfig, 'staff') : initializeApp(firebaseConfig);
 const secondaryApp = initializeApp(firebaseConfig, 'Secondary');
 

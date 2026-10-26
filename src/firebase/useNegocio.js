@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './config';
 import { getNegocioSlug } from '../utils/negocio';
+import { isReservedSlug } from '../shared/booking/publicRoutes';
 
 export function useNegocio(user) {
   const [negocioId, setNegocioId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!user?.email) { setLoading(false); return; }
@@ -15,6 +17,13 @@ export function useNegocio(user) {
       const ref = doc(db, 'negocios', slug);
       const snap = await getDoc(ref);
       if (!snap.exists()) {
+        // Auto-registro: no se crean negocios con slugs reservados (rutas de
+        // la app). Los que ya existan siguen funcionando normalmente.
+        if (isReservedSlug(slug)) {
+          setError('reserved-slug');
+          setLoading(false);
+          return;
+        }
         await setDoc(ref, {
           slug,
           adminUid: user.uid,
@@ -27,5 +36,5 @@ export function useNegocio(user) {
     })();
   }, [user]);
 
-  return { negocioId, loading };
+  return { negocioId, loading, error };
 }

@@ -5,7 +5,7 @@
 
 import { auth } from '../../firebase/config';
 
-const isStaffRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/barber');
+const isStaffRoute = typeof window !== 'undefined' && /^\/barber(\/|$)/.test(window.location.pathname);
 const KEY = isStaffRoute ? 'nexus_sid_staff' : 'nexus_sid_admin';
 
 export function getSessionId() {
