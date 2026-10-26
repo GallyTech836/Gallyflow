@@ -8,7 +8,7 @@ const cache = new Map();
 
 /**
  * Lee un token --nx-* calculado en el DOM ahora mismo.
- * Ej: getNexusToken('primary') -> '#0F6FFF' (o el valor activo
+ * Ej: getNexusToken('primary') -> '#18181B' (o el valor activo
  * de [data-theme="dark"] si algún día se activa).
  */
 export function getNexusToken(name, { fresh = false } = {}) {
