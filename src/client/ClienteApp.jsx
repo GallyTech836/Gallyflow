@@ -46,7 +46,7 @@ const DEFAULT_HOURS = [
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-export default function App({ negocioSlug } = {}) {
+export default function App({ negocioSlug, proId } = {}) {
   const [step, setStep] = useState(0); 
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedBarber, setSelectedBarber] = useState(null);
@@ -84,8 +84,8 @@ export default function App({ negocioSlug } = {}) {
   // === RESOLUCIÓN DEL NEGOCIO (mismo mecanismo que useNegocio.js: negocios/{slug}) ===
   // Admin lo resuelve desde el email del admin logueado; Barber desde su login por
   // username/password. Cliente no tiene ningún login en este flujo, así que el
-  // slug debe llegar desde afuera: por prop (cuando se integre la ruta) o por
-  // el query param ?negocio=slug mientras tanto.
+  // slug debe llegar desde afuera: por prop (URL limpia /slug, ver App.jsx) o
+  // por el query param ?negocio=slug (formato viejo, sigue funcionando).
   const [negocioId, setNegocioId] = useState(null);
   const [negocioResolving, setNegocioResolving] = useState(true);
   const [negocioNotFound, setNegocioNotFound] = useState(false);
@@ -224,8 +224,11 @@ export default function App({ negocioSlug } = {}) {
     return () => unsub();
   }, [negocioId]);
 
-  // === LINK PERSONAL DE UN PROFESIONAL: /reservar?negocio=slug&pro=ID ===
-  const personalProId = useMemo(() => new URLSearchParams(window.location.search).get('pro'), []);
+  // === LINK PERSONAL DE UN PROFESIONAL: /slug/p/ID o /reservar?negocio=slug&pro=ID ===
+  const personalProId = useMemo(
+    () => proId || new URLSearchParams(window.location.search).get('pro'),
+    [proId],
+  );
   const personalBarber = personalProId && canUseCapability('linkPersonalProfesional')
     ? barbers.find(b => b.id === personalProId && !b.isPending)
     : null;

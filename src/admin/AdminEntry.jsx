@@ -14,7 +14,7 @@ const AdminApp = lazy(() => import('./AdminApp'));
  * tipo, cambia solo, sin recargar.
  */
 export default function AdminEntry({ user, fallback = null }) {
-  const { negocioId, loading } = useNegocio(user);
+  const { negocioId, loading, error } = useNegocio(user);
   // undefined = todavía no se leyó el negocio
   const [businessType, setBusinessType] = useState(undefined);
 
@@ -27,6 +27,16 @@ export default function AdminEntry({ user, fallback = null }) {
     );
     return () => unsub();
   }, [negocioId]);
+
+  if (error === 'reserved-slug') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-nexus-bg px-4">
+        <p className="max-w-sm text-center text-nexus-text-secondary">
+          No se puede crear un negocio con este correo. Usa otro correo o contacta a soporte.
+        </p>
+      </div>
+    );
+  }
 
   if (loading || !negocioId || businessType === undefined) return fallback;
 

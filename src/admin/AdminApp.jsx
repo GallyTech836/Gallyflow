@@ -45,6 +45,7 @@ import AnalyticsSection from './analytics/AnalyticsSection';
 import InventoryPage from './inventory/InventoryPage';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
+import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
 
 const GEOLOCATIONS_DB = [
   { name: "Equipetrol, Santa Cruz de la Sierra", address: "Av. San Martín, Calle 5 Oeste, Santa Cruz de la Sierra, Bolivia", lat: -17.7732, lng: -63.1821 },
@@ -2819,7 +2820,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
               {negocioId && (
                 <a
-                  href={`${window.location.origin}/reservar?negocio=${negocioId}`}
+                  href={buildPublicBookingUrl(negocioId)}
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Abrir página pública"

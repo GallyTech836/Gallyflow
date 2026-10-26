@@ -1,8 +1,9 @@
 import { useEffect } from "react";
+import { isAppRoute, parsePublicBookingPath } from "../booking/publicRoutes";
 
 const MANIFESTS = [
-  { match: (path) => path.startsWith("/barber"), href: "/manifest-barber.json" },
-  { match: (path) => path.startsWith("/reservar"), href: "/manifest-cliente.json" },
+  { match: (path) => isAppRoute(path, "barber"), href: "/manifest-barber.json" },
+  { match: (path) => isAppRoute(path, "reservar") || !!parsePublicBookingPath(path), href: "/manifest-cliente.json" },
   { match: () => true, href: "/manifest-admin.json" }, // fallback: AdminApp
 ];
 
