@@ -7,6 +7,7 @@ import ClosedDayBanner from '../shared/businessSettings/ClosedDayBanner';
 import { signOut } from 'firebase/auth';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { LogOut } from 'lucide-react';
+import { nexusChartColors } from '../shared/theme/theme';
 import { useBarberAuth } from './useBarberAuth';
 import { useServicios } from '../firebase/useServicios';
 import { isOpenPendingCita, professionalCanDo, getCitaServiceIds } from '../shared/appointments/pendingModel';
@@ -38,7 +39,7 @@ import { useNotifications, notify, NotificationType } from '../shared/notificati
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
 
 // Colores del gráfico "Servicios más Solicitados" (gráfico de torta + su leyenda).
-const PIE_COLORS = ['#0F6FFF', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'];
+const PIE_COLORS = ['#18181B', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'];
 
 // --- ICONOS SVG PERSONALIZADOS (Diseño ultra-limpio) ---
 const Icons = {
@@ -1911,9 +1912,9 @@ const fetchByDate = async (subcollection, date) => {
                             <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
                             <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E9EDF2', borderRadius: '12px', fontSize: '11px' }} />
-                            <Bar dataKey="monto" fill="#0F6FFF" radius={[8, 8, 0, 0]}>
+                            <Bar dataKey="monto" fill={nexusChartColors.primary} radius={[8, 8, 0, 0]}>
                               {performanceData.barData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? '#0F6FFF' : index === 1 ? '#3B82F6' : '#10B981'} />
+                                <Cell key={`cell-${index}`} fill={index === 0 ? nexusChartColors.primary : index === 1 ? nexusChartColors.accent : '#10B981'} />
                               ))}
                             </Bar>
                           </BarChart>

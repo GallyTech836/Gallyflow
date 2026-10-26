@@ -71,11 +71,11 @@ function SidebarItem({ icon: Icon, label, active = false, collapsed = false, bad
       className={`w-full flex h-10 items-center rounded-lg px-3 text-sm font-medium transition-colors duration-150 cursor-pointer ${
         collapsed ? 'justify-center' : 'gap-3'
       } ${
-        active ? 'bg-nexus-primary text-white shadow-sm' : 'text-white/75 hover:text-white hover:bg-nexus-navy-soft'
+        active ? 'bg-nexus-surface text-nexus-text shadow-sm' : 'text-white/75 hover:text-white hover:bg-nexus-navy-soft'
       }`}
     >
       <span className="relative inline-flex shrink-0">
-        <Icon className={`w-[18px] h-[18px] ${active ? 'text-white' : 'text-nexus-primary'}`} aria-hidden="true" />
+        <Icon className={`w-[18px] h-[18px] ${active ? 'text-nexus-text' : 'text-white/60'}`} aria-hidden="true" />
         {collapsed && badge > 0 && (
           <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full bg-nexus-warning ring-2 ring-nexus-navy" aria-label={badgeLabel} />
         )}
@@ -85,7 +85,7 @@ function SidebarItem({ icon: Icon, label, active = false, collapsed = false, bad
           <span className="flex-1 truncate text-left">{label}</span>
           {badge > 0 && (
             <span
-              className={`min-w-6 h-6 px-1.5 inline-flex items-center justify-center rounded-full text-xs font-bold nx-num ${active ? 'bg-white text-nexus-primary' : 'bg-nexus-primary text-white'}`}
+              className={`min-w-6 h-6 px-1.5 inline-flex items-center justify-center rounded-full text-xs font-bold nx-num ${active ? 'bg-nexus-primary text-white' : 'bg-white text-nexus-text'}`}
               aria-label={badgeLabel}
             >
               {badge}
@@ -457,8 +457,8 @@ const { heroConfig } = useHeroConfig(negocioId);
 
       const customPinIcon = window.L.divIcon({
         html: `
-        <span class="absolute inline-flex h-10 w-10 rounded-full bg-blue-500/30 animate-ping"></span>
-        <div class="w-8 h-8 rounded-full bg-[#0F6FFF] border-2 border-white shadow-xl flex items-center justify-center">
+        <span class="absolute inline-flex h-10 w-10 rounded-full bg-zinc-900/30 animate-ping"></span>
+        <div class="w-8 h-8 rounded-full bg-[#18181B] border-2 border-white shadow-xl flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-4 h-4">
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
               </svg>
@@ -2698,7 +2698,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                         : 'text-white/60 hover:text-white hover:bg-nexus-navy-soft'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${isCurrent ? 'text-nexus-primary' : ''}`} aria-hidden="true" />
+                    <Icon className={`w-4 h-4 shrink-0 ${isCurrent ? 'text-white' : ''}`} aria-hidden="true" />
                     <span className="truncate">{label}</span>
                   </button>
                 );

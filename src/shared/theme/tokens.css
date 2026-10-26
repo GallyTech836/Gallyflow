@@ -1,35 +1,35 @@
 /* ============================================================
    NEXUS · Design Tokens
    Única fuente de verdad de la identidad visual.
-   Cambiar el azul de Nexus = cambiar UNA línea aquí.
+   Cambiar el color de Nexus = cambiar UNA línea aquí.
    ============================================================ */
 
 /* ---- 1. Tokens crudos (light, valores por defecto) ---- */
 :root,
 [data-theme="light"] {
   /* Marca */
-  --nx-primary: #0F6FFF;
-  --nx-primary-hover: #0B5CD9;
-  --nx-primary-soft: #E6F0FF;
+  --nx-primary: #18181B;
+  --nx-primary-hover: #3F3F46;
+  --nx-primary-soft: #F4F4F5;
 
-  --nx-navy: #16233A;
-  --nx-navy-soft: #1F3049;      /* hover de items dentro del sidebar */
+  --nx-navy: #09090B;
+  --nx-navy-soft: #27272A;      /* hover de items dentro del sidebar */
   --nx-navy-border: rgba(255, 255, 255, 0.08);
 
-  --nx-accent: #06B6D4;
-  --nx-accent-hover: #0891B2;
-  --nx-accent-soft: #E0F7FA;
+  --nx-accent: #71717A;
+  --nx-accent-hover: #52525B;
+  --nx-accent-soft: #F4F4F5;
 
   /* Superficies */
-  --nx-background: #F8FAFC;
+  --nx-background: #FAFAFA;
   --nx-surface: #FFFFFF;
-  --nx-surface-hover: #F1F5F9;
-  --nx-border: #E9EDF2;
+  --nx-surface-hover: #F4F4F5;
+  --nx-border: #E4E4E7;
 
   /* Texto */
-  --nx-text: #0F172A;
-  --nx-text-secondary: #64748B;
-  --nx-text-muted: #94A3B8;
+  --nx-text: #09090B;
+  --nx-text-secondary: #52525B;
+  --nx-text-muted: #71717A;
   --nx-text-inverse: #FFFFFF;   /* texto sobre navy / primary */
 
   /* Estados */
@@ -63,6 +63,29 @@
   --nx-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Foco visible (teclado) */
+  --nx-focus-ring: 0 0 0 3px rgba(24, 24, 27, 0.35);
+}
+
+/* ---- 1b. Paleta anterior (azul) — solo respaldo ----
+   Nada activa este bloque. Para volver al azul: copiar estos
+   valores al bloque :root de arriba (o poner data-theme="azul"). */
+[data-theme="azul"] {
+  --nx-primary: #0F6FFF;
+  --nx-primary-hover: #0B5CD9;
+  --nx-primary-soft: #E6F0FF;
+  --nx-navy: #16233A;
+  --nx-navy-soft: #1F3049;
+  --nx-accent: #06B6D4;
+  --nx-accent-hover: #0891B2;
+  --nx-accent-soft: #E0F7FA;
+  --nx-background: #F8FAFC;
+  --nx-surface: #FFFFFF;
+  --nx-surface-hover: #F1F5F9;
+  --nx-border: #E9EDF2;
+  --nx-text: #0F172A;
+  --nx-text-secondary: #64748B;
+  --nx-text-muted: #94A3B8;
+  --nx-text-inverse: #FFFFFF;
   --nx-focus-ring: 0 0 0 3px rgba(15, 111, 255, 0.35);
 }
 
