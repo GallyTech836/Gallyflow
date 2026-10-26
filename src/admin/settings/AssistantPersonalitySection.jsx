@@ -43,7 +43,7 @@ export default function AssistantPersonalitySection({ negocioId, personalidad, b
     try {
       const limpio = normalizarPersonalidad(draft);
       await setDoc(doc(db, 'negocios', negocioId), { assistantConfig: { personalidad: limpio } }, { merge: true });
-      setMensaje('Guardado. El asistente empieza a usarlo en menos de un minuto.');
+      setMensaje('Guardado.');
     } catch (err) {
       console.error('[AssistantPersonalitySection] Error al guardar:', err);
       setMensaje('No se pudo guardar. Inténtalo de nuevo.');
@@ -59,11 +59,10 @@ export default function AssistantPersonalitySection({ negocioId, personalidad, b
         <h3 className="text-base font-semibold text-nexus-text">Personalidad del asistente</h3>
       </div>
       <p className="text-sm text-nexus-text-secondary mb-4">
-        Elige cómo habla el asistente con tus {tl('clients')}. Solo cambia el tono de los mensajes: las opciones y la forma de reservar son las mismas.
+        Cómo le habla a tus {tl('clients')}.
       </p>
 
       {/* Tono */}
-      <p className="text-sm font-semibold text-nexus-text mb-2">Personalidad</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {LISTA_TONOS.map((tono) => {
           const activo = draft.tono === tono.id;
@@ -91,8 +90,7 @@ export default function AssistantPersonalitySection({ negocioId, personalidad, b
       {/* Ajustes que se combinan con cualquier personalidad */}
       <div className="mt-4 grid grid-cols-1 gap-3">
         <div className="p-3 bg-nexus-background border border-nexus-border rounded-xl">
-          <label htmlFor="asistente-emojis" className="text-sm font-semibold text-nexus-text">Emojis</label>
-          <p className="text-xs text-nexus-text-muted mb-2">Puedes combinar cualquier personalidad con o sin emojis.</p>
+          <label htmlFor="asistente-emojis" className="block mb-2 text-sm font-semibold text-nexus-text">Emojis</label>
           <select
             id="asistente-emojis"
             value={emojisAValor(draft.emojis)}
@@ -107,7 +105,7 @@ export default function AssistantPersonalitySection({ negocioId, personalidad, b
         <div className="p-3 bg-nexus-background border border-nexus-border rounded-xl">
           <label htmlFor="asistente-saludo" className="text-sm font-semibold text-nexus-text">Saludo propio (opcional)</label>
           <p className="text-xs text-nexus-text-muted mb-2">
-            Reemplaza la primera frase del saludo. Puedes usar <b>{'{nombre}'}</b> ({g('client', 'el', 'la')} {tl('client')}) y <b>{'{negocio}'}</b>. Vacío = el saludo de la personalidad.
+            Usa <b>{'{nombre}'}</b> y <b>{'{negocio}'}</b>.
           </p>
           <textarea
             id="asistente-saludo"
@@ -123,7 +121,7 @@ export default function AssistantPersonalitySection({ negocioId, personalidad, b
 
         <div className="p-3 bg-nexus-background border border-nexus-border rounded-xl">
           <label htmlFor="asistente-despedida" className="text-sm font-semibold text-nexus-text">Mensaje al confirmar {g('appointment', 'un', 'una')} {cita} (opcional)</label>
-          <p className="text-xs text-nexus-text-muted mb-2">Se agrega al final de la confirmación. Ej.: «Llega 5 minutos antes, por favor».</p>
+          <p className="text-xs text-nexus-text-muted mb-2">Ej.: «Llega 5 minutos antes».</p>
           <textarea
             id="asistente-despedida"
             rows={2}

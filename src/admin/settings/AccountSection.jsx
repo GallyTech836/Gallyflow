@@ -65,7 +65,6 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
                   {heroConfig.cover && heroConfig.logo ? 'Cambiar logo y portada' : 'Subir logo y portada'}
                 </Button>
               )}
-              <span className="text-xs text-nexus-text-muted">Se configuran en Link Público y se usan en todo Nexus.</span>
             </div>
           </div>
         </Card>
@@ -74,7 +73,7 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
         <Card>
           <CardHeader
             title={<span className="inline-flex items-center gap-2.5"><User className="w-5 h-5 text-nexus-primary" aria-hidden="true" />Cuenta</span>}
-            subtitle={user?.email ? `Sesión activa: ${user.email}` : 'Sesión activa.'}
+            subtitle={user?.email || undefined}
             className="mb-3"
           />
           <Button variant="danger-soft" icon={LogOut} onClick={onLogout}>Cerrar sesión</Button>

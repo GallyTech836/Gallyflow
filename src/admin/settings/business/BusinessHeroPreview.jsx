@@ -14,11 +14,6 @@ export default function BusinessHeroPreview({ config }) {
             <Eye className="w-5 h-5 text-nexus-primary shrink-0" aria-hidden="true" />
             <h3 className="text-base font-semibold text-nexus-text">Vista previa</h3>
           </div>
-          <p className="text-sm text-nexus-text-secondary mt-0.5">Así lo ven tus clientes.</p>
-        </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-nexus-primary-soft border border-nexus-primary/20 rounded-full shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-nexus-primary animate-pulse" />
-          <span className="text-xs text-nexus-primary font-semibold">En vivo</span>
         </div>
       </div>
 
@@ -36,7 +31,7 @@ export default function BusinessHeroPreview({ config }) {
 
         {/* Portada en «Más información» */}
         <div>
-          <p className="text-xs font-medium text-nexus-text-secondary mb-1.5">Portada en «Más información»</p>
+          <p className="text-xs font-medium text-nexus-text-secondary mb-1.5">Más información</p>
           <div className="rounded-xl border border-nexus-border bg-nexus-surface overflow-hidden">
             <div className="h-20 bg-gradient-to-br from-nexus-primary-soft via-nexus-primary/15 to-nexus-primary/30">
               {config.cover && <img src={config.cover} alt="" className="w-full h-full object-cover" />}

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { Smartphone, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Smartphone, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 import {
@@ -100,7 +100,7 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
     aplicar(r.data.numbers || []);
     setPhone('');
     setBranch('');
-    setMensaje('Número conectado. Escríbele "hola" desde otro teléfono para probar el asistente.');
+    setMensaje('Conectado. Escríbele "hola" desde otro teléfono para probar.');
   };
 
   const cambiarSucursal = async (id, valor) => {
@@ -123,34 +123,21 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
     if (!r.ok) setError(r.data?.error || 'No se pudo quitar el número.');
     else {
       aplicar(r.data.numbers || []);
-      setMensaje('Número quitado. El asistente ya no responde en ese número.');
+      setMensaje('Número quitado.');
     }
   };
 
   return (
     <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)]">
-      <div className="flex items-center gap-2.5 mb-1">
+      <div className="flex items-center gap-2.5 mb-4">
         <Smartphone className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
         <h3 className="text-base font-semibold text-nexus-text">Número de WhatsApp</h3>
       </div>
-      <p className="text-sm text-nexus-text-secondary mb-4">
-        El asistente responde en tu mismo número y tú sigues usando tu app de WhatsApp Business como siempre.
-      </p>
 
       {numbers === null ? (
         <p className="text-xs text-nexus-text-muted">Cargando…</p>
       ) : (
         <div className="space-y-3">
-          {numbers.length === 0 && (
-            <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-nexus-text-muted shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1 min-w-0">
-                <p className="font-bold text-nexus-text">Sin número conectado</p>
-                <p className="text-nexus-text-muted">Sigue los pasos de abajo para conectar el WhatsApp de tu negocio.</p>
-              </div>
-            </div>
-          )}
-
           {numbers.map((n) => (
             <div key={n.id} className="p-4 bg-nexus-background border border-nexus-border rounded-xl">
               <div className="flex items-start gap-3">
@@ -220,8 +207,8 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
           <div className="p-4 bg-nexus-background border border-nexus-border rounded-xl">
             <p className="text-sm font-semibold text-nexus-text mb-2">{numbers.length ? 'Conectar otro número' : 'Conectar tu número'}</p>
             <div className="space-y-1 text-xs text-nexus-text-secondary mb-3">
-              <p><b>1.</b> Escribe a soporte de Nexus para habilitar tu número. Lo conectamos contigo y sigues usando tu app de WhatsApp Business.</p>
-              <p><b>2.</b> Cuando te avisemos, escribe el número aquí y toca <b>Conectar</b>.</p>
+              <p><b>1.</b> Pide a soporte de Nexus que habilite tu número.</p>
+              <p><b>2.</b> Cuando te avisemos, escríbelo aquí y toca <b>Conectar</b>.</p>
             </div>
             <label htmlFor="wa-phone" className="text-sm font-semibold text-nexus-text">Número</label>
             <input
@@ -262,7 +249,7 @@ export default function WhatsAppNumbersPanel({ negocioId, onNumbersChange }) {
           <div className="p-3 rounded-xl bg-nexus-info-bg border border-nexus-info/25 flex items-start gap-2">
             <Info className="w-4 h-4 text-nexus-info-text shrink-0 mt-0.5" />
             <p className="text-xs text-nexus-info-text">
-              <b>Importante:</b> abre la app de WhatsApp Business en tu teléfono al menos <b>una vez cada 14 días</b>. Si pasan más de 14 días sin abrirla, WhatsApp puede desconectar el asistente de tu número.
+              Abre WhatsApp Business al menos <b>una vez cada 14 días</b> o el asistente se puede desconectar.
             </p>
           </div>
         </div>

@@ -72,8 +72,7 @@ export default function BusinessSection({ negocioId }) {
           <h3 className="text-base font-semibold text-nexus-text">Horario del negocio</h3>
         </div>
         <p className="text-sm text-nexus-text-secondary mb-4">
-          Días y horas en que el negocio atiende. Un día cerrado aquí bloquea las reservas
-          públicas ese día, sin importar el horario de cada profesional.
+          Un día cerrado no recibe reservas.
         </p>
         {/* Fase 4: filas tipo tabla en escritorio; en celular cada día en su bloque. */}
         <div className="rounded-lg border border-nexus-border divide-y divide-nexus-border">
@@ -158,8 +157,7 @@ export default function BusinessSection({ negocioId }) {
             </h3>
           </div>
           <p className="text-sm text-nexus-text-secondary mb-3">
-            Tiempo mínimo antes de una cita para que un cliente pueda reservarla desde el link
-            público. 0 = sin restricción (puede reservar para dentro de un momento).
+            Desde el link público. 0 = sin límite.
           </p>
           <label className="flex items-center gap-3">
             <input
@@ -176,7 +174,7 @@ export default function BusinessSection({ negocioId }) {
               className="h-10 w-28 bg-nexus-background border border-nexus-border rounded-lg px-3 text-base sm:text-sm nx-num text-nexus-text outline-none focus:border-nexus-primary"
             />
             <span className="text-sm text-nexus-text-secondary">
-              minutos de anticipación mínima
+              minutos antes
             </span>
           </label>
         </Card>
@@ -190,8 +188,7 @@ export default function BusinessSection({ negocioId }) {
             </h3>
           </div>
           <p className="text-sm text-nexus-text-secondary mb-3">
-            Opciones que aparecen al marcar una cita como "Completada" en Admin y Barber,
-            para registrar cómo pagó el cliente.
+            Se eligen al completar una cita.
           </p>
 
           <div className="flex flex-wrap gap-2 mb-3">
@@ -245,7 +242,7 @@ export default function BusinessSection({ negocioId }) {
               type="text"
               value={newMethod}
               onChange={(e) => setNewMethod(e.target.value)}
-              placeholder="Ej: QR, Pago móvil..."
+              placeholder="Ej: QR"
               aria-label="Nuevo método de pago"
               className="h-10 flex-1 min-w-0 bg-nexus-background border border-nexus-border rounded-lg px-3 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary"
             />
@@ -267,7 +264,6 @@ export default function BusinessSection({ negocioId }) {
           por detrás ni queda tapado. */}
       <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border">
         <div className="flex items-center justify-end gap-3">
-          {saved && !saving && <span className="text-sm text-nexus-success-text" role="status">Cambios guardados</span>}
           <button
             type="button"
             onClick={handleSave}
@@ -275,7 +271,7 @@ export default function BusinessSection({ negocioId }) {
             className="w-full sm:w-auto inline-flex h-11 items-center justify-center gap-2 px-6 rounded-lg bg-nexus-primary hover:bg-nexus-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
-            {saving ? 'Guardando...' : saved ? 'Guardado ✓' : 'Guardar cambios'}
+            {saving ? 'Guardando…' : saved ? 'Guardado' : 'Guardar cambios'}
           </button>
         </div>
       </div>

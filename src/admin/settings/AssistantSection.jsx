@@ -115,26 +115,24 @@ export default function AssistantSection({ negocioId }) {
           <h3 className="text-base font-semibold text-nexus-text">Asistente de WhatsApp</h3>
         </div>
         <p className="text-sm text-nexus-text-secondary mb-4">
-          Tus {tl('clients')} pueden reservar escribiendo a tu número de WhatsApp. {g('appointment', 'Los', 'Las')} {tl('appointments')} aparecen en la agenda al instante.
+          Tus {tl('clients')} reservan escribiendo a tu WhatsApp.
         </p>
 
         {conectado && (
           <p className="text-sm text-nexus-text-secondary">
-            {ultimoMensaje ? `Último mensaje recibido ${ultimoMensaje}.` : 'Aún no se recibieron mensajes.'}
+            {ultimoMensaje ? `Último mensaje ${ultimoMensaje}.` : 'Sin mensajes todavía.'}
           </p>
         )}
         {!conectado && numeros !== null && (
-          <p className="text-sm text-nexus-text-secondary">Conecta tu número arriba para activar el asistente.</p>
+          <p className="text-sm text-nexus-text-secondary">Conecta tu número para activarlo.</p>
         )}
 
         <div className={`mt-4 flex items-center justify-between gap-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-nexus-text">Responder automáticamente</p>
-            <p className="text-xs text-nexus-text-muted">
-              {activo
-                ? `El asistente atiende y agenda ${tl('appointments')}.`
-                : 'Apagado: responde que por ahora no se reciben reservas por WhatsApp.'}
-            </p>
+            {!activo && (
+              <p className="text-xs text-nexus-text-muted">Apagado: avisa que no se reciben reservas por WhatsApp.</p>
+            )}
           </div>
           <button
             type="button"
@@ -153,7 +151,7 @@ export default function AssistantSection({ negocioId }) {
         <div className={`mt-3 p-3 bg-nexus-background border border-nexus-border rounded-xl ${conectado ? '' : 'opacity-50'}`}>
           <p className="text-sm font-semibold text-nexus-text">Reprogramar por WhatsApp</p>
           <p className="text-xs text-nexus-text-muted mb-2">
-            Hasta cuándo {g('client', 'el', 'la')} {tl('client')} puede cambiar su {tl('appointment')} sin hablar con el negocio.
+            Hasta cuándo {g('client', 'el', 'la')} {tl('client')} puede cambiar su {tl('appointment')}.
           </p>
           <select
             value={horasCambio}
@@ -169,16 +167,19 @@ export default function AssistantSection({ negocioId }) {
         {error && <p className="mt-2 text-xs text-nexus-error-text">{error}</p>}
       </div>
 
-      <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)]">
-        <h3 className="text-base font-semibold text-nexus-text mb-3">Cómo funciona</h3>
-        <ul className="space-y-2 text-sm text-nexus-text-secondary list-disc pl-4">
-          <li>{g('client', 'El', 'La')} {tl('client')} elige {g('service', 'uno o varios', 'una o varias')} {tl('services')}, {g('professional', 'el', 'la')} {tl('professional')}, el día y la hora. Solo se ofrecen horarios realmente libres.</li>
-          <li>Con «Cualquier {tl('professional')}» {g('appointment', 'el', 'la')} {tl('appointment')} queda como <b>Pendiente</b>: si solo {g('professional', 'un', 'una')} {tl('professional')} está libre se asigna {g('appointment', 'solo', 'sola')}; si hay {g('professional', 'varios', 'varias')}, decides tú.</li>
-          <li>Con «Hablar con alguien» recibes un aviso y el asistente deja de responder en ese chat por 2 horas para que una persona atienda. Si {g('client', 'el', 'la')} {tl('client')} escribe «menu», vuelve el asistente.</li>
-          <li>Si {g('client', 'el', 'la')} {tl('client')} ya tiene {g('appointment', 'un', 'una')} {tl('appointment')}, el saludo se lo muestra con la opción <b>Reprogramar</b> (día, hora y {tl('professional')}), respetando la anticipación que elijas arriba. Para cancelar, {g('client', 'el', 'la')} {tl('client')} debe hablar con el negocio.</li>
-          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe la notificación de cada reserva nueva o reprogramada.</li>
+      <details className="group bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-[var(--nx-shadow-sm)]">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-nexus-text flex items-center justify-between [&::-webkit-details-marker]:hidden">
+          Cómo funciona
+          <span className="text-nexus-text-muted transition-transform group-open:rotate-180" aria-hidden="true">▾</span>
+        </summary>
+        <ul className="mt-3 space-y-2 text-sm text-nexus-text-secondary list-disc pl-4">
+          <li>Solo ofrece horarios libres.</li>
+          <li>Con «Cualquier {tl('professional')}», si hay más de {g('professional', 'uno', 'una')} libre, {g('appointment', 'el', 'la')} {tl('appointment')} queda <b>Pendiente</b> y asignas tú.</li>
+          <li>«Hablar con alguien» te avisa y pausa el asistente en ese chat por 2 horas («menu» lo reactiva).</li>
+          <li>Puede reprogramar, pero no cancelar: para eso habla con el negocio.</li>
+          <li>{g('professional', 'El', 'La')} {tl('professional')} recibe un aviso de cada reserva.</li>
         </ul>
-      </div>
+      </details>
      </div>
 
       <div className="min-w-0">
