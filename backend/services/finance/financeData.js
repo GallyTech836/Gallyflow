@@ -125,43 +125,5 @@ export async function getDetalleComisionesBarbero(negocioId, barberId, { startDa
   });
 }
 
-export async function registrarPagoComision(negocioId, barberId, { startDate, endDate }) {
-  const citas = await getCitasEnRango(negocioId, startDate, endDate, 'all');
-  const { barbers, servicios } = await getBarbersYServicios(negocioId);
-  const barber = barbers.find((b) => b.id === barberId);
-  if (!barber) throw new Error('Profesional no encontrado.');
-
-  const pendientes = citas.filter(
-    (c) => (c.professionalId === barberId || c.barberId === barberId) && !c.commissionPaid
-  );
-
-  let monto = 0;
-  const citaIds = [];
-  const batch = db.batch();
-  const citasRef = db.collection('negocios').doc(negocioId).collection('citas');
-
-  for (const cita of pendientes) {
-    const { totalAmount } = calculateCommissionForCita(cita, barber, servicios);
-    if (totalAmount > 0) {
-      monto += totalAmount;
-      citaIds.push(cita.id);
-      batch.update(citasRef.doc(cita.id), { commissionPaid: true });
-    }
-  }
-
-  if (citaIds.length === 0) {
-    return { monto: 0, citaIds: [] };
-  }
-
-  const pagoRef = db.collection('negocios').doc(negocioId).collection('commissionPayments').doc();
-  batch.set(pagoRef, {
-    barberId,
-    barberName: barber.name,
-    amount: monto,
-    citaIds,
-    paidAt: new Date().toISOString(),
-  });
-
-  await batch.commit();
-  return { monto, citaIds, paymentId: pagoRef.id };
-}
+// El pago de comisiones vive en services/cash/cashService.js
+// (registerCommissionPayment): transacción, método de pago y salida de caja.

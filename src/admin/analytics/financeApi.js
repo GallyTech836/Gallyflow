@@ -60,11 +60,11 @@ export async function getFinanceCommissionDetail(sessionToken, barberId, { start
   return { ok: res.ok, status: res.status, data: await res.json() };
 }
 
-export async function payFinanceCommission(sessionToken, barberId, { startDate, endDate }) {
+export async function payFinanceCommission(sessionToken, barberId, { startDate, endDate, method, branchId }) {
   const res = await fetch(`${BASE_URL}/finance/commissions/${barberId}/pay`, {
     method: 'POST',
     headers: await authHeaders({ 'x-finance-session': sessionToken }),
-    body: JSON.stringify({ startDate, endDate }),
+    body: JSON.stringify({ startDate, endDate, method, branchId }),
   });
   return { ok: res.ok, status: res.status, data: await res.json() };
 }

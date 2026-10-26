@@ -12,6 +12,7 @@ import staffRoutes from '../routes/staff.routes.js';
 import sessionRoutes from '../routes/session.routes.js';
 import whatsappConnectionRoutes from '../routes/whatsappConnection.routes.js';
 import negocioResourcesRoutes from '../routes/negocioResources.routes.js';
+import cashRoutes from '../routes/cash.routes.js';
 
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/api', staffRoutes);
 app.use('/api', sessionRoutes);
 app.use('/api', whatsappConnectionRoutes);
 app.use('/api', negocioResourcesRoutes);
+app.use('/api', cashRoutes);
 
 
 app.get('/health', (req, res) => {

@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContaine
 import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
 import { verifyFinancePin, setFinancePin, getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
+import CommissionPayModal from '../cash/CommissionPayModal';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 
 const CHANNEL_LABELS = {
@@ -82,7 +83,7 @@ function ingresoDeCita(cita) {
   return getServicesFromCita(cita).reduce((sum, s) => sum + Number(s?.price || 0), 0);
 }
 
-export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId }) {
+export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [] }) {
   const terms = useBusinessTerms();
   const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
   const [financeSession, setFinanceSession] = useState(null);
@@ -349,10 +350,18 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     setCommissionDetail(result.data);
   }
 
-  async function handlePagarComision(barberId) {
-    await payFinanceCommission(financeSession?.token, barberId, { startDate, endDate });
-    loadFinanceData();
-    setExpandedBarberId(null);
+  // Abre el modal para elegir el método; el backend registra el pago (y la
+  // salida de caja si es en efectivo) sin poder pagarlo dos veces.
+  const [payingId, setPayingId] = useState(null);
+  function handlePagarComision(barberId) {
+    setPayingId(barberId);
+  }
+  async function confirmarPagoComision(method) {
+    const barber = (barbers || []).find((b) => b?.id === payingId);
+    const branchId = (branches || []).find((b) => b?.name === barber?.branch)?.id || null;
+    const r = await payFinanceCommission(financeSession?.token, payingId, { startDate, endDate, method, branchId });
+    if (r.ok) { loadFinanceData(); setExpandedBarberId(null); }
+    return { ok: r.ok, data: r.data, error: r.data?.error };
   }
 
   useEffect(() => {
@@ -530,6 +539,19 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           ))}
         </div>
       </section>
+      {payingId && (() => {
+        const p = profesionalesConFinanzas.find((x) => x.id === payingId);
+        return (
+          <CommissionPayModal
+            professional={p}
+            amount={p?.finanzas?.comisionPendiente || 0}
+            periodLabel={startDate === endDate ? startDate : `${startDate} al ${endDate}`}
+            paymentMethods={paymentMethods}
+            onPay={confirmarPagoComision}
+            onClose={() => setPayingId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
