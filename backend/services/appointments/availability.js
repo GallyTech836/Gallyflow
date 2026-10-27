@@ -72,7 +72,9 @@ export function getAvailableSlots({
     (c) =>
       c?.date === fecha &&
       (c?.professionalId === profesional.id || c?.barberId === profesional.id) &&
-      c?.status !== 'cancelled'
+      c?.status !== 'cancelled' &&
+      // Registros de servicio (Nexus Control): no tienen horario, no ocupan.
+      c?.origin !== 'registro'
   );
 
   const bloqueosDelBarbero = bloqueos.filter(

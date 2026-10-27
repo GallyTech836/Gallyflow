@@ -31,6 +31,7 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
     .map((cap) => [cap, capabilities?.[cap.key]])
     .filter(([cap, val]) => cap.status !== 'soon' && !cap.core
       && !(cap.status === 'mock' && !val?.enabled)
+      && !(cap.hideWhenOff && !val?.enabled)
       && val?.source !== 'profile');
 
   const name = businessName || heroConfig.businessName;

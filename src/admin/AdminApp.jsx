@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -46,6 +46,9 @@ import InventoryPage from './inventory/InventoryPage';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
+import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
+import RegistrosPanel from '../shared/registros/RegistrosPanel';
+import { isRegistro } from '../shared/registros/registroModel';
 
 const GEOLOCATIONS_DB = [
   { name: "Equipetrol, Santa Cruz de la Sierra", address: "Av. San Martín, Calle 5 Oeste, Santa Cruz de la Sierra, Bolivia", lat: -17.7732, lng: -63.1821 },
@@ -234,11 +237,13 @@ const [activeTab, setActiveTab] = useState('agenda');
 const { capabilities: planFeatures, can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
 // Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
 // capacidad mientras la pestaña está abierta, se vuelve a la agenda.
-const TAB_CAPABILITY = { dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas' };
+const TAB_CAPABILITY = { dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
+// Pestañas que no son un módulo propio: "Servicios registrados" es parte de Agenda.
+const TAB_MODULE = { registros: 'agenda' };
 useEffect(() => {
   if (planLoading) return;
   const cap = TAB_CAPABILITY[activeTab];
-  if ((cap && !canUseCapability(cap)) || !hasModule(activeTab)) setActiveTab('agenda');
+  if ((cap && !canUseCapability(cap)) || !hasModule(TAB_MODULE[activeTab] || activeTab)) setActiveTab('agenda');
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, planFeatures, planLoading, businessProfile]);
 const { businessSettings } = useBusinessSettings(negocioId);
@@ -248,6 +253,9 @@ const { heroConfig } = useHeroConfig(negocioId);
   const [filterBarberId, setFilterBarberId] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedBranch, setSelectedBranch] = useState(null);
+  // Registro de servicios (Nexus Control): modal y recarga de la lista.
+  const [registroModalOpen, setRegistroModalOpen] = useState(false);
+  const [registrosTick, setRegistrosTick] = useState(0);
 
   // Selecciona la primera sucursal real del negocio en cuanto Firestore
   // las entrega — nunca asume un nombre fijo. Solo corre si el usuario
@@ -271,6 +279,13 @@ const { heroConfig } = useHeroConfig(negocioId);
     if (!Array.isArray(reservations)) return [];
     return reservations.filter(r => r?.branch === selectedBranch);
   }, [reservations, selectedBranch]);
+  // Grilla de la agenda: sin los registros de servicio (Nexus Control), que no
+  // tienen horario. Dashboard, comisiones y analítica siguen usando branchReservations.
+  // Las citas normales no tienen `origin`: para ellas esto no cambia nada.
+  const agendaBranchReservations = useMemo(
+    () => branchReservations.filter(r => !isRegistro(r)),
+    [branchReservations]
+  );
 
   const [searchClientQuery, setSearchClientQuery] = useState('');
   const [searchBarberQuery, setSearchBarberQuery] = useState('');
@@ -826,27 +841,36 @@ const { heroConfig } = useHeroConfig(negocioId);
   }, [negocioId, selectedBranch, activeTab]);
 
   // 7) Agenda vista Año: solo el contador de reservas por mes (12 count, sin descargar documentos).
+  const yearCountExcludesRegistros = canUseCapability('registroServicios');
   useEffect(() => {
     if (!negocioId || !selectedBranch || !agendaYearCountsMode) return;
     let cancelled = false;
     const citasRef = collection(db, 'negocios', negocioId, 'citas');
-    Promise.all(Array.from({ length: 12 }, (_, i) => {
+    const monthQuery = (mm, ...extra) => query(
+      citasRef,
+      where('branch', '==', selectedBranch),
+      ...extra,
+      where('date', '>=', `${selectedYear}-${mm}-01`),
+      where('date', '<=', `${selectedYear}-${mm}-31`)
+    );
+    Promise.all(Array.from({ length: 12 }, async (_, i) => {
       const mm = String(i + 1).padStart(2, '0');
-      return getCountFromServer(query(
-        citasRef,
-        where('branch', '==', selectedBranch),
-        where('date', '>=', `${selectedYear}-${mm}-01`),
-        where('date', '<=', `${selectedYear}-${mm}-31`)
-      ));
+      const total = getCountFromServer(monthQuery(mm));
+      if (!yearCountExcludesRegistros) return (await total).data().count;
+      // Nexus Control: los registros de servicio no son citas de la agenda; se
+      // cuentan aparte y se restan (índice citas: branch + origin + date). Si
+      // falta el índice, cae al listener de abajo, que ya los filtra.
+      const [t, reg] = await Promise.all([total, getCountFromServer(monthQuery(mm, where('origin', '==', 'registro')))]);
+      return Math.max(0, t.data().count - reg.data().count);
     }))
-      .then((snaps) => { if (!cancelled) setYearMonthCounts(snaps.map(sn => sn.data().count)); })
+      .then((counts) => { if (!cancelled) setYearMonthCounts(counts); })
       .catch((err) => {
         // Si el conteo falla (p. ej. falta el índice), la vista Año vuelve a usar el listener del período.
         console.warn('[Agenda año] conteo no disponible, usando documentos:', err?.message || err);
         if (!cancelled) setYearCountsFailed(true);
       });
     return () => { cancelled = true; };
-  }, [negocioId, selectedBranch, agendaYearCountsMode, selectedYear, citasWriteTick]);
+  }, [negocioId, selectedBranch, agendaYearCountsMode, selectedYear, citasWriteTick, yearCountExcludesRegistros]);
 
   // Busca una cita en los conjuntos cargados.
   const findCitaById = (id) =>
@@ -1014,9 +1038,9 @@ const { heroConfig } = useHeroConfig(negocioId);
   };
 
   const dayReservations = useMemo(() => {
-    if (!Array.isArray(branchReservations)) return [];
-    return branchReservations.filter(res => res?.date === selectedDate);
-  }, [branchReservations, selectedDate]);
+    if (!Array.isArray(agendaBranchReservations)) return [];
+    return agendaBranchReservations.filter(res => res?.date === selectedDate);
+  }, [agendaBranchReservations, selectedDate]);
 
   // Badge de pendientes del menú: del listener del período si está activo; si no, del contador liviano.
   const pendingBadgeCount = periodDocsActive
@@ -1429,7 +1453,8 @@ const { heroConfig } = useHeroConfig(negocioId);
       r?.id !== ignoreId && 
       r?.date === date && 
       (r?.professionalId === barberId || r?.barberId === barberId) && 
-      r?.status !== 'cancelled'
+      r?.status !== 'cancelled' &&
+      !isRegistro(r) // registros de servicio: sin horario, no chocan
     );
 
     for (const res of activeRes) {
@@ -2575,6 +2600,16 @@ const { heroConfig } = useHeroConfig(negocioId);
             onClick={() => { setActiveTab('agenda'); setIsMobileSidebarOpen(false); }}
           />
 
+          {canUseCapability('registroServicios') && (
+            <SidebarItem
+              icon={ClipboardList}
+              label={`${t('services')} registrados`}
+              collapsed={navCollapsed}
+              active={activeTab === 'registros'}
+              onClick={() => { setActiveTab('registros'); setIsMobileSidebarOpen(false); }}
+            />
+          )}
+
           <SidebarSection label="Gestión" collapsed={navCollapsed} />
 
           {hasModule('barbers') && (
@@ -2733,6 +2768,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 <span className="truncate">
                   {activeTab === 'dashboard' && 'Panel General'}
                   {activeTab === 'agenda' && `Agenda de ${t('professionals')}`}
+                  {activeTab === 'registros' && `${t('services')} registrados`}
                   {activeTab === 'barbers' && `Gestión de ${t('professionals')}`}
                   {activeTab === 'services' && `Catálogo de ${t('services')}`}
                   {activeTab === 'clients' && `Base de Datos de ${t('clients')}`}
@@ -2746,6 +2782,13 @@ const { heroConfig } = useHeroConfig(negocioId);
               </h2>
             </div>
 
+            {activeTab === 'agenda' && canUseCapability('registroServicios') && (
+              <span className="xl:hidden shrink-0">
+                <Button size="sm" variant="secondary" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)} aria-label={`Registrar ${tl('service')}`}>
+                  Registrar
+                </Button>
+              </span>
+            )}
             {activeTab === 'agenda' && (
               <span className="xl:hidden shrink-0">
               <Button
@@ -2831,6 +2874,13 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </a>
               )}
 
+              {activeTab === 'agenda' && canUseCapability('registroServicios') && (
+                <span className="hidden xl:block">
+                  <Button variant="secondary" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)}>
+                    Registrar {tl('service')}
+                  </Button>
+                </span>
+              )}
               {activeTab === 'agenda' && (
                 <span className="hidden xl:block">
                   <Button
@@ -3252,7 +3302,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               {agendaView === 'semana' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                   {getWeekDates(selectedDate).map(day => {
-                    const dayRes = (branchReservations || []).filter(r => r?.date === day?.dateStr);
+                    const dayRes = (agendaBranchReservations || []).filter(r => r?.date === day?.dateStr);
                     return (
                       <div key={day?.dateStr} className="bg-nexus-surface border border-nexus-border rounded-xl p-3 flex flex-col xl:h-80 min-w-0">
                         <div className="border-b border-nexus-border pb-2 mb-2 flex justify-between items-center gap-2">
@@ -3308,7 +3358,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   </div>
                   <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                     {getMonthDays(selectedDate).map((day, idx) => {
-                      const dayRes = day?.isCurrentMonth ? (branchReservations || []).filter(r => r?.date === day?.dateStr) : [];
+                      const dayRes = day?.isCurrentMonth ? (agendaBranchReservations || []).filter(r => r?.date === day?.dateStr) : [];
                       if (!day?.isCurrentMonth) return <div key={idx} className="h-14 sm:h-20" aria-hidden="true" />;
                       const isSelected = day?.dateStr === selectedDate;
 
@@ -3345,7 +3395,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                     const monthId = (idx + 1).toString().padStart(2, '0');
                     const monthCount = agendaYearCountsMode
                       ? (yearMonthCounts?.[idx] ?? 0)
-                      : (branchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`)).length;
+                      : (agendaBranchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`)).length;
                     return (
                       <button type="button" key={m} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 text-center hover:border-nexus-primary/50 transition-colors cursor-pointer" onClick={() => {
                         const targetDate = `${yearVal}-${monthId}-01`;
@@ -3792,6 +3842,21 @@ const { heroConfig } = useHeroConfig(negocioId);
           {/* ==========================================
               9. PESTAÑA: ANALÍTICAS
               ========================================== */}
+          {activeTab === 'registros' && canUseCapability('registroServicios') && (
+            <div className="p-4 md:p-6">
+            <RegistrosPanel
+              isAdmin
+              professionals={barbers}
+              services={services}
+              clients={clients}
+              paymentMethods={businessSettings.paymentMethods}
+              refreshKey={registrosTick}
+              onRegister={() => setRegistroModalOpen(true)}
+              onToast={triggerToast}
+            />
+            </div>
+          )}
+
           {activeTab === 'reports' && (
            <AnalyticsSection
            reservations={branchReservations}
@@ -3802,6 +3867,7 @@ const { heroConfig } = useHeroConfig(negocioId);
            negocioId={negocioId}
            paymentMethods={businessSettings.paymentMethods}
            branches={branches}
+           basic={canUseCapability('registroServicios')}
            />
          )}
 
@@ -4947,6 +5013,17 @@ const { heroConfig } = useHeroConfig(negocioId);
 
       {/* 7. MODAL: AGREGAR SERVICIOS */}
       {/* 7. MODAL: AGREGAR SERVICIOS */}
+      {registroModalOpen && (
+        <RegistrarServicioModal
+          services={services}
+          professionals={barbers}
+          clients={clients}
+          paymentMethods={businessSettings.paymentMethods}
+          onRegistered={() => setRegistrosTick(n => n + 1)}
+          onClose={() => setRegistroModalOpen(false)}
+          onToast={triggerToast}
+        />
+      )}
       {selectedClientId && clients.find(c => c.id === selectedClientId) && (
         <ClientProfileModal
           negocioId={negocioId}

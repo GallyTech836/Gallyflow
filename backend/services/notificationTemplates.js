@@ -47,6 +47,18 @@ export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
         titulo: '✅ Reserva asignada',
         cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nSe te asignó la reserva de ${cliente}.`,
       };
+    case 'SERVICIO_REGISTRADO': {
+      // Registro de servicio (Nexus Control). byRole = quién lo registró:
+      // 'barber' -> avisa a los admins; 'admin' -> avisa al profesional.
+      const precio = Number.isFinite(Number(data.price)) && data.price !== null && data.price !== '' ? ` · Bs ${Number(data.price)}` : '';
+      const fecha = data.dateLabel ? ` del ${data.dateLabel}` : '';
+      const titulo = `✅ ${t('service')} ${g('service', 'registrado', 'registrada')}`;
+      if (data.byRole === 'admin') {
+        return { titulo, cuerpo: `Se registró ${servicio}${fecha} a tu nombre${precio}.` };
+      }
+      const quien = data.professionalName || `${g('professional', 'Un', 'Una')} ${tl('professional')}`;
+      return { titulo, cuerpo: `${quien} registró ${servicio}${fecha}${precio}.` };
+    }
     case 'RESERVA_CONFIRMADA_CLIENTE':
       return { titulo: '✅ ¡Reserva confirmada!', cuerpo: `Tu ${tl('appointment')}${hora} ${g('appointment', 'quedó agendado', 'quedó agendada')}. ¡Te esperamos!` };
     default:

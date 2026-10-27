@@ -102,6 +102,7 @@ export function isProfessionalFreeAt({
 
   const choca = citas.some((c) => {
     if (!c || c.id === ignoreCitaId || c.date !== fecha || c.status === 'cancelled') return false;
+    if (c.origin === 'registro') return false; // registros de servicio: no ocupan horario
     if (c.professionalId !== professional.id && c.barberId !== professional.id) return false;
     const cStart = timeToMin(c.time);
     const cEnd = cStart + (c.duration || 30);

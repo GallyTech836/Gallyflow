@@ -904,7 +904,8 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         .get();
       const ultima = snap.docs
         .map((d) => d.data())
-        .filter((c) => c.status !== 'cancelled' && c.professionalId && c.professionalId !== PENDING_ID)
+        // Los registros de servicio (Nexus Control) no se ofrecen para repetir.
+        .filter((c) => c.status !== 'cancelled' && c.origin !== 'registro' && c.professionalId && c.professionalId !== PENDING_ID)
         .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))[0];
       if (!ultima) return null;
 

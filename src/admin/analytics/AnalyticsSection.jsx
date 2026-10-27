@@ -83,7 +83,11 @@ function ingresoDeCita(cita) {
   return getServicesFromCita(cita).reduce((sum, s) => sum + Number(s?.price || 0), 0);
 }
 
-export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [] }) {
+// `basic` (plan Nexus Control, capacidad registroServicios): vista sencilla de
+// dinero (bruto, comisiones calculadas/pendientes/pagadas, importe para el
+// negocio y detalle por profesional) con los mismos /finance/*. Oculta
+// "Canales de reservas" y "Nuevos/recurrentes". Sin `basic`, igual que siempre.
+export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false }) {
   const terms = useBusinessTerms();
   const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
   const [financeSession, setFinanceSession] = useState(null);
@@ -399,7 +403,16 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {financeSummary && (
+      {basic && financeSummary && (
+        <BasicMoney
+          summary={financeSummary}
+          professionals={profesionalesConFinanzas}
+          terms={terms}
+          onPay={handlePagarComision}
+        />
+      )}
+
+      {!basic && financeSummary && (
         <section>
           <h3 className="text-base font-semibold text-nexus-text mb-3">Rendimiento general</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -414,6 +427,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       <section>
         <h3 className="text-base font-semibold text-nexus-text mb-3">Reservas y {terms.tl('clients')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {!basic && (
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
             <p className="text-xs text-nexus-text-secondary nx-num">Canales de reservas</p>
             <div className="space-y-1.5">
@@ -423,6 +437,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
               {canalesStats.length === 0 && <p className="text-xs text-nexus-text-secondary">Sin datos.</p>}
             </div>
           </div>
+          )}
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.reservas}</p>
@@ -436,10 +451,12 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('clients')} {terms.g('client', 'atendidos', 'atendidas')}</p>
+            {!basic && (
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesRecurrentes ?? '—'}</b><span className="text-nexus-text-secondary">Recurrentes</span></span>
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.clientesNuevos ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'Nuevos', 'Nuevas')}</span></span>
             </div>
+            )}
           </div>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
@@ -496,6 +513,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
         </div>
       </section>
 
+      {!basic && (
       <section>
         <h3 className="text-base font-semibold text-nexus-text mb-3">{terms.t('professionals')}</h3>
         <div className="space-y-2">
@@ -539,6 +557,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           ))}
         </div>
       </section>
+      )}
       {payingId && (() => {
         const p = profesionalesConFinanzas.find((x) => x.id === payingId);
         return (
@@ -553,6 +572,68 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
         );
       })()}
     </div>
+  );
+}
+
+// Vista básica de dinero (Nexus Control): sin gráficos ni comparativas.
+function BasicMoney({ summary, professionals, terms, onPay }) {
+  const bs = (n) => `Bs ${(Number(n) || 0).toFixed(2)}`;
+  const rows = (professionals || []).filter((p) => p.finanzas && (p.finanzas.citasAtendidas > 0 || p.finanzas.comisionPendiente > 0));
+  return (
+    <>
+      <section>
+        <h3 className="text-base font-semibold text-nexus-text mb-3">Resumen del periodo</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <BigMetric label="Ingreso bruto" value={bs(summary.ingresosBrutos)} />
+          <BigMetric label="Comisiones calculadas" value={bs(summary.comisionGenerada)} />
+          <BigMetric label="Comisiones pendientes" value={bs(summary.comisionPendiente)} />
+          <BigMetric label="Comisiones pagadas" value={bs(summary.comisionPagada)} />
+          <div className="col-span-2 md:col-span-1">
+            <BigMetric label="Importe para el negocio" value={bs(summary.resultadoBarberia)} />
+            <p className="mt-1 text-center text-xs text-nexus-text-muted">Bruto − comisiones, sin gastos</p>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h3 className="text-base font-semibold text-nexus-text mb-3">Por {terms.tl('professional')}</h3>
+        {rows.length === 0 ? (
+          <p className="text-sm text-nexus-text-secondary">Sin {terms.tl('services')} en este periodo.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-nexus-border bg-nexus-surface">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="text-xs text-nexus-text-secondary">
+                <tr className="border-b border-nexus-border">
+                  <th className="px-3 py-2 text-left font-medium">{terms.t('professional')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{terms.t('services')}</th>
+                  <th className="px-3 py-2 text-right font-medium">Importe</th>
+                  <th className="px-3 py-2 text-right font-medium">Comisión calculada</th>
+                  <th className="px-3 py-2 text-right font-medium">Pendiente</th>
+                  <th className="px-3 py-2 text-right font-medium">Pagada</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="nx-num divide-y divide-nexus-border">
+                {rows.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-2 font-semibold text-nexus-text">{p.name}</td>
+                    <td className="px-3 py-2 text-right">{p.serviciosRealizados}</td>
+                    <td className="px-3 py-2 text-right">{bs(p.finanzas.ingresosGenerados)}</td>
+                    <td className="px-3 py-2 text-right">{bs(p.finanzas.comisionGenerada)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-nexus-warning-text">{bs(p.finanzas.comisionPendiente)}</td>
+                    <td className="px-3 py-2 text-right">{bs(p.finanzas.comisionPagada)}</td>
+                    <td className="px-3 py-2 text-right">
+                      {p.finanzas.comisionPendiente > 0 && (
+                        <button type="button" onClick={() => onPay(p.id)} className="rounded-lg bg-nexus-primary px-3 py-1.5 text-xs font-bold text-white cursor-pointer">Pagar</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 
