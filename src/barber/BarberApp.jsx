@@ -26,7 +26,7 @@ import AppointmentManageModal from '../shared/appointments/AppointmentManageModa
 import { getEffectiveFieldPermissions } from '../shared/appointments/permissions';
 import { normalizeStaffPermissions, DEFAULT_STAFF_PERMISSIONS, canEditPart } from '../shared/staffPermissions/staffPermissionsModel';
 import { checkWorkingHours } from '../shared/appointments/workingHours';
-import { useConfirm, Modal, Button, Field, Input, SegmentedControl } from '../shared/ui';
+import { useConfirm, Modal, Button, Field, Input, SegmentedControl, LoadingState } from '../shared/ui';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import PersonalBookingLink from '../shared/booking/PersonalBookingLink';
@@ -373,19 +373,19 @@ const isVisibleAppt = (appt) => staffPerms.viewOthersAppointments || matchesBarb
 const canSeeCommissions = staffPerms.viewCommissions && canUseCapability('comisiones');
 // Registro de servicios (plan Nexus Control): siempre a su propio nombre.
 const canRegistrar = canUseCapability('registroServicios');
-// Mostrar agenda (vistaAgenda). Apagada (Nexus Control): la pestaña queda solo
-// en Día y en lista, con los servicios registrados del día. La agenda sigue
-// funcionando por dentro; solo se oculta en pantalla.
-const showAgenda = canUseCapability('vistaAgenda');
-const hideAgendaView = !showAgenda && activeTab === "agenda";
+// Mostrar agenda (vistaAgenda). Apagada (Nexus Control): la pestaña Agenda no
+// aparece y el inicio es "Servicios registrados". Si tampoco hay registro de
+// servicios, la agenda se muestra igual (si no, no habría pantalla de inicio).
+const hideAgenda = !canUseCapability('vistaAgenda') && canRegistrar;
+const homeTab = hideAgenda ? "registros" : "agenda";
+// La agenda no se pinta mientras carga el plan: así nunca aparece y se va.
+const agendaTab = activeTab === "agenda" && !planLoading;
 useEffect(() => {
-  if (hideAgendaView && selectedRange !== "Día") setSelectedRange("Día");
-}, [hideAgendaView, selectedRange]);
-useEffect(() => {
-  if (activeTab === "comisiones" && !planLoading && !canSeeCommissions) setActiveTab("agenda");
-  if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab("agenda");
-  if (activeTab === "registros" && !planLoading && !canRegistrar) setActiveTab("agenda");
-}, [activeTab, staffPerms, canSeeCommissions, planLoading, canRegistrar]);
+  if (activeTab === "comisiones" && !planLoading && !canSeeCommissions) setActiveTab(homeTab);
+  if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab(homeTab);
+  if (activeTab === "registros" && !planLoading && !canRegistrar) setActiveTab(homeTab);
+  if (activeTab === "agenda" && !planLoading && hideAgenda) setActiveTab(homeTab);
+}, [activeTab, staffPerms, canSeeCommissions, planLoading, canRegistrar, hideAgenda, homeTab]);
 
 // --- RANGO DE FECHAS QUE MUESTRA LA PANTALLA (Día / Semana / Mes / Año) ---
 // Mes incluye las 42 celdas de la grilla (días de meses vecinos). Solo se descarga este rango.
@@ -962,9 +962,7 @@ const fetchByDate = async (subcollection, date) => {
     return appointments.filter(appt => {
       if (!matchesBarber(appt, activeBarber.id)) return false;
       if (appt.status === 'cancelled') return false; // canceladas fuera de la agenda
-      // Registros de servicio: sin horario, fuera de la agenda. Con la agenda
-      // oculta sí se listan en la vista Día.
-      if (isRegistro(appt) && (showAgenda || selectedRange !== "Día")) return false;
+      if (isRegistro(appt)) return false; // registros de servicio: sin horario, fuera de la agenda
 
       const targetDate = new Date(selectedDate + "T00:00:00");
       const apptDate = new Date(appt.date + "T00:00:00");
@@ -989,7 +987,7 @@ const fetchByDate = async (subcollection, date) => {
 
       return true;
     }).sort((a, b) => a.time.localeCompare(b.time));
-  }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays, showAgenda]);
+  }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays]);
 
   // --- DISTRIBUCIÓN MENSUAL SIMPLE PARA VISTA ANUAL ---
   const annualMonthlyDistribution = useMemo(() => {
@@ -1216,7 +1214,7 @@ const fetchByDate = async (subcollection, date) => {
           </div>
 
           {/* ALTERNADOR DE VISTA DÍA (Acoplado al extremo derecho) */}
-          {showAlternator && showAgenda && selectedRange === "Día" && (
+          {showAlternator && selectedRange === "Día" && (
             <div className="flex bg-nexus-surface p-1 rounded-xl border border-nexus-border items-center gap-1 shrink-0 animate-fade-in">
               <button
                 type="button"
@@ -1336,7 +1334,8 @@ const fetchByDate = async (subcollection, date) => {
     <div className="min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none pb-24 md:pb-0">
       
       {/* HEADER SUPERIOR */}
-      {activeTab !== "perfil" && !hideAgendaView && (
+      {/* En "Servicios registrados" no: esa pantalla tiene sus propios periodos. */}
+      {activeTab !== "perfil" && activeTab !== "registros" && (
         <header className="sticky top-0 z-40 bg-nexus-surface/95 backdrop-blur border-b border-nexus-border py-3 px-3 sm:px-4 w-full">
           <div className="w-full max-w-md mx-auto flex bg-nexus-background p-1 rounded-2xl border border-nexus-border items-center justify-between gap-1">
             {["Día", "Semana", "Mes", "Año"].map(range => (
@@ -1390,7 +1389,8 @@ const fetchByDate = async (subcollection, date) => {
         ) : (
           <>
             {/* ================= TAB 1: AGENDA ================= */}
-            {activeTab === "agenda" && (
+            {activeTab === "agenda" && planLoading && <LoadingState />}
+            {agendaTab && (
               <div className="space-y-5 animate-fade-in">
                 
                 {canRegistrar && (
@@ -1559,7 +1559,7 @@ const fetchByDate = async (subcollection, date) => {
                     </div>
                   </div>
 
-                ) : selectedRange === "Día" && showAgenda && diaViewStyle === "Calendario" ? (
+                ) : selectedRange === "Día" && diaViewStyle === "Calendario" ? (
                   
                   /* ================= VISTA DÍA: CALENDARIO (Fase 4) =================
                      Cada cita ocupa el alto de su duración (igual que la agenda del Admin).
@@ -1727,33 +1727,7 @@ const fetchByDate = async (subcollection, date) => {
                         </p>
                       </div>
                     ) : (
-                      filteredAppointments.map((appt) => isRegistro(appt) ? (
-                        /* Servicio registrado (solo con la agenda oculta): sin acciones;
-                           se corrige o anula desde "Servicios registrados". */
-                        <div
-                          key={appt.id}
-                          className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex items-center gap-4 shadow-sm"
-                        >
-                          <div className="w-16 h-16 rounded-xl bg-nexus-background border border-nexus-border flex flex-col items-center justify-center shrink-0">
-                            <span className="text-xs text-nexus-primary font-bold">Hora</span>
-                            <span className="text-base font-bold text-nexus-text leading-none mt-1 nx-num">{appt.time}</span>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-bold text-nexus-text text-sm truncate">{appt.service}</p>
-                            {appt.clientName && <p className="text-xs text-nexus-text-secondary mt-1 truncate">{appt.clientName}</p>}
-                            {(staffPerms.viewFinancials || canSeeCommissions) && (
-                              <div className="flex items-center gap-3 text-xs mt-2 flex-wrap">
-                                {staffPerms.viewFinancials && <span className="text-nexus-success-text font-bold nx-num">{appt.price} Bs</span>}
-                                {canSeeCommissions && (
-                                  <span className="text-nexus-text-secondary nx-num">
-                                    Comisión: <span className="font-bold text-nexus-text">{Number(appt.commissionSnapshot?.amount) || 0} Bs</span>
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
+                      filteredAppointments.map((appt) => (
                         <div 
                           key={appt.id} 
                           onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
@@ -2125,7 +2099,7 @@ const fetchByDate = async (subcollection, date) => {
       )}
 
       {/* BOTÓN FLOTANTE "+" DE AGENDA */}
-      {activeTab === "agenda" && showAgenda && staffPerms.createAppointments && (
+      {agendaTab && staffPerms.createAppointments && (
         <button 
           onClick={() => {
             setTempSelectedTime("");
@@ -2330,12 +2304,12 @@ const fetchByDate = async (subcollection, date) => {
       {/* BOTTOM NAVIGATION DE ESTILO MÓVIL */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-nexus-surface border-t border-nexus-border flex justify-around py-1.5 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
         {[
-          { id: "agenda", label: showAgenda ? "Agenda" : "Hoy", icon: showAgenda ? Icons.Calendar : ClipboardList },
+          { id: "agenda", label: "Agenda", icon: Icons.Calendar },
           ...(canRegistrar ? [{ id: "registros", label: t('services'), icon: ClipboardList }] : []),
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
           { id: "rendimiento", label: "Rendimiento", icon: Icons.TrendingUp },
           { id: "perfil", label: "Perfil", icon: Icons.User }
-        ].filter(tab => (tab.id !== "comisiones" || canSeeCommissions) && (tab.id !== "rendimiento" || staffPerms.viewFinancials)).map(tab => {
+        ].filter(tab => (tab.id !== "agenda" || !hideAgenda) && (tab.id !== "comisiones" || canSeeCommissions) && (tab.id !== "rendimiento" || staffPerms.viewFinancials)).map(tab => {
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
