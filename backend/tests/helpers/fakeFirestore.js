@@ -1,7 +1,7 @@
 // fakeFirestore.js
 //
 // Firestore en memoria, SOLO para pruebas. Implementa lo que usa el backend:
-// collection/doc/get/set/update/where/limit/runTransaction y FieldValue.
+// collection/doc/get/set/update/where/limit/runTransaction (con tx.create) y FieldValue.
 // La transacción exige "todas las lecturas antes de las escrituras", igual que
 // Firestore real, para detectar errores de orden en el código.
 
@@ -124,6 +124,7 @@ export function createFakeDb(initial = {}) {
     doc: (path) => docRef(path),
     async runTransaction(fn) {
       const writes = [];
+      const creates = [];
       const tx = {
         get: async (refOrQuery) => {
           if (writes.length) throw new Error('Firestore: todas las lecturas deben ir antes de las escrituras en una transacción.');
@@ -132,8 +133,12 @@ export function createFakeDb(initial = {}) {
         set: (ref, data, opts = {}) => { writes.push(() => writeNow(ref.path, data, { merge: !!opts.merge })); return tx; },
         update: (ref, data) => { writes.push(() => writeNow(ref.path, data, { mustExist: true })); return tx; },
         delete: (ref) => { writes.push(() => store.delete(ref.path)); return tx; },
+        // Como Firestore real: si el documento ya existe, la transacción entera falla.
+        create: (ref, data) => { creates.push(ref.path); writes.push(() => writeNow(ref.path, data)); return tx; },
       };
       const result = await fn(tx);
+      const taken = creates.find((path) => store.has(path));
+      if (taken) { const e = new Error(`ALREADY_EXISTS: ${taken}`); e.code = 6; throw e; }
       writes.forEach((w) => w());
       return result;
     },

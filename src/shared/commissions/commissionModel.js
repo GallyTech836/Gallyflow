@@ -174,6 +174,33 @@ export function calculateCommission(reservation, barber, allServices = null) {
     value,
   };
 }
+
+// Comisión congelada (registros de servicio de Nexus Control). Se calcula y
+// guarda en el servidor al registrar: { amount, breakdown[], calculatedAt }.
+// Si una cita la trae, se usa tal cual (no cambia si después se edita la
+// configuración del profesional). Las citas SIN snapshot se calculan igual
+// que siempre.
+export function getCommissionSnapshot(cita) {
+  const s = cita?.commissionSnapshot;
+  if (!s || typeof s !== 'object' || !Array.isArray(s.breakdown)) return null;
+  if (!Number.isFinite(Number(s.amount))) return null;
+  return s;
+}
+
+function fromSnapshot(snap) {
+  const breakdown = snap.breakdown.map((b) => ({
+    ...b,
+    amount: Number(b?.amount) || 0,
+    isConfigured: b?.isConfigured === true,
+    issue: b?.issue || null,
+    issueLabel: b?.issue ? COMMISSION_ISSUE_LABELS[b.issue] || null : null,
+    type: b?.type ?? null,
+    value: b?.value ?? null,
+  }));
+  const allConfigured = breakdown.length > 0 && breakdown.every((item) => item.isConfigured);
+  return { totalAmount: Number(snap.amount), allConfigured, breakdown, frozen: true };
+}
+
 /**
  * Calcula la comisión total de una cita que puede tener uno o varios
  * servicios (services[] en el esquema nuevo, o campos planos legacy).
@@ -186,6 +213,8 @@ export function calculateCommission(reservation, barber, allServices = null) {
  * @returns {{ totalAmount: number, allConfigured: boolean, breakdown: Array }}
  */
 export function calculateCommissionForCita(cita, barber, allServices = null) {
+  const snapshot = getCommissionSnapshot(cita);
+  if (snapshot) return fromSnapshot(snapshot);
   const services = getServicesFromCita(cita);
 
   const breakdown = services.map((service) => {

@@ -13,6 +13,7 @@ import sessionRoutes from '../routes/session.routes.js';
 import whatsappConnectionRoutes from '../routes/whatsappConnection.routes.js';
 import negocioResourcesRoutes from '../routes/negocioResources.routes.js';
 import cashRoutes from '../routes/cash.routes.js';
+import serviciosRegistradosRoutes from '../routes/serviciosRegistrados.routes.js';
 
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api', sessionRoutes);
 app.use('/api', whatsappConnectionRoutes);
 app.use('/api', negocioResourcesRoutes);
 app.use('/api', cashRoutes);
+app.use('/api', serviciosRegistradosRoutes);
 
 
 app.get('/health', (req, res) => {

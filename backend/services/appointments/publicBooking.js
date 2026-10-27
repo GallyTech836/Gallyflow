@@ -100,7 +100,8 @@ export async function listBusyAppointments(negocioId, date) {
   }));
   const citas = snap.docs
     .map((d) => d.data())
-    .filter((c) => c && c.status !== 'cancelled')
+    // Registros de servicio (Nexus Control): no tienen horario, no ocupan.
+    .filter((c) => c && c.status !== 'cancelled' && c.origin !== 'registro')
     .map((c) => ({
       date: c.date,
       time: c.time || '00:00',

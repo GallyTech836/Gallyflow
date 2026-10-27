@@ -15,4 +15,7 @@ export const NotificationType = {
   // Pendiente (sin profesional): aviso a candidatos y aviso de asignación.
   RESERVA_PENDIENTE: 'RESERVA_PENDIENTE',
   RESERVA_PENDIENTE_ASIGNADA: 'RESERVA_PENDIENTE_ASIGNADA',
+  // Registro de servicio (Nexus Control). Lo envía el backend al registrar;
+  // el front no lo dispara.
+  SERVICIO_REGISTRADO: 'SERVICIO_REGISTRADO',
 };
