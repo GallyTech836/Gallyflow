@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Plus, History, Pencil, Ban } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ClipboardList, Plus, History, Pencil, Ban, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Modal, Button, Field, Input, Select, Textarea, Badge, SegmentedControl, EmptyState, LoadingState } from '../ui';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import ServicePicker from './ServicePicker';
 import { estimateTotal, toServiceInputs } from './servicePickerModel';
 import { listRegistros, listCorrecciones, correctRegistro, voidRegistro } from './registrosApi';
 import {
-  periodRange, summarize, needsPin, barberCanEdit, describeChange, dayLabel, todayKey, GENERAL_CLIENT,
+  periodRange, summarize, needsPin, barberCanEdit, describeChange, dayLabel, todayKey, shiftDay, GENERAL_CLIENT,
 } from './registroModel';
 
 const money = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
-const PERIODS = [{ value: 'hoy', label: 'Hoy' }, { value: 'semana', label: '7 días' }, { value: 'mes', label: 'Mes' }];
+const PERIODS = [{ value: 'dia', label: 'Día' }, { value: 'semana', label: '7 días' }, { value: 'mes', label: 'Mes' }];
 
 /**
  * Lista de "Servicios registrados" del periodo (plan Nexus Control), con
@@ -30,14 +30,15 @@ export default function RegistrosPanel({
   refreshKey = 0, onRegister, onToast,
 }) {
   const terms = useBusinessTerms();
-  const [period, setPeriod] = useState('hoy');
+  const [period, setPeriod] = useState('dia');
+  const [day, setDay] = useState(() => todayKey()); // modo Día: el día que se mira (nunca futuro)
   const [proFilter, setProFilter] = useState('all');
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [openId, setOpenId] = useState(null);
   const [tick, setTick] = useState(0);
 
-  const range = useMemo(() => periodRange(period, todayKey()), [period]);
+  const range = useMemo(() => (period === 'dia' ? { from: day, to: day } : periodRange(period, todayKey())), [period, day]);
   const proName = useCallback((id) => professionals.find((p) => p.id === id)?.name || '—', [professionals]);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function RegistrosPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl ariaLabel="Periodo" options={PERIODS} value={period} onChange={setPeriod} />
+        {period === 'dia' && <DayPicker day={day} onChange={setDay} />}
         {isAdmin && (
           <Select value={proFilter} onChange={(e) => setProFilter(e.target.value)} aria-label={terms.t('professional')} className="w-auto min-w-40">
             <option value="all">Todos</option>
@@ -88,7 +90,7 @@ export default function RegistrosPanel({
             <li key={r.id}>
               <button type="button" onClick={() => setOpenId(r.id)} className={`flex w-full items-center gap-3 px-3 py-3 text-left cursor-pointer hover:bg-nexus-surface-hover ${r.status === 'cancelled' ? 'opacity-60' : ''}`}>
                 <span className="nx-num w-12 shrink-0 text-xs text-nexus-text-secondary">
-                  {period === 'hoy' && !r.backdated ? r.time : dayLabel(r.date)}
+                  {period === 'dia' && !r.backdated ? r.time : dayLabel(r.date)}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-sm font-semibold text-nexus-text ${r.status === 'cancelled' ? 'line-through' : ''}`}>{r.serviceName}</span>
@@ -363,5 +365,42 @@ function VoidForm({ r, isAdmin, onCancel, onDone }) {
         {error && <p role="alert" className="rounded-lg bg-nexus-error-bg px-3 py-2 text-sm text-nexus-error-text">{error}</p>}
       </div>
     </Modal>
+  );
+}
+
+const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+/** ◀ fecha ▶ del modo Día. Tocar la fecha abre el calendario. Sin días futuros. */
+function DayPicker({ day, onChange }) {
+  const today = todayKey();
+  const inputRef = useRef(null);
+  const atToday = day >= today;
+  const label = day === today ? `Hoy · ${dayLabel(day)}`
+    : day === shiftDay(today, -1) ? `Ayer · ${dayLabel(day)}`
+    : `${WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()]} ${dayLabel(day)}`;
+  const pick = (v) => { if (v && v <= today) onChange(v); };
+  const openCalendar = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    try { el.showPicker(); } catch { el.focus(); el.click(); }
+  };
+  const arrow = 'h-9 w-9 inline-flex items-center justify-center rounded-lg text-nexus-primary transition-colors cursor-pointer hover:bg-nexus-surface-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
+  return (
+    <div className="flex h-11 items-center rounded-xl border border-nexus-border bg-nexus-surface px-1">
+      <button type="button" onClick={() => onChange(shiftDay(day, -1))} aria-label="Día anterior" className={arrow}>
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <span className="relative">
+        <button type="button" onClick={openCalendar} aria-label="Elegir día"
+          className="nx-num min-w-28 rounded-lg px-2 py-1.5 text-center text-sm font-semibold text-nexus-text cursor-pointer hover:bg-nexus-surface-hover">
+          {label}
+        </button>
+        <input ref={inputRef} type="date" value={day} max={today} onChange={(e) => pick(e.target.value)}
+          tabIndex={-1} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-0" />
+      </span>
+      <button type="button" onClick={() => onChange(shiftDay(day, 1))} disabled={atToday} aria-label="Día siguiente" className={arrow}>
+        <ChevronRight className="h-5 w-5" />
+      </button>
+    </div>
   );
 }
