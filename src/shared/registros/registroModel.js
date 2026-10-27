@@ -69,12 +69,6 @@ export function needsPin(registro) {
   return !!registro?.cashSessionId || registro?.commissionPaid === true || registro?.cashPlacement === 'fuera-de-caja';
 }
 
-/** ¿Puede este profesional cambiarlo? (mismo criterio que el backend). */
-export function barberCanEdit(registro, uid) {
-  return !!registro && registro.status !== 'cancelled' && registro.professionalId === uid
-    && registro.date === todayKey() && !registro.commissionPaid && !registro.cashSessionId;
-}
-
 /** Totales de una lista de registros (los anulados no cuentan). */
 export function summarize(registros = []) {
   const vivos = registros.filter((r) => r?.status !== 'cancelled');

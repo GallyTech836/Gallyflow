@@ -292,9 +292,9 @@ describe('avisos push', () => {
 
 describe('corregir', () => {
   beforeEach(() => seed());
-  const corregir = (id, body, actor = BARBER) => call('POST', `/servicios-registrados/${id}/correct`, body, actor);
+  const corregir = (id, body, actor = ADMIN) => call('POST', `/servicios-registrados/${id}/correct`, body, actor);
 
-  test('barbero corrige el suyo de hoy: guarda antes/después, quién, cuándo y motivo', async () => {
+  test('admin corrige: guarda antes/después, quién, cuándo y motivo', async () => {
     const { id } = (await registrar()).body.registro;
     const r = await corregir(id, { reason: 'Era corte y barba', services: [{ serviceId: 'corte' }, { serviceId: 'barba' }], paymentMethod: 'QR' });
     assert.equal(r.status, 200, JSON.stringify(r.body));
@@ -306,7 +306,8 @@ describe('corregir', () => {
     const [c] = db._list(`${N}/citas/${id}/correcciones`);
     assert.equal(c.type, 'correct');
     assert.equal(c.reason, 'Era corte y barba');
-    assert.deepEqual(c.by, { uid: 'p1', rol: 'barber' });
+    assert.equal(c.by.uid, 'uidA');
+    assert.equal(c.by.rol, 'admin');
     assert.ok(c.at);
     assert.equal(c.before.price, 50);
     assert.equal(c.after.price, 80);
@@ -322,18 +323,18 @@ describe('corregir', () => {
     assert.equal(cita(id).commissionSnapshot.amount, 100, 'sigue el 50% pactado al registrar');
   });
 
-  test('barbero: no el de otro, no de otro día, no con comisión pagada, no con caja cerrada, no cambia el profesional', async () => {
-    const { id } = (await registrar({}, BARBER2)).body.registro;
-    assert.equal((await corregir(id, { reason: 'motivo largo', paymentMethod: 'QR' }, BARBER)).body.code, 'NOT_OWNER');
+  test('barbero: 403 ADMIN_ONLY, incluso uno suyo de hoy sin caja ni comisión pagada; no se guarda nada', async () => {
     const mio = (await registrar({}, BARBER)).body.registro.id;
-    db._set(`${N}/citas/${mio}`, { ...cita(mio), date: ayer() });
-    assert.equal((await corregir(mio, { reason: 'motivo largo', paymentMethod: 'QR' })).body.code, 'ONLY_SAME_DAY');
-    db._set(`${N}/citas/${mio}`, { ...cita(mio), date: hoy(), commissionPaid: true });
-    assert.equal((await corregir(mio, { reason: 'motivo largo', paymentMethod: 'QR' })).body.code, 'COMMISSION_PAID');
-    db._set(`${N}/citas/${mio}`, { ...cita(mio), commissionPaid: false, cashSessionId: 'caja1' });
-    assert.equal((await corregir(mio, { reason: 'motivo largo', paymentMethod: 'QR' })).body.code, 'CASH_CLOSED');
-    db._set(`${N}/citas/${mio}`, { ...cita(mio), cashSessionId: null });
-    assert.equal((await corregir(mio, { reason: 'motivo largo', professionalId: 'p2' })).body.code, 'NOT_ALLOWED');
+    const antes = cita(mio);
+    const r = await corregir(mio, { reason: 'motivo largo', paymentMethod: 'QR' }, BARBER);
+    assert.equal(r.status, 403);
+    assert.equal(r.body.code, 'ADMIN_ONLY');
+    // También sin motivo: el permiso se revisa primero.
+    assert.equal((await corregir(mio, { paymentMethod: 'QR' }, BARBER)).body.code, 'ADMIN_ONLY');
+    const otro = (await registrar({}, BARBER2)).body.registro.id;
+    assert.equal((await corregir(otro, { reason: 'motivo largo', paymentMethod: 'QR' }, BARBER)).body.code, 'ADMIN_ONLY');
+    assert.deepEqual(cita(mio), antes);
+    assert.equal(db._list(`${N}/citas/${mio}/correcciones`).length, 0);
   });
 
   test('motivo obligatorio y sin cambios no se guarda', async () => {
@@ -386,7 +387,7 @@ describe('corregir', () => {
 
 describe('anular', () => {
   beforeEach(() => seed());
-  const anular = (id, body, actor = BARBER) => call('POST', `/servicios-registrados/${id}/void`, body, actor);
+  const anular = (id, body, actor = ADMIN) => call('POST', `/servicios-registrados/${id}/void`, body, actor);
 
   test('anula sin borrar: status cancelled, quién, cuándo, motivo e historial', async () => {
     const { id } = (await registrar()).body.registro;
@@ -396,12 +397,23 @@ describe('anular', () => {
     assert.ok(d, 'el documento sigue existiendo');
     assert.equal(d.status, 'cancelled');
     assert.ok(d.voidedAt);
-    assert.deepEqual(d.voidedBy, { uid: 'p1', rol: 'barber' });
+    assert.equal(d.voidedBy.uid, 'uidA');
+    assert.equal(d.voidedBy.rol, 'admin');
     assert.equal(d.voidReason, 'Me equivoqué');
     const [c] = db._list(`${N}/citas/${id}/correcciones`);
     assert.equal(c.type, 'void');
     assert.equal((await anular(id, { reason: 'Otra vez' })).body.code, 'ALREADY_VOIDED');
     assert.equal((await anular(id, {})).body.code, 'REASON_REQUIRED');
+  });
+
+  test('barbero: 403 ADMIN_ONLY al anular, incluso uno suyo de hoy; el registro sigue igual', async () => {
+    const mio = (await registrar({}, BARBER)).body.registro.id;
+    const r = await anular(mio, { reason: 'Me equivoqué' }, BARBER);
+    assert.equal(r.status, 403);
+    assert.equal(r.body.code, 'ADMIN_ONLY');
+    assert.equal(cita(mio).status, 'completed');
+    assert.equal(db._list(`${N}/citas/${mio}/correcciones`).length, 0);
+    assert.equal((await anular(mio, { reason: 'Me equivoqué' })).status, 200, 'el admin sí puede');
   });
 
   test('anulado no cuenta en analítica', async () => {
@@ -417,7 +429,7 @@ describe('anular', () => {
     await setPin('1234');
     const { id } = (await registrar()).body.registro;
     db._set(`${N}/citas/${id}`, { ...cita(id), cashSessionId: 'caja1' });
-    assert.equal((await anular(id, { reason: 'motivo largo' })).body.code, 'CASH_CLOSED');
+    assert.equal((await anular(id, { reason: 'motivo largo' }, BARBER)).body.code, 'ADMIN_ONLY');
     assert.equal((await anular(id, { reason: 'motivo largo' }, ADMIN)).body.code, 'PIN_REQUIRED');
     assert.equal((await anular(id, { reason: 'motivo largo', pin: '1234' }, ADMIN)).status, 200);
   });
@@ -430,7 +442,7 @@ describe('listas', () => {
     const a = (await registrar({}, BARBER)).body.registro.id;
     await registrar({}, BARBER2);
     db._set(`${N}/citas/normal`, { status: 'completed', date: hoy(), professionalId: 'p1', price: 50 });
-    await call('POST', `/servicios-registrados/${a}/void`, { reason: 'Me equivoqué' }, BARBER);
+    await call('POST', `/servicios-registrados/${a}/void`, { reason: 'Me equivoqué' }, ADMIN);
 
     const mios = await call('GET', '/servicios-registrados', {}, BARBER, { from: hoy(), to: hoy(), professionalId: 'p2' });
     assert.deepEqual(mios.body.items.map((x) => x.professionalId), ['p1']);

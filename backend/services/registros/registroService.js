@@ -445,19 +445,20 @@ function diffAudit(before, after) {
   return out;
 }
 
-/** Comprueba permisos y si hace falta el PIN. Lanza si no se puede. */
-function checkEditable(cita, actor) {
+/** Corregir y anular: solo el administrador (el barbero solo registra y consulta). */
+function assertAdmin(actor) {
+  if (actor?.rol === 'barber') {
+    throw new RegistroError(403, 'Solo el administrador puede corregir o anular un registro.', 'ADMIN_ONLY');
+  }
+}
+
+/** Comprueba si se puede cambiar y si hace falta el PIN. Lanza si no se puede. */
+function checkEditable(cita) {
   if (!cita || cita.origin !== ORIGIN) throw new RegistroError(404, 'Registro no encontrado.', 'NOT_FOUND');
   if (cita.status === 'cancelled') throw new RegistroError(409, 'Este registro ya está anulado.', 'ALREADY_VOIDED');
   // Caja cerrada, comisión pagada, o registro con otra fecha que quedó fuera
   // de caja (su día ya estaba cerrado): solo con PIN.
   const locked = !!cita.cashSessionId || cita.commissionPaid === true || cita.cashPlacement === CASH_PLACEMENT.OUTSIDE;
-  if (actor?.rol === 'barber') {
-    if (cita.professionalId !== actor.uid) throw new RegistroError(403, 'Solo puedes cambiar tus propios registros.', 'NOT_OWNER');
-    if (cita.date !== todayKey()) throw new RegistroError(403, 'Solo puedes cambiar registros de hoy. Pide al administrador.', 'ONLY_SAME_DAY');
-    if (cita.commissionPaid === true) throw new RegistroError(403, 'La comisión ya se pagó. Pide al administrador.', 'COMMISSION_PAID');
-    if (cita.cashSessionId) throw new RegistroError(403, 'La caja ya se cerró. Pide al administrador.', 'CASH_CLOSED');
-  }
   return { needsPin: locked };
 }
 
@@ -487,11 +488,8 @@ function parseReason(raw) {
  * Corrige un registro. body: { reason, pin?, services?, paymentMethod?, clientId? (null = Cliente general), professionalId? (solo admin) }
  */
 export async function correctRegistro({ negocioId, actor, id, body = {} }) {
+  assertAdmin(actor);
   const reason = parseReason(body.reason);
-  const isBarber = actor?.rol === 'barber';
-  if (isBarber && body.professionalId !== undefined && body.professionalId !== actor.uid) {
-    throw new RegistroError(403, 'No puedes pasar un registro a otro profesional.', 'NOT_ALLOWED');
-  }
   const inputs = body.services !== undefined ? parseServiceInputs(body.services) : null;
   const pinState = await preparePin(negocioId, body.pin);
 
@@ -502,11 +500,11 @@ export async function correctRegistro({ negocioId, actor, id, body = {} }) {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const cita = snap.exists ? snap.data() : null;
-    const { needsPin } = checkEditable(cita, actor);
+    const { needsPin } = checkEditable(cita);
     requirePinIfNeeded(needsPin, pinState);
 
     const negocio = (await tx.get(nRef)).data() || {};
-    const newProId = !isBarber && body.professionalId !== undefined ? texto(body.professionalId, 120) : cita.professionalId;
+    const newProId = body.professionalId !== undefined ? texto(body.professionalId, 120) : cita.professionalId;
     const proChanged = newProId !== cita.professionalId;
     const reprice = !!inputs || proChanged;
     // Solo se relee el profesional si hay que recalcular precio/comisión
@@ -552,6 +550,7 @@ export async function correctRegistro({ negocioId, actor, id, body = {} }) {
 
 /** Anula un registro (status cancelled). Nunca borra el documento. body: { reason, pin? } */
 export async function voidRegistro({ negocioId, actor, id, body = {} }) {
+  assertAdmin(actor);
   const reason = parseReason(body.reason);
   const pinState = await preparePin(negocioId, body.pin);
   const ref = negRef(negocioId).collection('citas').doc(String(id));
@@ -560,7 +559,7 @@ export async function voidRegistro({ negocioId, actor, id, body = {} }) {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const cita = snap.exists ? snap.data() : null;
-    const { needsPin } = checkEditable(cita, actor);
+    const { needsPin } = checkEditable(cita);
     requirePinIfNeeded(needsPin, pinState);
 
     const at = nowIso();

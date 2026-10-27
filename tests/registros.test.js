@@ -4,7 +4,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isRegistro, newRequestId, defaultPaymentMethod, periodRange, shiftDay, needsPin, barberCanEdit, summarize, describeChange, dayLabel, todayKey,
+  isRegistro, newRequestId, defaultPaymentMethod, periodRange, shiftDay, needsPin, summarize, describeChange, dayLabel,
 } from '../src/shared/registros/registroModel.js';
 
 describe('registroModel', () => {
@@ -40,16 +40,6 @@ describe('registroModel', () => {
     assert.equal(needsPin({ commissionPaid: true }), true);
     assert.equal(needsPin({ cashPlacement: 'fuera-de-caja' }), true);
     assert.equal(needsPin({ cashPlacement: 'caja-abierta' }), false);
-  });
-
-  test('el barbero solo cambia los suyos, de hoy, sin caja cerrada ni comisión pagada', () => {
-    const base = { professionalId: 'p1', date: todayKey(), status: 'completed' };
-    assert.equal(barberCanEdit(base, 'p1'), true);
-    assert.equal(barberCanEdit(base, 'p2'), false);
-    assert.equal(barberCanEdit({ ...base, date: '2020-01-01' }, 'p1'), false);
-    assert.equal(barberCanEdit({ ...base, commissionPaid: true }, 'p1'), false);
-    assert.equal(barberCanEdit({ ...base, cashSessionId: 'c' }, 'p1'), false);
-    assert.equal(barberCanEdit({ ...base, status: 'cancelled' }, 'p1'), false);
   });
 
   test('totales: los anulados no cuentan; comisión calculada, pendiente y pagada', () => {

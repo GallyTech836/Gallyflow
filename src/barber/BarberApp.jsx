@@ -1796,7 +1796,6 @@ const fetchByDate = async (subcollection, date) => {
                   Registrar {tl('service')}
                 </Button>
                 <RegistrosPanel
-                  currentUid={activeBarber?.id}
                   professionals={activeBarber ? [activeBarber] : []}
                   services={services}
                   clients={clientes}

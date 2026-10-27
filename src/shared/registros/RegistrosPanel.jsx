@@ -6,7 +6,7 @@ import ServicePicker from './ServicePicker';
 import { estimateTotal, toServiceInputs } from './servicePickerModel';
 import { listRegistros, listCorrecciones, correctRegistro, voidRegistro } from './registrosApi';
 import {
-  periodRange, summarize, needsPin, barberCanEdit, describeChange, dayLabel, todayKey, shiftDay, GENERAL_CLIENT,
+  periodRange, summarize, needsPin, describeChange, dayLabel, todayKey, shiftDay, GENERAL_CLIENT,
 } from './registroModel';
 
 const money = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
@@ -18,15 +18,15 @@ const PERIODS = [{ value: 'dia', label: 'Día' }, { value: 'semana', label: '7 d
  * backend (/api/servicios-registrados).
  *
  * Props:
- * - isAdmin: admin ve todos y filtra por profesional; el barbero solo los suyos.
- * - currentUid: uid del barbero (para saber qué puede cambiar).
+ * - isAdmin: admin ve todos, filtra por profesional, corrige y anula. El
+ *   barbero solo ve los suyos y su detalle (no corrige ni anula).
  * - professionals, services, clients, paymentMethods
  * - refreshKey: cambia para volver a cargar (ej. después de registrar).
  * - onRegister: abre el modal de registrar (botón del encabezado).
  * - onToast(msg, tipo)
  */
 export default function RegistrosPanel({
-  isAdmin = false, currentUid = null, professionals = [], services = [], clients = [], paymentMethods = [],
+  isAdmin = false, professionals = [], services = [], clients = [], paymentMethods = [],
   refreshKey = 0, onRegister, onToast,
 }) {
   const terms = useBusinessTerms();
@@ -112,7 +112,6 @@ export default function RegistrosPanel({
         <RegistroDetail
           registro={open}
           isAdmin={isAdmin}
-          currentUid={currentUid}
           professionals={professionals}
           services={services}
           clients={clients}
@@ -148,7 +147,7 @@ function RowBadges({ r }) {
 
 // ───────────────────────── Detalle ─────────────────────────
 
-function RegistroDetail({ registro: r, isAdmin, currentUid, professionals, services, clients, paymentMethods, proName, onClose, onChanged }) {
+function RegistroDetail({ registro: r, isAdmin, professionals, services, clients, paymentMethods, proName, onClose, onChanged }) {
   const terms = useBusinessTerms();
   const [history, setHistory] = useState(null);
   const [mode, setMode] = useState(null); // 'correct' | 'void'
@@ -159,7 +158,8 @@ function RegistroDetail({ registro: r, isAdmin, currentUid, professionals, servi
     return () => { cancelled = true; };
   }, [r.id]);
 
-  const editable = r.status !== 'cancelled' && (isAdmin || barberCanEdit(r, currentUid));
+  // Corregir y anular: solo el administrador (el backend responde 403 al barbero).
+  const editable = isAdmin && r.status !== 'cancelled';
   const commission = Number(r.commissionSnapshot?.amount) || 0;
 
   if (mode === 'correct') return <CorrectForm r={r} isAdmin={isAdmin} professionals={professionals} services={services} clients={clients} paymentMethods={paymentMethods} onCancel={() => setMode(null)} onDone={onChanged} />;
@@ -202,8 +202,8 @@ function RegistroDetail({ registro: r, isAdmin, currentUid, professionals, servi
         {r.status === 'cancelled' && (
           <p className="rounded-lg bg-nexus-error-bg px-3 py-2 text-sm text-nexus-error-text">Anulado: {r.voidReason}</p>
         )}
-        {!editable && r.status !== 'cancelled' && !isAdmin && (
-          <p className="text-xs text-nexus-text-muted">Solo puedes cambiar tus registros de hoy, si la caja no se cerró y la comisión no se pagó. Para otros cambios, pide al administrador.</p>
+        {!isAdmin && r.status !== 'cancelled' && (
+          <p className="text-sm text-nexus-text-secondary">Si hay un error, avísale al administrador.</p>
         )}
 
         <div>
