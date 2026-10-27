@@ -427,8 +427,10 @@ export const LAUNCH_PLAN_PRESETS = [
     id: 'nexus-control', name: 'Nexus Control', order: 4, price: 150, active: false,
     description: 'Registro de servicios por orden de llegada, comisiones por profesional, caja y analítica básica. Sin reservas online.',
     features: { ...NEXUS_CONTROL_FEATURES, profesionales: { limit: 5 }, sucursales: { limit: 1 } },
+    // Sin agenda: el Asistente de WhatsApp (agenda citas) no se ofrece.
+    addons: { ...LAUNCH_ADDONS, asistenteWhatsapp: { ...LAUNCH_ADDONS.asistenteWhatsapp, available: false } },
   },
-].map(({ active = true, ...p }) => ({
+].map(({ active = true, addons = LAUNCH_ADDONS, ...p }) => ({
   ...p,
   currency: 'Bs',
   billingCycle: 'monthly',
@@ -436,7 +438,7 @@ export const LAUNCH_PLAN_PRESETS = [
   trialDays: 14,
   setupFee: 0, // activación gratuita durante el lanzamiento
   active,
-  addons: LAUNCH_ADDONS,
+  addons,
 }));
 
 // ───────────────────────── Resolución ─────────────────────────

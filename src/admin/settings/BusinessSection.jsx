@@ -3,6 +3,7 @@ import { Clock, Copy, Save, Loader as Loader2, Wallet, Plus, X, CalendarClock } 
 import { useBusinessSettings } from '../../shared/businessSettings/useBusinessSettings';
 import { saveBusinessSettings } from '../../shared/businessSettings/businessSettingsService';
 import ClosedDaysCard from './business/ClosedDaysCard';
+import { STICKY_ABOVE_BAR } from '../../shared/registros/RegistrarServicioBar';
 
 function Card({ children, className = '' }) {
   return (
@@ -14,7 +15,9 @@ function Card({ children, className = '' }) {
 
 // Negocio: horario de atención, anticipación para reservar y métodos de pago.
 // (Marca, plan, cuenta y sesiones están en AccountSection: "Cuenta y plan".)
-export default function BusinessSection({ negocioId }) {
+// registrosMode (Nexus Control, sin agenda): solo métodos de pago. El horario,
+// los días cerrados y la anticipación se ocultan pero se guardan tal cual.
+export default function BusinessSection({ negocioId, registrosMode = false }) {
   const { businessSettings, loading: settingsLoading } = useBusinessSettings(negocioId);
 
   const [form, setForm] = useState(businessSettings);
@@ -65,6 +68,7 @@ export default function BusinessSection({ negocioId }) {
   return (
     <div className="space-y-4">
 
+      {!registrosMode && (<>
       {/* ── Horario del negocio ──────────────────────────────────── */}
       <Card>
         <div className="flex items-center gap-2.5 mb-1">
@@ -145,10 +149,12 @@ export default function BusinessSection({ negocioId }) {
         value={form.closedDays || []}
         onChange={(closedDays) => { setForm((prev) => ({ ...prev, closedDays })); setSaved(false); }}
       />
+      </>)}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         {/* ── Anticipación para reservar ───────────────────────────── */}
+        {!registrosMode && (
         <Card>
           <div className="flex items-center gap-2.5 mb-1">
             <CalendarClock className="w-5 h-5 text-nexus-primary" aria-hidden="true" />
@@ -178,6 +184,7 @@ export default function BusinessSection({ negocioId }) {
             </span>
           </label>
         </Card>
+        )}
 
         {/* ── Métodos de pago ───────────────────────────────────────── */}
         <Card>
@@ -262,7 +269,7 @@ export default function BusinessSection({ negocioId }) {
       {/* ── Guardar (horario + días cerrados + anticipación + métodos de pago) ─────────
           Fase 4: barra fija con fondo propio, así el contenido no se ve
           por detrás ni queda tapado. */}
-      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border">
+      <div className={`sticky ${registrosMode ? STICKY_ABOVE_BAR : 'bottom-0'} z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border`}>
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"

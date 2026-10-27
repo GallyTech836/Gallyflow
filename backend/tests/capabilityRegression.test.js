@@ -173,7 +173,12 @@ describe('plan Nexus Control', () => {
     assert.equal(now.getLimit(r, 'sucursales'), 1);
   });
 
-  test('el asistente de WhatsApp no viene en el plan, pero se puede contratar aparte', () => {
+  test('el asistente de WhatsApp no se ofrece como complemento (sin agenda); profesional extra sí', () => {
+    assert.equal(now.getAddonOffer(p, 'asistenteWhatsapp').available, false);
+    assert.equal(now.getAddonOffer(p, 'profesionalExtra').available, true);
+  });
+
+  test('si igual se activa el complemento a mano, el modelo lo respeta (como antes)', () => {
     const con = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }), addons: { asistenteWhatsapp: true } });
     assert.equal(con.asistenteWhatsapp.enabled, true);
     assert.equal(con.asistenteWhatsapp.source, 'addon');

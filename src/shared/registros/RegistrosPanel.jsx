@@ -23,11 +23,12 @@ const PERIODS = [{ value: 'dia', label: 'Día' }, { value: 'semana', label: '7 d
  * - professionals, services, clients, paymentMethods
  * - refreshKey: cambia para volver a cargar (ej. después de registrar).
  * - onRegister: abre el modal de registrar (botón del encabezado).
+ * - registerDesktopOnly: ese botón solo en escritorio (en celular hay barra fija).
  * - onToast(msg, tipo)
  */
 export default function RegistrosPanel({
   isAdmin = false, professionals = [], services = [], clients = [], paymentMethods = [],
-  refreshKey = 0, onRegister, onToast,
+  refreshKey = 0, onRegister, registerDesktopOnly = false, onToast,
 }) {
   const terms = useBusinessTerms();
   const [period, setPeriod] = useState('dia');
@@ -67,7 +68,10 @@ export default function RegistrosPanel({
           </Select>
         )}
         {onRegister && (
-          <Button icon={Plus} onClick={onRegister} className="ml-auto">Registrar {terms.tl('service')}</Button>
+          // Con la barra fija de celular (registerDesktopOnly), aquí solo en escritorio.
+          <span className={registerDesktopOnly ? 'ml-auto hidden lg:block' : 'ml-auto'}>
+            <Button icon={Plus} onClick={onRegister}>Registrar {terms.tl('service')}</Button>
+          </span>
         )}
       </div>
 

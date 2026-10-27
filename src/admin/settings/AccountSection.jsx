@@ -18,7 +18,8 @@ const initials = (name) => (name || 'N').split(/\s+/).filter(Boolean).slice(0, 2
 
 // Cuenta y plan: marca del negocio (logo y portada del Link Público),
 // suscripción, sesión del administrador y sesiones activas.
-export default function AccountSection({ negocioId, businessName, user, onLogout, onChangeSection }) {
+// registrosMode (Nexus Control): el logo se edita en "Marca", sin portada.
+export default function AccountSection({ negocioId, businessName, user, onLogout, onChangeSection, registrosMode = false }) {
   const { planName, capabilities, loading: planLoading } = useNegocioPlan(negocioId);
   const { status } = useNegocioStatus(negocioId);
   const { heroConfig } = useHeroConfig(negocioId);
@@ -63,7 +64,9 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {onChangeSection && (
                 <Button variant="secondary" size="sm" icon={LayoutTemplate} onClick={() => onChangeSection('hero')}>
-                  {heroConfig.cover && heroConfig.logo ? 'Cambiar logo y portada' : 'Subir logo y portada'}
+                  {registrosMode
+                    ? (heroConfig.logo ? 'Cambiar logo' : 'Subir logo')
+                    : (heroConfig.cover && heroConfig.logo ? 'Cambiar logo y portada' : 'Subir logo y portada')}
                 </Button>
               )}
             </div>

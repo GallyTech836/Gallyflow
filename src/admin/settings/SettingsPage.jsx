@@ -20,6 +20,7 @@ export default function SettingsPage({
   onLogout,
   onChangeSection,
   activeSection = 'business',
+  registrosMode = false,
 }) {
   const ActiveComponent = SECTION_COMPONENTS[activeSection] || BusinessSection;
 
@@ -33,6 +34,7 @@ export default function SettingsPage({
       setIsEditingBusinessName={setIsEditingBusinessName}
       onLogout={onLogout}
       onChangeSection={onChangeSection}
+      registrosMode={registrosMode}
     />
   );
 }

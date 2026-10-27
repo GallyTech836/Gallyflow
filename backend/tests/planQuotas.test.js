@@ -68,7 +68,9 @@ describe('planes de lanzamiento (modelo)', () => {
       assert.equal(p.vertical, 'citas');
       // Nexus Control se siembra inactivo hasta confirmar precio y límites.
       assert.equal(p.active, p.id !== 'nexus-control');
-      assert.deepEqual(p.addons, { profesionalExtra: { available: true, price: 45 }, asistenteWhatsapp: { available: true, price: 350 } });
+      // Nexus Control no tiene agenda: el Asistente de WhatsApp no se ofrece.
+      const asistenteDisponible = p.id !== 'nexus-control';
+      assert.deepEqual(p.addons, { profesionalExtra: { available: true, price: 45 }, asistenteWhatsapp: { available: asistenteDisponible, price: 350 } });
     }
   });
 

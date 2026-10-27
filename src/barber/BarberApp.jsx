@@ -40,6 +40,7 @@ import { useNotifications, notify, NotificationType } from '../shared/notificati
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
 import RegistrosPanel from '../shared/registros/RegistrosPanel';
+import RegistrarServicioBar from '../shared/registros/RegistrarServicioBar';
 import { isRegistro } from '../shared/registros/registroModel';
 import { ClipboardList } from 'lucide-react';
 
@@ -380,6 +381,9 @@ const hideAgenda = !canUseCapability('vistaAgenda') && canRegistrar;
 const homeTab = hideAgenda ? "registros" : "agenda";
 // La agenda no se pinta mientras carga el plan: así nunca aparece y se va.
 const agendaTab = activeTab === "agenda" && !planLoading;
+// Modo registros: "Registrar servicio" fijo abajo en celular y tablet, en
+// Servicios, Comisiones y Rendimiento (no en Perfil).
+const showRegistrarBar = hideAgenda && ["registros", "comisiones", "rendimiento"].includes(activeTab);
 useEffect(() => {
   if (activeTab === "comisiones" && !planLoading && !canSeeCommissions) setActiveTab(homeTab);
   if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab(homeTab);
@@ -1331,7 +1335,7 @@ const fetchByDate = async (subcollection, date) => {
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
-    <div className="min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none pb-24 md:pb-0">
+    <div className={`min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none ${showRegistrarBar ? 'pb-40 md:pb-24 lg:pb-0' : 'pb-24 md:pb-0'}`}>
       
       {/* HEADER SUPERIOR */}
       {/* En "Servicios registrados" no: esa pantalla tiene sus propios periodos. */}
@@ -1792,9 +1796,12 @@ const fetchByDate = async (subcollection, date) => {
             {/* ================= TAB 2: COMISIONES ================= */}
             {activeTab === "registros" && canRegistrar && (
               <div className="space-y-4 animate-fade-in">
-                <Button fullWidth size="lg" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)}>
-                  Registrar {tl('service')}
-                </Button>
+                {/* Con la barra fija (modo registros), este botón solo en escritorio. */}
+                <div className={showRegistrarBar ? 'hidden lg:block' : ''}>
+                  <Button fullWidth size="lg" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)}>
+                    Registrar {tl('service')}
+                  </Button>
+                </div>
                 <RegistrosPanel
                   professionals={activeBarber ? [activeBarber] : []}
                   services={services}
@@ -2084,6 +2091,16 @@ const fetchByDate = async (subcollection, date) => {
         )}
 
       </main>
+
+      {/* Debajo de md va justo encima de la barra de pestañas (que allí es fija);
+          de md a lg esa barra ya no es fija y esta queda abajo de todo. */}
+      {showRegistrarBar && (
+        <RegistrarServicioBar
+          label={`Registrar ${tl('service')}`}
+          onClick={() => setRegistroModalOpen(true)}
+          position="bottom-[calc(3.375rem+1px+max(0.375rem,env(safe-area-inset-bottom)))] pb-3 md:bottom-0 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        />
+      )}
 
       {registroModalOpen && activeBarber && (
         <RegistrarServicioModal

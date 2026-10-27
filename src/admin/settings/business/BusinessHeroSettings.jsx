@@ -4,6 +4,7 @@ import { useHeroConfig } from '../../../shared/heroConfig/useHeroConfig';
 import { ImageUploader } from '../../../shared/ui';
 import { saveHeroConfig, saveHeroImage } from './businessHeroService';
 import BusinessHeroPreview from './BusinessHeroPreview';
+import { STICKY_ABOVE_BAR } from '../../../shared/registros/RegistrarServicioBar';
 
 // Link Público: lo que el cliente ve antes de reservar.
 // El logo y la portada se configuran SOLO aquí; "Cuenta y plan", las
@@ -37,7 +38,9 @@ function FieldLabel({ children, htmlFor }) {
   );
 }
 
-export default function BusinessHeroSettings({ negocioId }) {
+// registrosMode (Nexus Control, sin link público): esta sección es "Marca" y
+// muestra solo el nombre y el logo. Lo demás se oculta pero se guarda tal cual.
+export default function BusinessHeroSettings({ negocioId, registrosMode = false }) {
   const { heroConfig, loading } = useHeroConfig(negocioId);
   const [form, setForm] = useState(heroConfig);
   const [saving, setSaving] = useState(false);
@@ -92,13 +95,13 @@ export default function BusinessHeroSettings({ negocioId }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4 items-start">
+      <div className={`grid grid-cols-1 ${registrosMode ? '' : 'xl:grid-cols-[minmax(0,1fr)_380px]'} gap-4 items-start`}>
 
         {/* ── Formulario ───────────────────────────────────────── */}
         <div className="space-y-4 min-w-0">
           <SectionCard
             icon={LayoutTemplate}
-            title="Identidad"
+            title={registrosMode ? 'Marca' : 'Identidad'}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -113,6 +116,7 @@ export default function BusinessHeroSettings({ negocioId }) {
                   maxLength={60}
                 />
               </div>
+              {!registrosMode && (
               <div>
                 <FieldLabel htmlFor="hero-slogan">Eslogan</FieldLabel>
                 <input
@@ -125,12 +129,13 @@ export default function BusinessHeroSettings({ negocioId }) {
                   maxLength={140}
                 />
               </div>
+              )}
             </div>
           </SectionCard>
 
           <SectionCard
             icon={ImageIcon}
-            title="Logo y portada"
+            title={registrosMode ? 'Logo' : 'Logo y portada'}
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ImageUploader
@@ -141,6 +146,7 @@ export default function BusinessHeroSettings({ negocioId }) {
                 maxSize={512}
                 hint="Cuadrado, 512×512."
               />
+              {!registrosMode && (
               <ImageUploader
                 label="Portada"
                 shape="wide"
@@ -150,10 +156,12 @@ export default function BusinessHeroSettings({ negocioId }) {
                 maxSize={1600}
                 hint="Horizontal, 1600×800."
               />
+              )}
             </div>
             {imageError && <p className="mt-2 text-xs text-nexus-error-text" role="alert">{imageError}</p>}
           </SectionCard>
 
+          {!registrosMode && (
           <SectionCard
             icon={Sparkles}
             title="Calificación y texto destacado"
@@ -220,16 +228,19 @@ export default function BusinessHeroSettings({ negocioId }) {
               </div>
             </div>
           </SectionCard>
+          )}
         </div>
 
         {/* ── Vista previa (fija al costado en pantallas grandes) ─── */}
+        {!registrosMode && (
         <div className="xl:sticky xl:top-24 min-w-0">
           <BusinessHeroPreview config={form} />
         </div>
+        )}
       </div>
 
       {/* ── Guardar ─────────────────────────────────────────────── */}
-      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border flex items-center justify-end gap-3">
+      <div className={`sticky ${registrosMode ? STICKY_ABOVE_BAR : 'bottom-0'} z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-nexus-background/95 backdrop-blur border-t border-nexus-border flex items-center justify-end gap-3`}>
         <button
           type="button"
           onClick={handleSave}

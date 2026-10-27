@@ -48,6 +48,7 @@ import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
 import RegistrosPanel from '../shared/registros/RegistrosPanel';
+import RegistrarServicioBar from '../shared/registros/RegistrarServicioBar';
 import { isRegistro } from '../shared/registros/registroModel';
 
 const GEOLOCATIONS_DB = [
@@ -2225,12 +2226,15 @@ const { heroConfig } = useHeroConfig(negocioId);
     return true;
   };
 
+  // Modo registros (sin agenda): el profesional no tiene paso "Disponibilidad".
+  // Se guarda con el horario por defecto (nuevo) o el que ya tenía (al editar).
+  const lastBarberStep = registrosMode ? 2 : 3;
   const handleNextStep = async () => {
     if (barberStep === 1) {
       if (await validateStep1()) {
         setBarberStep(2);
       }
-    } else if (barberStep === 2) {
+    } else if (barberStep === 2 && lastBarberStep === 3) {
       setBarberStep(3);
     }
   };
@@ -2782,7 +2786,9 @@ const { heroConfig } = useHeroConfig(negocioId);
 
           {!navCollapsed && isSettingsMenuOpen && (
             <div className="ml-4 pl-2 border-l border-nexus-navy-border space-y-0.5 py-1">
-              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp')).map(({ id, label, icon: Icon }) => {
+              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp')).map(({ id, label: baseLabel, icon: Icon }) => {
+                // Modo registros: sin link público, la sección queda como "Marca" (nombre y logo).
+                const label = registrosMode && id === 'hero' ? 'Marca' : baseLabel;
                 const isCurrent = activeTab === 'settings' && settingsSection === id;
                 return (
                   <button
@@ -2964,7 +2970,8 @@ const { heroConfig } = useHeroConfig(negocioId);
           )}
         </header>
 
-        <div className="flex-1 p-3 sm:p-5 space-y-4 sm:space-y-5">
+        {/* Modo registros: espacio abajo para la barra fija "Registrar servicio" (celular y tablet). */}
+        <div className={`flex-1 p-3 sm:p-5 space-y-4 sm:space-y-5 ${registrosMode ? 'pb-24 sm:pb-24 lg:pb-5' : ''}`}>
           
           {/* ==========================================
               1. PESTAÑA: DASHBOARD (METRICAS FILTRADAS)
@@ -3580,6 +3587,8 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {t('services')} disponibles <span className="font-normal text-nexus-text-muted nx-num">({(services || []).length})</span>
                 </h3>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  {/* Modo registros: sin link público, no hay fotos que mostrar ahí. */}
+                  {!registrosMode && (
                   <button
                     type="button"
                     role="switch"
@@ -3592,6 +3601,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                       ? <ToggleRight className="w-7 h-7 text-nexus-success" aria-hidden="true" />
                       : <ToggleLeft className="w-7 h-7 text-nexus-text-muted" aria-hidden="true" />}
                   </button>
+                  )}
                   <Button icon={Plus} className="w-full sm:w-auto" onClick={openNewServiceModal}>
                     Agregar {t('service')}
                   </Button>
@@ -3939,6 +3949,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               paymentMethods={businessSettings.paymentMethods}
               refreshKey={registrosTick}
               onRegister={() => setRegistroModalOpen(true)}
+              registerDesktopOnly={registrosMode}
               onToast={triggerToast}
             />
             </div>
@@ -3969,6 +3980,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             onLogout={logout}
             activeSection={settingsSection === 'automation' && !hasFeature(planFeatures, 'asistenteWhatsapp') ? 'business' : settingsSection}
             onChangeSection={setSettingsSection}
+            registrosMode={registrosMode}
           />
           )}
 
@@ -4214,7 +4226,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 <p className="text-xs text-nexus-text-secondary">Complete los pasos para configurar el perfil {g('professional', 'del', 'de la')} {tl('professional')}.</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5 text-xs sm:text-sm w-full md:flex md:items-center md:gap-2.5 md:w-auto">
+              <div className={`grid ${lastBarberStep === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 text-xs sm:text-sm w-full md:flex md:items-center md:gap-2.5 md:w-auto`}>
                 <button 
                   type="button"
                   onClick={() => setBarberStep(1)}
@@ -4244,6 +4256,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   <span className="w-5 h-5 shrink-0 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold">2</span>
                   {t('services')}
                 </button>
+                {lastBarberStep === 3 && (<>
                 <div className="w-6 h-[1.5px] bg-nexus-border hidden md:block" />
                 <button 
                   type="button"
@@ -4261,6 +4274,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   <span className="w-5 h-5 shrink-0 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold">3</span>
                   Disponibilidad
                 </button>
+                </>)}
               </div>
             </div>
 
@@ -4706,7 +4720,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
                 
 
-{barberStep === 3 && (
+{barberStep === 3 && lastBarberStep === 3 && (
                 <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
                   <div className="flex justify-between items-center">
                     <div>
@@ -4896,7 +4910,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   </button>
                 )}
 
-                {barberStep < 3 ? (
+                {barberStep < lastBarberStep ? (
                   <button 
                     type="button"
                     onClick={handleNextStep}
@@ -5098,6 +5112,11 @@ const { heroConfig } = useHeroConfig(negocioId);
         </div>
       )}
 
+      {/* Modo registros: "Registrar servicio" fijo abajo en celular y tablet, en todas las pestañas. */}
+      {registrosMode && (
+        <RegistrarServicioBar label={`Registrar ${tl('service')}`} onClick={() => setRegistroModalOpen(true)} />
+      )}
+
       {/* 7. MODAL: AGREGAR SERVICIOS */}
       {/* 7. MODAL: AGREGAR SERVICIOS */}
       {registroModalOpen && (
@@ -5202,6 +5221,9 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </span>
               </label>
 
+              {/* Modo registros (sin agenda ni link público): oculto. El servicio nuevo
+                  se guarda con todos los días; uno existente conserva los suyos. */}
+              {!registrosMode && (
               <div>
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="text-xs text-nexus-text-secondary font-bold">Disponibilidad por Días *</label>
@@ -5254,6 +5276,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   })}
                 </div>
               </div>
+              )}
 
               <div className="sticky -bottom-5 sm:-bottom-6 z-20 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 px-5 sm:px-6 pt-3 pb-5 sm:pb-6 bg-nexus-surface flex justify-end gap-2.5 border-t border-nexus-border">
                 <button 
