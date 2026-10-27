@@ -2330,7 +2330,7 @@ const fetchByDate = async (subcollection, date) => {
       {/* BOTTOM NAVIGATION DE ESTILO MÓVIL */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-nexus-surface border-t border-nexus-border flex justify-around py-1.5 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
         {[
-          { id: "agenda", label: showAgenda ? "Agenda" : "Servicios", icon: showAgenda ? Icons.Calendar : ClipboardList },
+          { id: "agenda", label: showAgenda ? "Agenda" : "Hoy", icon: showAgenda ? Icons.Calendar : ClipboardList },
           ...(canRegistrar ? [{ id: "registros", label: t('services'), icon: ClipboardList }] : []),
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
           { id: "rendimiento", label: "Rendimiento", icon: Icons.TrendingUp },
