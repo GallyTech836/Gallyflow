@@ -29,7 +29,7 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
   // no activas ni funciones que no aplican a este tipo de negocio.
   const featureEntries = CAPABILITIES
     .map((cap) => [cap, capabilities?.[cap.key]])
-    .filter(([cap, val]) => cap.status !== 'soon' && !cap.core
+    .filter(([cap, val]) => cap.status !== 'soon' && !cap.core && !cap.screenSetting
       && !(cap.status === 'mock' && !val?.enabled)
       && !(cap.hideWhenOff && !val?.enabled)
       && val?.source !== 'profile');

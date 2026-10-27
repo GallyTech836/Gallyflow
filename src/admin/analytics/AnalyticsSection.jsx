@@ -10,6 +10,7 @@ import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
+import { isRegistro } from '../../shared/registros/registroModel';
 import { verifyFinancePin, setFinancePin, getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 import CommissionPayModal from '../cash/CommissionPayModal';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
@@ -87,7 +88,12 @@ function ingresoDeCita(cita) {
 // dinero (bruto, comisiones calculadas/pendientes/pagadas, importe para el
 // negocio y detalle por profesional) con los mismos /finance/*. Oculta
 // "Canales de reservas" y "Nuevos/recurrentes". Sin `basic`, igual que siempre.
-export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false }) {
+// (Hoy sin uso: AdminApp ya no la activa.)
+//
+// `registros` (modo registros: agenda oculta + registro de servicios, Nexus
+// Control): la Analítica normal, pero hablando de servicios registrados en vez
+// de reservas, sin "Canales de reservas" ni las tarjetas de clientes.
+export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false }) {
   const terms = useBusinessTerms();
   const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
   const [financeSession, setFinanceSession] = useState(null);
@@ -131,7 +137,8 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   // ya los cubre (p. ej. Año actual), se reutilizan las citas ya cargadas: 0 lecturas extra.
   const cubre30d = startDate <= hace30dias && endDate >= hoyStr;
   useEffect(() => {
-    if (!isUnlocked || !negocioId || !selectedBranch || cubre30d) return;
+    // Modo registros: las tarjetas de clientes no se muestran, no se lee nada.
+    if (registros || !isUnlocked || !negocioId || !selectedBranch || cubre30d) return;
     let cancelled = false;
     getDocs(query(
       collection(db, 'negocios', negocioId, 'citas'),
@@ -142,7 +149,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       .then((snap) => { if (!cancelled) setRecent30Docs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); })
       .catch((err) => { console.error('[Analítica] error al leer últimos 30 días:', err); if (!cancelled) setRecent30Docs([]); });
     return () => { cancelled = true; };
-  }, [isUnlocked, negocioId, selectedBranch, cubre30d, hace30dias, hoyStr]);
+  }, [registros, isUnlocked, negocioId, selectedBranch, cubre30d, hace30dias, hoyStr]);
 
   const activos30dRecientes = useMemo(() => {
     const fuente = cubre30d ? reservations : recent30Docs;
@@ -188,6 +195,9 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   const canceladasEnRango = todasEnRango.length - citasEnRango.length;
 
   const completadas = useMemo(() => citasEnRango.filter((r) => r.status === 'completed'), [citasEnRango]);
+  // Modo registros: servicios registrados del período (sin anulados) y anulados.
+  const registrosEnRango = useMemo(() => citasEnRango.filter(isRegistro).length, [citasEnRango]);
+  const anuladosEnRango = useMemo(() => todasEnRango.filter((r) => isRegistro(r) && r.status === 'cancelled').length, [todasEnRango]);
 
   const performance = useMemo(() => {
     const ingresosGenerados = completadas.reduce((sum, r) => sum + ingresoDeCita(r), 0);
@@ -419,15 +429,15 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             <BigMetric label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
             <BigMetric label="Comisiones generadas" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
             <BigMetric label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
-            <BigMetric label="Resultado del negocio" value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
+            <BigMetric label={registros ? 'Para el negocio (antes de gastos)' : 'Resultado del negocio'} value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
           </div>
         </section>
       )}
 
       <section>
-        <h3 className="text-base font-semibold text-nexus-text mb-3">Reservas y {terms.tl('clients')}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {!basic && (
+        <h3 className="text-base font-semibold text-nexus-text mb-3">{registros ? `${terms.t('services')} registrados` : `Reservas y ${terms.tl('clients')}`}</h3>
+        <div className={`grid grid-cols-1 ${registros ? 'md:grid-cols-2' : 'md:grid-cols-4'} gap-4`}>
+          {!basic && !registros && (
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4">
             <p className="text-xs text-nexus-text-secondary nx-num">Canales de reservas</p>
             <div className="space-y-1.5">
@@ -439,6 +449,15 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           </div>
           )}
 
+          {registros ? (
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
+            <p className="text-3xl font-black text-nexus-text">{registrosEnRango}</p>
+            <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('services')} registrados</p>
+            <div className="flex justify-center gap-6 text-sm">
+              <span className="flex flex-col items-center"><b className={`text-lg ${anuladosEnRango > 0 ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{anuladosEnRango}</b><span className="text-nexus-text-secondary">Anulados</span></span>
+            </div>
+          </div>
+          ) : (
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.reservas}</p>
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">Reservas</p>
@@ -447,6 +466,9 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
               <span className="flex flex-col items-center"><b className={`text-lg ${canceladasEnRango > 0 ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{canceladasEnRango}</b><span className="text-nexus-text-secondary">Canceladas</span></span>
             </div>
           </div>
+          )}
+
+          {!registros && (<>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
             <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
@@ -478,6 +500,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
             )}
             {historyError && <p className="text-xs text-nexus-error-text mt-2">{historyError}</p>}
           </div>
+          </>)}
         </div>
       </section>
 
@@ -504,7 +527,11 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                 {serviciosStats.map((s) => (
                   <div key={s.serviceName}>
                     <DashedRow label={s.serviceName} value={`${s.participacion.toFixed(1)}%`} />
-                    <p className="text-xs text-nexus-text-secondary pl-1">{s.reservas} reservas · Bs {s.precioPromedio.toFixed(2)} prom. · {s.duracionPromedio.toFixed(0)} min prom.</p>
+                    <p className="text-xs text-nexus-text-secondary pl-1">
+                      {registros
+                        ? `${s.reservas} ${s.reservas === 1 ? 'registrado' : 'registrados'} · Bs ${s.precioPromedio.toFixed(2)} prom.`
+                        : `${s.reservas} reservas · Bs ${s.precioPromedio.toFixed(2)} prom. · ${s.duracionPromedio.toFixed(0)} min prom.`}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -524,9 +551,9 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
                 <div>
                   <p className="font-bold text-base text-nexus-text mb-1">{p.name}</p>
                   <div className="flex gap-4 text-sm text-nexus-text-secondary">
-                    <span>{p.reservasAtendidas} reservas</span>
+                    {!registros && <span>{p.reservasAtendidas} reservas</span>}
                     <span>{p.serviciosRealizados} {terms.tl('services')}</span>
-                    <span>{p.clientesAtendidos} {terms.tl('clients')}</span>
+                    {!registros && <span>{p.clientesAtendidos} {terms.tl('clients')}</span>}
                   </div>
                 </div>
                 {p.finanzas && (

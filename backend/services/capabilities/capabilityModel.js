@@ -69,6 +69,9 @@ export const CAPABILITY_MODULES = [
 // legacyKeys: claves viejas de planes ya guardados que significan lo mismo.
 // hideWhenOff: no se lista en "Mi cuenta" del negocio si está apagada (así una
 //   capacidad nueva no le aparece como "No incluido" a los negocios de siempre).
+// screenSetting: es un ajuste de pantalla, no una función que se vende. Nunca
+//   se promociona como incluida (sellableCapabilities) ni se lista en
+//   "Mi cuenta". Se sigue configurando en planes y excepciones como un toggle.
 // default: valor cuando ni el plan ni un override dicen nada. Reproduce lo
 //   que cada negocio veía ANTES de este sistema (compatibilidad sin migrar).
 // enforcedIn: dónde se valida de verdad ('ui', 'backend', 'rules').
@@ -98,6 +101,7 @@ export const CAPABILITIES = [
     description: 'El dueño y los profesionales registran los servicios atendidos por orden de llegada (sin horario). Plan Nexus Control.',
     enforcedIn: ['ui', 'backend'] },
   { key: 'vistaAgenda', module: 'agenda', label: 'Mostrar agenda', status: 'implemented', kind: 'toggle', default: true,
+    screenSetting: true,
     description: 'Solo controla si se ve la pestaña o vista de agenda. La agenda sigue activa por dentro (es core). Apagada en Nexus Control.',
     enforcedIn: ['ui'] },
   { key: 'listaEspera', module: 'agenda', label: 'Lista de espera', status: 'soon', kind: 'toggle', default: false },
@@ -351,10 +355,12 @@ export function isPlanCompatible(plan, businessVertical = 'citas') {
 /**
  * Capacidades que se pueden PROMOCIONAR como incluidas: activas y realmente
  * operativas (implementadas o parciales). Nunca maquetas ni "próximamente",
- * ni complementos (el WhatsApp activado por complemento no cuenta).
+ * ni complementos (el WhatsApp activado por complemento no cuenta), ni
+ * ajustes de pantalla (screenSetting).
  */
 export function sellableCapabilities(resolved) {
   return CAPABILITIES.filter((c) => {
+    if (c.screenSetting) return false;
     const v = resolved?.[c.key];
     if (!v?.enabled || v.source === 'addon') return false;
     if (c.status !== 'implemented' && c.status !== 'partial') return false;

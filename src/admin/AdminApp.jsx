@@ -129,7 +129,7 @@ export default function App({ user }) {
     return (
       <div className="bg-nexus-surface border border-nexus-border rounded-lg px-3 py-2 shadow-lg text-xs space-y-0.5">
         <p className="font-bold text-nexus-text">{displayLabel}</p>
-        <p className="text-nexus-text-secondary">{t('appointments')}: {bucket.citas || 0}</p>
+        <p className="text-nexus-text-secondary">{registrosMode ? `${t('services')} registrados` : t('appointments')}: {bucket.citas || 0}</p>
       <p className="text-nexus-text-secondary">Ventas: {Number(bucket.ventas || 0).toLocaleString('es-BO')} Bs</p>
       </div>
     );
@@ -249,6 +249,9 @@ const homeTab = showAgenda ? 'agenda'
   : 'services';
 // La agenda no se pinta mientras carga el plan: así nunca aparece y se va.
 const agendaTab = activeTab === 'agenda' && !planLoading;
+// Modo registros (Nexus Control): agenda oculta + registro de servicios. El
+// Dashboard y la Analítica hablan de servicios registrados en vez de citas.
+const registrosMode = !showAgenda && canUseCapability('registroServicios');
 useEffect(() => {
   if (planLoading) return;
   const cap = TAB_CAPABILITY[activeTab];
@@ -796,6 +799,45 @@ const { heroConfig } = useHeroConfig(negocioId);
     return () => { cancelled = true; };
   }, [negocioId, selectedBranch, activeTab, prevStart, prevEnd]);
 
+  // 4b) Modo registros: cantidad de servicios registrados (sin anulados) del
+  //     período anterior, para el "vs anterior" de la tarjeta. Mismo esquema que
+  //     las ventas: conteo en el servidor y, si falta el índice, lectura del período.
+  const [prevRegistrosCount, setPrevRegistrosCount] = useState(null);
+  useEffect(() => {
+    if (!negocioId || !selectedBranch || activeTab !== 'dashboard' || !registrosMode) return;
+    let cancelled = false;
+    const citasRef = collection(db, 'negocios', negocioId, 'citas');
+    (async () => {
+      try {
+        const snap = await getCountFromServer(query(
+          citasRef,
+          where('branch', '==', selectedBranch),
+          where('origin', '==', 'registro'),
+          where('status', '==', 'completed'),
+          where('date', '>=', prevStart),
+          where('date', '<=', prevEnd)
+        ));
+        if (!cancelled) setPrevRegistrosCount(snap.data().count);
+      } catch (err) {
+        console.warn('[Dashboard] conteo de registros no disponible, usando lectura de documentos:', err?.message || err);
+        try {
+          const snap = await getDocs(query(
+            citasRef,
+            where('branch', '==', selectedBranch),
+            where('date', '>=', prevStart),
+            where('date', '<=', prevEnd)
+          ));
+          const n = snap.docs.map(d => d.data()).filter(r => isRegistro(r) && r?.status !== 'cancelled').length;
+          if (!cancelled) setPrevRegistrosCount(n);
+        } catch (err2) {
+          console.error('[Dashboard] no se pudo contar los registros del período anterior:', err2);
+          if (!cancelled) setPrevRegistrosCount(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [negocioId, selectedBranch, activeTab, prevStart, prevEnd, registrosMode]);
+
   // 5) Dashboard: "Próxima cita" (independiente del selector). Una sola cita: la primera
   //    activa (pendiente / confirmada / en atención) desde ahora, ordenada por fecha y hora.
   const getNowCursor = () => {
@@ -1173,6 +1215,16 @@ const { heroConfig } = useHeroConfig(negocioId);
     return { comparable: true, percent };
   }, [prevRevenue, rangeMetrics]);
 
+  // Modo registros: servicios registrados del período (sin anulados) y su "vs anterior".
+  const rangeRegistrosCount = useMemo(
+    () => (rangeReservations || []).filter(isRegistro).length,
+    [rangeReservations]
+  );
+  const registrosComparison = useMemo(() => {
+    if (!prevRegistrosCount) return { comparable: false, percent: 0 };
+    return { comparable: true, percent: ((rangeRegistrosCount - prevRegistrosCount) / prevRegistrosCount) * 100 };
+  }, [prevRegistrosCount, rangeRegistrosCount]);
+
   // Horario real de atención para una fecha dada: se deriva de la disponibilidad
   // ('Disponible') que cada barbero de la sucursal ya tiene configurada por día
   // en su ficha (barber.availability). No existe todavía un horario general de
@@ -1309,7 +1361,10 @@ const { heroConfig } = useHeroConfig(negocioId);
       .filter(r => r?.branch === selectedBranch)
       .map(r => {
         const isNew = !!r?.createdAt && r.createdAt === r.updatedAt;
-        const label = isNew ? 'nueva reserva' : (STATUS_ACTIVITY_LABELS[r?.status] || `${cita} ${g('appointment', 'actualizado', 'actualizada')}`);
+        // Registros de servicio (Nexus Control): no son reservas.
+        const label = isRegistro(r)
+          ? (r?.status === 'cancelled' ? 'Registro anulado' : `${t('service')} registrado`)
+          : isNew ? 'nueva reserva' : (STATUS_ACTIVITY_LABELS[r?.status] || `${cita} ${g('appointment', 'actualizado', 'actualizada')}`);
         return { id: r?.id, clientName: r?.clientName || t('client'), label, ts: r?.updatedAt || r?.createdAt };
       })
       .filter(ev => !!ev.ts)
@@ -2917,7 +2972,7 @@ const { heroConfig } = useHeroConfig(negocioId);
           {activeTab === 'dashboard' && (
             <div className="space-y-4 sm:space-y-5">
               {/* Indicadores del periodo (Fase 4: textos de 12px o más, números alineados). */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className={`grid grid-cols-2 ${registrosMode ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-3 sm:gap-4`}>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">Ventas del periodo</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.totalRevenue)}</p>
@@ -2931,6 +2986,21 @@ const { heroConfig } = useHeroConfig(negocioId);
                     <p className="text-xs text-nexus-text-muted mt-1">Sin datos para comparar</p>
                   )}
                 </div>
+                {registrosMode ? (
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">{t('services')} registrados</p>
+                  <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1">{rangeRegistrosCount}</p>
+                  {registrosComparison.comparable ? (
+                    <p className={`flex items-center gap-1 mt-1 text-xs font-semibold ${registrosComparison.percent >= 0 ? 'text-nexus-success-text' : 'text-nexus-error-text'}`}>
+                      {registrosComparison.percent >= 0 ? <TrendingUp className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <TrendingDown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
+                      <span className="nx-num">{registrosComparison.percent >= 0 ? '+' : ''}{registrosComparison.percent.toFixed(1)}%</span>
+                      <span className="font-normal text-nexus-text-muted truncate">vs anterior</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-nexus-text-muted mt-1">Sin datos para comparar</p>
+                  )}
+                </div>
+                ) : (
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">{t('appointments')} {g('appointment', 'agendados', 'agendadas')}</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1">{(rangeReservations || []).length}</p>
@@ -2940,11 +3010,14 @@ const { heroConfig } = useHeroConfig(negocioId);
                     <p className="text-xs text-nexus-text-muted mt-1">Sin {g('appointment', 'cancelados', 'canceladas')}</p>
                   )}
                 </div>
+                )}
+                {!registrosMode && (
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">{t('clients')} {g('client', 'atendidos', 'atendidas')}</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-primary nx-num mt-1">{rangeMetrics?.clientsServed}</p>
                   <p className="text-xs text-nexus-text-muted mt-1">En el periodo</p>
                 </div>
+                )}
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">Comisión estimada</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.pendingCommissions)}</p>
@@ -2955,7 +3028,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
                 <div className={`${showAgenda ? 'lg:col-span-2' : 'lg:col-span-3'} bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0`}>
                   <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                    <h3 className="text-base font-semibold text-nexus-text">{t('appointments')} del periodo</h3>
+                    <h3 className="text-base font-semibold text-nexus-text">{registrosMode ? `${t('services')} registrados` : t('appointments')} del periodo</h3>
                     <span className="inline-flex items-center rounded-full border border-nexus-primary/20 bg-nexus-primary-soft px-2 py-0.5 text-xs font-medium text-nexus-primary">Tiempo real</span>
                   </div>
                   <div className="h-52 sm:h-56 w-full">
@@ -3881,7 +3954,7 @@ const { heroConfig } = useHeroConfig(negocioId);
            negocioId={negocioId}
            paymentMethods={businessSettings.paymentMethods}
            branches={branches}
-           basic={canUseCapability('registroServicios')}
+           registros={registrosMode}
            />
          )}
 

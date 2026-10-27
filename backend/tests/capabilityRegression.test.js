@@ -18,6 +18,8 @@ const OLD_KEYS = before.CAPABILITIES.map((c) => c.key);
 const OLD_PRESETS = Object.fromEntries(before.LAUNCH_PLAN_PRESETS.map((p) => [p.id, p]));
 const NEW_PRESETS = Object.fromEntries(now.LAUNCH_PLAN_PRESETS.map((p) => [p.id, p]));
 const EXISTING_PLANS = ['esencial', 'profesional', 'premium'];
+// Capacidades agregadas después del modelo congelado.
+const NEW_KEYS = ['registroServicios', 'vistaAgenda'];
 
 // Plan guardado como lo guarda Super Admin HOY (con el modelo anterior):
 // no tiene la clave registroServicios.
@@ -67,7 +69,7 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
   });
 
   test('el catálogo anterior no cambió: mismas capacidades, en el mismo orden, con la misma definición', () => {
-    const nuevas = now.CAPABILITIES.filter((c) => c.key !== 'registroServicios');
+    const nuevas = now.CAPABILITIES.filter((c) => !NEW_KEYS.includes(c.key));
     assert.deepEqual(nuevas, before.CAPABILITIES);
     assert.deepEqual(now.CAPABILITY_MODULES, before.CAPABILITY_MODULES);
     assert.deepEqual(now.ADDONS, before.ADDONS);
@@ -91,8 +93,8 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
     for (const id of EXISTING_PLANS) {
       const p = NEW_PRESETS[id];
       const nuevo = now.buildPlanFeatures(p.features, { vertical: p.vertical });
-      // Lo único nuevo al guardar: registroServicios explícitamente apagada.
-      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false }, id);
+      // Lo único nuevo al guardar: registroServicios apagada y vistaAgenda activa.
+      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true }, id);
       assertSameResolution({ planFeatures: nuevo }, `re-guardado ${id}`);
     }
   });
@@ -129,10 +131,11 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
         { planFeatures, overrides, addons, profileDefaults: prof.profileDefaults, relevantModules: prof.relevantModules },
         `caso ${i}`,
       );
-      // Guardar un plan viejo (sin vertical) da lo mismo + la clave nueva apagada.
+      // Guardar un plan viejo (sin vertical) da lo mismo + las claves nuevas con su default.
       if (planFeatures) {
-        assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...before.buildPlanFeatures(planFeatures), registroServicios: false }, `buildPlanFeatures caso ${i}`);
-        assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...before.buildPlanFeatures(planFeatures, { vertical: 'citas' }), registroServicios: false });
+        const nuevas = { registroServicios: false, vistaAgenda: true };
+        assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...before.buildPlanFeatures(planFeatures), ...nuevas }, `buildPlanFeatures caso ${i}`);
+        assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...before.buildPlanFeatures(planFeatures, { vertical: 'citas' }), ...nuevas });
       }
       if (overrides) assert.deepEqual(now.cleanOverrides(overrides), before.cleanOverrides(overrides));
     }
@@ -174,5 +177,24 @@ describe('plan Nexus Control', () => {
     const con = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }), addons: { asistenteWhatsapp: true } });
     assert.equal(con.asistenteWhatsapp.enabled, true);
     assert.equal(con.asistenteWhatsapp.source, 'addon');
+  });
+});
+
+describe('vistaAgenda: ajuste de pantalla, no se vende', () => {
+  test('nunca se promociona como incluida, en ningún plan', () => {
+    assert.equal(now.getCapability('vistaAgenda').screenSetting, true);
+    for (const p of now.LAUNCH_PLAN_PRESETS) {
+      const r = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }) });
+      assert.ok(!now.sellableCapabilities(r).some((c) => c.key === 'vistaAgenda'), p.id);
+    }
+  });
+
+  test('Esencial, Profesional y Premium promocionan exactamente lo mismo que antes de vistaAgenda', () => {
+    for (const id of EXISTING_PLANS) {
+      const a = before.resolveCapabilities({ planFeatures: storedFeatures(id) });
+      const p = NEW_PRESETS[id];
+      const b = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }) });
+      assert.deepEqual(now.sellableCapabilities(b).map((c) => c.key), before.sellableCapabilities(a).map((c) => c.key), id);
+    }
   });
 });
