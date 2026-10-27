@@ -38,6 +38,10 @@ import { calculateCommission, calculateCommissionForCita } from '../shared/commi
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
+import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
+import RegistrosPanel from '../shared/registros/RegistrosPanel';
+import { isRegistro } from '../shared/registros/registroModel';
+import { ClipboardList } from 'lucide-react';
 
 // Colores del gráfico "Servicios más Solicitados" (gráfico de torta + su leyenda).
 const PIE_COLORS = ['#18181B', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'];
@@ -278,6 +282,9 @@ console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const logout = logoutBarber;
   const [activeTab, setActiveTab] = useState("agenda"); 
   const [activeBarber, setActiveBarber] = useState(null);
+  // Registro de servicios (Nexus Control): modal y recarga de la lista.
+  const [registroModalOpen, setRegistroModalOpen] = useState(false);
+  const [registrosTick, setRegistrosTick] = useState(0);
   const [appointments, setAppointments] = useState([]);
   const [blockedSlots, setBlockedSlots] = useState([]); // Bloqueos administrativos
   const [selectedRange, setSelectedRange] = useState("Día"); // Día, Semana, Mes, Año
@@ -364,10 +371,13 @@ const isVisibleAppt = (appt) => staffPerms.viewOthersAppointments || matchesBarb
 // Comisiones: permiso del profesional Y capacidad comercial `comisiones` del plan.
 // (Negocios sin plan: `comisiones` es false por defecto -> la pestaña no aparece.)
 const canSeeCommissions = staffPerms.viewCommissions && canUseCapability('comisiones');
+// Registro de servicios (plan Nexus Control): siempre a su propio nombre.
+const canRegistrar = canUseCapability('registroServicios');
 useEffect(() => {
   if (activeTab === "comisiones" && !planLoading && !canSeeCommissions) setActiveTab("agenda");
   if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab("agenda");
-}, [activeTab, staffPerms, canSeeCommissions, planLoading]);
+  if (activeTab === "registros" && !planLoading && !canRegistrar) setActiveTab("agenda");
+}, [activeTab, staffPerms, canSeeCommissions, planLoading, canRegistrar]);
 
 // --- RANGO DE FECHAS QUE MUESTRA LA PANTALLA (Día / Semana / Mes / Año) ---
 // Mes incluye las 42 celdas de la grilla (días de meses vecinos). Solo se descarga este rango.
@@ -488,7 +498,8 @@ const fetchByDate = async (subcollection, date) => {
       matchesBarber(appt, activeBarber.id) &&
       appt.date === selectedDate &&
       appt.time === newTime &&
-      appt.status !== "Cancelado"
+      appt.status !== "Cancelado" &&
+      !isRegistro(appt)
     );
 
     if (duplicateAppt) {
@@ -639,7 +650,7 @@ const fetchByDate = async (subcollection, date) => {
       }
     }
     const conflictAppt = citasDeLaFecha.find(appt => {
-      if (appt.barber !== activeBarber.id || appt.date !== blockDate || appt.status === "Cancelado") return false;
+      if (appt.barber !== activeBarber.id || appt.date !== blockDate || appt.status === "Cancelado" || isRegistro(appt)) return false;
       const apptMin = convertTimeToMinutes(appt.time);
       return apptMin >= startMin && apptMin < endMin;
     });
@@ -869,7 +880,9 @@ const fetchByDate = async (subcollection, date) => {
   // que ya está filtrado por ese mismo período.
   const [collectingAll, setCollectingAll] = useState(false);
   const markAllCommissionsPaid = async () => {
-    const pendientes = (commissionSummary.allFinalized || []).filter(item => !item.commissionPaid);
+    // Los registros de servicio (Nexus Control) solo los paga el admin
+    // (commissionPayments / caja): aquí no se marcan.
+    const pendientes = (commissionSummary.allFinalized || []).filter(item => !item.commissionPaid && !isRegistro(item));
     if (pendientes.length === 0 || collectingAll) return;
     setCollectingAll(true);
     try {
@@ -941,6 +954,7 @@ const fetchByDate = async (subcollection, date) => {
     return appointments.filter(appt => {
       if (!matchesBarber(appt, activeBarber.id)) return false;
       if (appt.status === 'cancelled') return false; // canceladas fuera de la agenda
+      if (isRegistro(appt)) return false; // registros de servicio: sin horario, fuera de la agenda
 
       const targetDate = new Date(selectedDate + "T00:00:00");
       const apptDate = new Date(appt.date + "T00:00:00");
@@ -1369,6 +1383,12 @@ const fetchByDate = async (subcollection, date) => {
             {activeTab === "agenda" && (
               <div className="space-y-5 animate-fade-in">
                 
+                {canRegistrar && (
+                  <Button fullWidth size="lg" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)}>
+                    Registrar {tl('service')}
+                  </Button>
+                )}
+
                 {/* Header de la Agenda con el selector unificado */}
                 {renderUnifiedSelector(true)}
 
@@ -1393,7 +1413,7 @@ const fetchByDate = async (subcollection, date) => {
                         {annualMonthlyDistribution.map((m) => {
                           const targetYear = new Date(selectedDate + "T00:00:00").getFullYear();
                           const count = appointments.filter(appt => {
-                            if (!matchesBarber(appt, activeBarber.id)) return false;
+                            if (!matchesBarber(appt, activeBarber.id) || isRegistro(appt)) return false;
                             const d = new Date(appt.date + "T00:00:00");
                             return d.getFullYear() === targetYear && d.getMonth() === m.monthIndex;
                           }).length;
@@ -1429,7 +1449,7 @@ const fetchByDate = async (subcollection, date) => {
                       {/* Grilla de Días */}
                       <div className="grid grid-cols-7 gap-1.5 pt-3">
                         {monthlyGridDays.map((gridItem, idx) => {
-                          const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === gridItem.dateStr && appt.status !== 'cancelled');
+                          const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === gridItem.dateStr && appt.status !== 'cancelled' && !isRegistro(appt));
                           const dayBlocks = blockedSlots.filter(block => block.barber === activeBarber.id && block.date === gridItem.dateStr);
                           const isSelected = gridItem.dateStr === selectedDate;
 
@@ -1486,7 +1506,7 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="space-y-4 animate-fade-in">
                     <div className="grid grid-cols-1 sm:grid-cols-7 gap-3">
                       {currentWeekDays.map((dayStr, idx) => {
-                        const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === dayStr && appt.status !== 'cancelled');
+                        const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === dayStr && appt.status !== 'cancelled' && !isRegistro(appt));
                         const isSelected = dayStr === selectedDate;
                         const dateObj = new Date(dayStr + "T00:00:00");
 
@@ -1760,6 +1780,23 @@ const fetchByDate = async (subcollection, date) => {
             )}
 
             {/* ================= TAB 2: COMISIONES ================= */}
+            {activeTab === "registros" && canRegistrar && (
+              <div className="space-y-4 animate-fade-in">
+                <Button fullWidth size="lg" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)}>
+                  Registrar {tl('service')}
+                </Button>
+                <RegistrosPanel
+                  currentUid={activeBarber?.id}
+                  professionals={activeBarber ? [activeBarber] : []}
+                  services={services}
+                  clients={clientes}
+                  paymentMethods={businessSettings?.paymentMethods}
+                  refreshKey={registrosTick}
+                  onToast={triggerToast}
+                />
+              </div>
+            )}
+
             {activeTab === "comisiones" && (
               <div className="space-y-6 animate-fade-in">
                 {renderUnifiedSelector(false)}
@@ -1792,14 +1829,14 @@ const fetchByDate = async (subcollection, date) => {
                       <h3 className="text-base font-bold text-nexus-text">Transacciones & Comisiones</h3>
                       <p className="text-xs text-nexus-text-muted">{`${t('services')} ${g('service', 'finalizados', 'finalizadas')} en este periodo.`}</p>
                     </div>
-                    {commissionSummary.allFinalized.some(item => !item.commissionPaid) && (
+                    {commissionSummary.allFinalized.some(item => !item.commissionPaid && !isRegistro(item)) && (
                       <button
                         onClick={markAllCommissionsPaid}
                         disabled={collectingAll}
                         className="h-10 px-4 bg-nexus-success hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
                       >
                         <Icons.Check className="w-3.5 h-3.5" />
-                        {collectingAll ? 'Cobrando...' : `Cobrar Todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid).length})`}
+                        {collectingAll ? 'Cobrando...' : `Cobrar Todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid && !isRegistro(item)).length})`}
                       </button>
                     )}
                   </div>
@@ -1839,7 +1876,7 @@ const fetchByDate = async (subcollection, date) => {
                               </span>
                             </div>
 
-                            {!item.commissionPaid && (
+                            {!item.commissionPaid && !isRegistro(item) && (
                               <Button size="sm" icon={Icons.Check} onClick={() => markCommissionPaid(item.id)}>
                                 Cobrar
                               </Button>
@@ -2038,6 +2075,18 @@ const fetchByDate = async (subcollection, date) => {
         )}
 
       </main>
+
+      {registroModalOpen && activeBarber && (
+        <RegistrarServicioModal
+          services={services}
+          fixedProfessional={activeBarber}
+          clients={clientes}
+          paymentMethods={businessSettings?.paymentMethods}
+          onRegistered={() => setRegistrosTick(n => n + 1)}
+          onClose={() => setRegistroModalOpen(false)}
+          onToast={triggerToast}
+        />
+      )}
 
       {/* BOTÓN FLOTANTE "+" DE AGENDA */}
       {activeTab === "agenda" && staffPerms.createAppointments && (
@@ -2246,6 +2295,7 @@ const fetchByDate = async (subcollection, date) => {
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-nexus-surface border-t border-nexus-border flex justify-around py-1.5 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] md:static md:shadow-none md:max-w-md md:mx-auto md:pb-6 md:pt-4">
         {[
           { id: "agenda", label: "Agenda", icon: Icons.Calendar },
+          ...(canRegistrar ? [{ id: "registros", label: t('services'), icon: ClipboardList }] : []),
           { id: "comisiones", label: "Comisiones", icon: Icons.Dollar },
           { id: "rendimiento", label: "Rendimiento", icon: Icons.TrendingUp },
           { id: "perfil", label: "Perfil", icon: Icons.User }
