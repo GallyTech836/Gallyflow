@@ -24,7 +24,7 @@ import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
-import { useConfirm, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl, ImageUploader } from '../shared/ui';
+import { useConfirm, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl, ImageUploader, LoadingState } from '../shared/ui';
 import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
@@ -236,14 +236,23 @@ const [activeTab, setActiveTab] = useState('agenda');
 // hasFeature/getFeatureLimit siguen funcionando igual que antes.
 const { capabilities: planFeatures, can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
 // Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
-// capacidad mientras la pestaña está abierta, se vuelve a la agenda.
-const TAB_CAPABILITY = { dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
+// capacidad mientras la pestaña está abierta, se vuelve a la pestaña de inicio.
+const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
 // Pestañas que no son un módulo propio: "Servicios registrados" es parte de Agenda.
 const TAB_MODULE = { registros: 'agenda' };
+// Pestaña de inicio: la Agenda; si está oculta (vistaAgenda, Nexus Control),
+// "Servicios registrados", luego Dashboard y, como último recurso, Servicios.
+const showAgenda = canUseCapability('vistaAgenda');
+const homeTab = showAgenda ? 'agenda'
+  : canUseCapability('registroServicios') ? 'registros'
+  : (canUseCapability('dashboard') && hasModule('dashboard')) ? 'dashboard'
+  : 'services';
+// La agenda no se pinta mientras carga el plan: así nunca aparece y se va.
+const agendaTab = activeTab === 'agenda' && !planLoading;
 useEffect(() => {
   if (planLoading) return;
   const cap = TAB_CAPABILITY[activeTab];
-  if ((cap && !canUseCapability(cap)) || !hasModule(TAB_MODULE[activeTab] || activeTab)) setActiveTab('agenda');
+  if ((cap && !canUseCapability(cap)) || !hasModule(TAB_MODULE[activeTab] || activeTab)) setActiveTab(homeTab);
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, planFeatures, planLoading, businessProfile]);
 const { businessSettings } = useBusinessSettings(negocioId);
@@ -2590,15 +2599,17 @@ const { heroConfig } = useHeroConfig(negocioId);
             />
           )}
 
-          <SidebarItem
-            icon={CalendarIcon}
-            label="Agenda"
-            collapsed={navCollapsed}
-            active={activeTab === 'agenda'}
-            badge={pendingBadgeCount}
-            badgeLabel={`${pendingBadgeCount} pendientes`}
-            onClick={() => { setActiveTab('agenda'); setIsMobileSidebarOpen(false); }}
-          />
+          {showAgenda && (
+            <SidebarItem
+              icon={CalendarIcon}
+              label="Agenda"
+              collapsed={navCollapsed}
+              active={activeTab === 'agenda'}
+              badge={pendingBadgeCount}
+              badgeLabel={`${pendingBadgeCount} pendientes`}
+              onClick={() => { setActiveTab('agenda'); setIsMobileSidebarOpen(false); }}
+            />
+          )}
 
           {canUseCapability('registroServicios') && (
             <SidebarItem
@@ -2767,7 +2778,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 <span className={`${headerHasToolbar ? 'hidden 2xl:inline' : 'hidden sm:inline'} text-nexus-text-muted`} aria-hidden="true">/</span>
                 <span className="truncate">
                   {activeTab === 'dashboard' && 'Panel General'}
-                  {activeTab === 'agenda' && `Agenda de ${t('professionals')}`}
+                  {agendaTab && `Agenda de ${t('professionals')}`}
                   {activeTab === 'registros' && `${t('services')} registrados`}
                   {activeTab === 'barbers' && `Gestión de ${t('professionals')}`}
                   {activeTab === 'services' && `Catálogo de ${t('services')}`}
@@ -2782,14 +2793,14 @@ const { heroConfig } = useHeroConfig(negocioId);
               </h2>
             </div>
 
-            {activeTab === 'agenda' && canUseCapability('registroServicios') && (
+            {agendaTab && canUseCapability('registroServicios') && (
               <span className="xl:hidden shrink-0">
                 <Button size="sm" variant="secondary" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)} aria-label={`Registrar ${tl('service')}`}>
                   Registrar
                 </Button>
               </span>
             )}
-            {activeTab === 'agenda' && (
+            {agendaTab && (
               <span className="xl:hidden shrink-0">
               <Button
                 size="sm"
@@ -2874,14 +2885,14 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </a>
               )}
 
-              {activeTab === 'agenda' && canUseCapability('registroServicios') && (
+              {agendaTab && canUseCapability('registroServicios') && (
                 <span className="hidden xl:block">
                   <Button variant="secondary" icon={ClipboardList} onClick={() => setRegistroModalOpen(true)}>
                     Registrar {tl('service')}
                   </Button>
                 </span>
               )}
-              {activeTab === 'agenda' && (
+              {agendaTab && (
                 <span className="hidden xl:block">
                   <Button
                     icon={Plus}
@@ -2942,7 +2953,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-                <div className="lg:col-span-2 bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
+                <div className={`${showAgenda ? 'lg:col-span-2' : 'lg:col-span-3'} bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0`}>
                   <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                     <h3 className="text-base font-semibold text-nexus-text">{t('appointments')} del periodo</h3>
                     <span className="inline-flex items-center rounded-full border border-nexus-primary/20 bg-nexus-primary-soft px-2 py-0.5 text-xs font-medium text-nexus-primary">Tiempo real</span>
@@ -2966,6 +2977,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   </div>
                 </div>
 
+                {showAgenda && (
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm flex flex-col min-w-0">
                   <h3 className="text-base font-semibold text-nexus-text mb-3">{g('appointment', 'Próximo', 'Próxima')} {tl('appointment')}</h3>
                   {nextAppointment ? (
@@ -2983,6 +2995,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                     </div>
                   )}
                 </div>
+                )}
               </div>
 
               <CashCard
@@ -3035,7 +3048,8 @@ const { heroConfig } = useHeroConfig(negocioId);
           {/* ==========================================
               2. PESTAÑA: AGENDA DEL STAFF
               ========================================== */}
-          {activeTab === 'agenda' && (
+          {activeTab === 'agenda' && planLoading && <LoadingState />}
+          {agendaTab && (
             <div className="space-y-3 sm:space-y-4">
 
               {agendaView === 'dia' && (() => {
