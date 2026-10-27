@@ -57,8 +57,8 @@ function seed({ plan = 'esencial', pros = 0, sucs = 0, extra = {} } = {}) {
 // ─────────────────────────────── Modelo ───────────────────────────────
 
 describe('planes de lanzamiento (modelo)', () => {
-  test('tres planes con precio numérico, moneda Bs, mensual, 14 días de prueba y activación gratis', () => {
-    assert.deepEqual(LAUNCH_PLAN_PRESETS.map((p) => [p.id, p.price]), [['esencial', 150], ['profesional', 280], ['premium', 450]]);
+  test('planes con precio numérico, moneda Bs, mensual, 14 días de prueba y activación gratis', () => {
+    assert.deepEqual(LAUNCH_PLAN_PRESETS.map((p) => [p.id, p.price]), [['esencial', 150], ['profesional', 280], ['premium', 450], ['nexus-control', 150]]);
     for (const p of LAUNCH_PLAN_PRESETS) {
       assert.equal(typeof p.price, 'number');
       assert.equal(p.currency, 'Bs');
@@ -66,7 +66,8 @@ describe('planes de lanzamiento (modelo)', () => {
       assert.equal(p.trialDays, 14);
       assert.equal(p.setupFee, 0);
       assert.equal(p.vertical, 'citas');
-      assert.equal(p.active, true);
+      // Nexus Control se siembra inactivo hasta confirmar precio y límites.
+      assert.equal(p.active, p.id !== 'nexus-control');
       assert.deepEqual(p.addons, { profesionalExtra: { available: true, price: 45 }, asistenteWhatsapp: { available: true, price: 350 } });
     }
   });
@@ -132,9 +133,10 @@ describe('planes de lanzamiento (modelo)', () => {
       assert.ok(!vendibles.some((c) => c.key === 'asistenteWhatsapp'));
     }
     // Aunque alguien active una maqueta en un plan, no se lista como vendible.
-    const conMaqueta = resolveCapabilities({ planFeatures: { inventario: true } });
-    assert.ok(conMaqueta.inventario.enabled);
-    assert.ok(!sellableCapabilities(conMaqueta).some((c) => c.key === 'inventario'));
+    // (Antes usaba `inventario`, que ya dejó de ser maqueta: ahora `asistencia`.)
+    const conMaqueta = resolveCapabilities({ planFeatures: { asistencia: true } });
+    assert.ok(conMaqueta.asistencia.enabled);
+    assert.ok(!sellableCapabilities(conMaqueta).some((c) => c.key === 'asistencia'));
     // WhatsApp por complemento no cuenta como "incluido en el plan".
     assert.ok(!sellableCapabilities(resolvedOf('premium', { addons: { asistenteWhatsapp: true } })).some((c) => c.key === 'asistenteWhatsapp'));
   });

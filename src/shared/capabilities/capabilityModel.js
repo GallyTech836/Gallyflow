@@ -67,6 +67,8 @@ export const CAPABILITY_MODULES = [
 // core: siempre activa, no se puede apagar (sin esto el producto no sirve).
 // requires: solo se activa si la capacidad padre está activa.
 // legacyKeys: claves viejas de planes ya guardados que significan lo mismo.
+// hideWhenOff: no se lista en "Mi cuenta" del negocio si está apagada (así una
+//   capacidad nueva no le aparece como "No incluido" a los negocios de siempre).
 // default: valor cuando ni el plan ni un override dicen nada. Reproduce lo
 //   que cada negocio veía ANTES de este sistema (compatibilidad sin migrar).
 // enforcedIn: dónde se valida de verdad ('ui', 'backend', 'rules').
@@ -91,6 +93,10 @@ export const CAPABILITIES = [
     description: 'Link /reservar para que los clientes agenden solos.', enforcedIn: ['ui', 'backend', 'rules'] },
   { key: 'linkPersonalProfesional', module: 'agenda', label: 'Link personal del profesional', status: 'implemented', kind: 'toggle', default: true,
     requires: 'reservaPublica', description: 'Cada profesional comparte su propio link de reserva.', enforcedIn: ['ui'] },
+  { key: 'registroServicios', module: 'agenda', label: 'Registro de servicios', status: 'implemented', kind: 'toggle', default: false,
+    hideWhenOff: true,
+    description: 'El dueño y los profesionales registran los servicios atendidos por orden de llegada (sin horario). Plan Nexus Control.',
+    enforcedIn: ['ui', 'backend'] },
   { key: 'listaEspera', module: 'agenda', label: 'Lista de espera', status: 'soon', kind: 'toggle', default: false },
   { key: 'citasRecurrentes', module: 'agenda', label: 'Citas recurrentes', status: 'soon', kind: 'toggle', default: false },
 
@@ -377,6 +383,13 @@ const PROFESIONAL_FEATURES = {
   fichaCliente: true, historialCliente: true, preferenciasCliente: true, camposPersonalizados: true,
   permisosProfesional: true, comisiones: true, analiticas: true,
 };
+// Nexus Control: barberías que atienden por orden de llegada, sin reserva
+// online. Registran los servicios hechos y controlan comisiones y caja.
+const NEXUS_CONTROL_FEATURES = {
+  ...ESENCIAL_FEATURES,
+  reservaPublica: false, linkPersonalProfesional: false,
+  registroServicios: true, comisiones: true, analiticas: true,
+};
 const LAUNCH_ADDONS = {
   profesionalExtra: { available: true, price: 45 },
   asistenteWhatsapp: { available: true, price: 350 },
@@ -398,14 +411,21 @@ export const LAUNCH_PLAN_PRESETS = [
     description: 'Todo lo de Profesional, con mayor capacidad para gestionar el negocio.',
     features: { ...PROFESIONAL_FEATURES, profesionales: { limit: 10 }, sucursales: { limit: 2 } },
   },
-].map((p) => ({
+  {
+    // Precio y límites PROVISIONALES: se confirman antes de ponerlo a la venta.
+    // Se siembra inactivo: Super Admin lo activa cuando esté listo.
+    id: 'nexus-control', name: 'Nexus Control', order: 4, price: 150, active: false,
+    description: 'Registro de servicios por orden de llegada, comisiones por profesional, caja y analítica básica. Sin reservas online.',
+    features: { ...NEXUS_CONTROL_FEATURES, profesionales: { limit: 5 }, sucursales: { limit: 1 } },
+  },
+].map(({ active = true, ...p }) => ({
   ...p,
   currency: 'Bs',
   billingCycle: 'monthly',
   vertical: 'citas',
   trialDays: 14,
   setupFee: 0, // activación gratuita durante el lanzamiento
-  active: true,
+  active,
   addons: LAUNCH_ADDONS,
 }));
 
