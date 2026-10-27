@@ -97,6 +97,9 @@ export const CAPABILITIES = [
     hideWhenOff: true,
     description: 'El dueño y los profesionales registran los servicios atendidos por orden de llegada (sin horario). Plan Nexus Control.',
     enforcedIn: ['ui', 'backend'] },
+  { key: 'vistaAgenda', module: 'agenda', label: 'Mostrar agenda', status: 'implemented', kind: 'toggle', default: true,
+    description: 'Solo controla si se ve la pestaña o vista de agenda. La agenda sigue activa por dentro (es core). Apagada en Nexus Control.',
+    enforcedIn: ['ui'] },
   { key: 'listaEspera', module: 'agenda', label: 'Lista de espera', status: 'soon', kind: 'toggle', default: false },
   { key: 'citasRecurrentes', module: 'agenda', label: 'Citas recurrentes', status: 'soon', kind: 'toggle', default: false },
 
@@ -389,6 +392,7 @@ const NEXUS_CONTROL_FEATURES = {
   ...ESENCIAL_FEATURES,
   reservaPublica: false, linkPersonalProfesional: false,
   registroServicios: true, comisiones: true, analiticas: true,
+  vistaAgenda: false,
 };
 const LAUNCH_ADDONS = {
   profesionalExtra: { available: true, price: 45 },
