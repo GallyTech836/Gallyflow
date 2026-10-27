@@ -21,7 +21,7 @@ import { readServicesInTx } from '../pricing/catalogInTx.js';
 import { buildCitaService, summarizeCitaServices } from '../pricing/professionalPricing.js';
 import { professionalCanDo } from '../appointments/pendingModel.js';
 import { calculateCommission, COMMISSION_TYPE } from '../finance/commissionModel.js';
-import { isRealPaymentMethod, localDateKey, round2 } from '../cash/cashModel.js';
+import { isRealPaymentMethod, localDateKey, localDayStartMillis, round2, toMillis } from '../cash/cashModel.js';
 import { getPinHash } from '../finance/pinStore.js';
 import { verifyPin } from '../finance/pin.js';
 import { sendNotification } from '../notificationService.js';
@@ -59,6 +59,84 @@ export function localTimeKey(ms, timeZone = TZ) {
 }
 
 export const todayKey = (ms = Date.now()) => localDateKey(ms, TZ);
+
+// ───────────────────────── Otra fecha (solo admin) ─────────────────────────
+//
+// El admin puede registrar un servicio de hasta 7 días atrás (nunca futuro).
+// Se guarda con hora fija 12:00 del negocio y paidAt = ese mediodía, para que
+// la caja (que agrupa por paidAt) lo trate como cobrado ESE día:
+//   - si la caja que cubre ese día sigue abierta -> entra en ella;
+//   - si ya se cerró -> queda fuera de caja (la caja cerrada no cambia y
+//     tampoco se suma a la de hoy).
+// La lógica de la caja no cambia: aquí solo se LEE su estado para avisar.
+export const MAX_BACKDATE_DAYS = 7;
+export const BACKDATE_TIME = '12:00';
+export const CASH_PLACEMENT = { OPEN: 'caja-abierta', NEXT: 'proxima-caja', OUTSIDE: 'fuera-de-caja', NONE: 'sin-caja' };
+
+export function shiftDay(key, days) {
+  return new Date(Date.parse(`${key}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+}
+
+/** Mediodía (hora del negocio) de un día 'AAAA-MM-DD', en milisegundos. */
+export function noonMillis(key) {
+  return localDayStartMillis(Date.parse(`${key}T12:00:00Z`), TZ) + 12 * 3600000;
+}
+
+/**
+ * Fecha del registro. El barbero siempre registra "ahora" (la fecha que
+ * mande se ignora). El admin puede mandar `date` entre hoy-7 y hoy.
+ */
+export function resolveRegistroDate(input, { isBarber = false, nowMs = Date.now() } = {}) {
+  const today = todayKey(nowMs);
+  if (isBarber || input === undefined || input === null || input === '') return { date: today, backdated: false };
+  const d = String(input);
+  if (!FECHA_RE.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`)) || shiftDay(d, 0) !== d) {
+    throw new RegistroError(400, 'La fecha no es válida.', 'DATE_INVALID');
+  }
+  if (d > today) throw new RegistroError(400, 'No se puede registrar un servicio con fecha futura.', 'DATE_IN_FUTURE');
+  if (d < shiftDay(today, -MAX_BACKDATE_DAYS)) {
+    throw new RegistroError(400, `Solo se puede registrar hasta ${MAX_BACKDATE_DAYS} días atrás.`, 'DATE_TOO_OLD');
+  }
+  return { date: d, backdated: d !== today };
+}
+
+/** Clave de caja (scope) de una sucursal, igual que resolveScope de la caja. */
+export function cashScopeKeyFor(branch, sucursales = []) {
+  if (sucursales.length === 0) return 'general';
+  const found = sucursales.find((s) => (s.name || '') === branch) || (sucursales.length === 1 ? sucursales[0] : null);
+  return found ? found.id : null;
+}
+
+/**
+ * ¿En qué caja queda un cobro con este paidAt? Mismo criterio que la ventana
+ * de la caja (windowStart = último cierre, o inicio del día en que se abrió).
+ */
+export function cashPlacementFor(paidAtMs, estado, session = null) {
+  if (!estado) return CASH_PLACEMENT.NONE;
+  if (estado.openSessionId) {
+    const start = toMillis(session?.windowStart) ?? toMillis(estado.lastClosedAt)
+      ?? localDayStartMillis(toMillis(session?.openedAt) ?? Date.now(), TZ);
+    return paidAtMs >= start ? CASH_PLACEMENT.OPEN : CASH_PLACEMENT.OUTSIDE;
+  }
+  const last = toMillis(estado.lastClosedAt);
+  if (last === null) return CASH_PLACEMENT.NONE;
+  return paidAtMs >= last ? CASH_PLACEMENT.NEXT : CASH_PLACEMENT.OUTSIDE;
+}
+
+async function readCashPlacement(tx, negocioId, branch, sucursales, paidAtMs) {
+  const scopeKey = cashScopeKeyFor(branch, sucursales);
+  if (!scopeKey) return CASH_PLACEMENT.NONE;
+  const estadoSnap = await tx.get(negRef(negocioId).collection('cajaEstado').doc(scopeKey));
+  const estado = estadoSnap.exists ? estadoSnap.data() : null;
+  let session = null;
+  if (estado?.openSessionId) {
+    const sesSnap = await tx.get(negRef(negocioId).collection('cajas').doc(String(estado.openSessionId)));
+    session = sesSnap.exists ? sesSnap.data() : null;
+  }
+  return cashPlacementFor(paidAtMs, estado, session);
+}
+
+const dayLabel = (key) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
 
 // ───────────────────────── Piezas puras ─────────────────────────
 
@@ -216,7 +294,7 @@ async function readSucursales(tx, negocioId) {
  * @param {object} args
  * @param {string} args.negocioId  del token (nunca del body)
  * @param {object} args.actor      req.actor ({ uid, rol })
- * @param {object} args.body       { requestId, professionalId?, services, paymentMethod, clientId?, confirmDuplicate? }
+ * @param {object} args.body       { requestId, professionalId?, services, paymentMethod, clientId?, confirmDuplicate?, date? (solo admin) }
  * @returns {{ registro, replay: boolean, notification }}
  */
 export async function createRegistro({ negocioId, actor, body = {} }) {
@@ -231,8 +309,9 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
   const nRef = negRef(negocioId);
   const citaRef = nRef.collection('citas').doc(requestId);
   const nowMs = Date.now();
-  const date = todayKey(nowMs);
-  const time = localTimeKey(nowMs);
+  const { date, backdated } = resolveRegistroDate(body.date, { isBarber, nowMs });
+  const time = backdated ? BACKDATE_TIME : localTimeKey(nowMs);
+  const paidAtMs = backdated ? noonMillis(date) : nowMs;
 
   const result = await runCreate(async (tx) => {
     const existing = await tx.get(citaRef);
@@ -253,6 +332,7 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
     const priced = priceServices(inputs, catalog, pro);
     const paymentMethod = resolvePaymentMethod(body.paymentMethod, negocio);
     const branch = resolveBranch(pro, sucursales);
+    const cashPlacement = backdated ? await readCashPlacement(tx, negocioId, branch, sucursales, paidAtMs) : null;
 
     // Posible duplicado: mismo profesional, mismos servicios, hace menos de 3 min.
     const ids = priced.services.map((s) => s.serviceId);
@@ -273,7 +353,7 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
       requestId,
       date,
       time,
-      paidAt: at,
+      paidAt: new Date(paidAtMs).toISOString(),
       createdAt: at,
       updatedAt: at,
       bookedBy: isBarber ? 'barber' : 'admin',
@@ -288,6 +368,7 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
       commissionPaid: false,
       notes: '',
       ...(dup ? { duplicateConfirmed: true } : {}),
+      ...(backdated ? { backdated: true, cashPlacement } : {}),
     };
     tx.create(citaRef, doc);
     return { registro: publicView(citaRef.id, doc), replay: false, professionalName: pro.name || '' };
@@ -322,7 +403,10 @@ export async function notifyRegistro(negocioId, actor, registro, professionalNam
     return await sendNotification({
       tipo: 'SERVICIO_REGISTRADO',
       negocioId,
-      data: { byRole: isBarber ? 'barber' : 'admin', professionalName, serviceName: registro.serviceName, price: registro.price },
+      data: {
+        byRole: isBarber ? 'barber' : 'admin', professionalName, serviceName: registro.serviceName, price: registro.price,
+        ...(registro.backdated ? { dateLabel: dayLabel(registro.date) } : {}),
+      },
       actorUid: actor.uid,
       targetProfessionalId: registro.professionalId,
       // Registra el admin: solo al profesional (no a otros admins).
@@ -365,7 +449,9 @@ function diffAudit(before, after) {
 function checkEditable(cita, actor) {
   if (!cita || cita.origin !== ORIGIN) throw new RegistroError(404, 'Registro no encontrado.', 'NOT_FOUND');
   if (cita.status === 'cancelled') throw new RegistroError(409, 'Este registro ya está anulado.', 'ALREADY_VOIDED');
-  const locked = !!cita.cashSessionId || cita.commissionPaid === true;
+  // Caja cerrada, comisión pagada, o registro con otra fecha que quedó fuera
+  // de caja (su día ya estaba cerrado): solo con PIN.
+  const locked = !!cita.cashSessionId || cita.commissionPaid === true || cita.cashPlacement === CASH_PLACEMENT.OUTSIDE;
   if (actor?.rol === 'barber') {
     if (cita.professionalId !== actor.uid) throw new RegistroError(403, 'Solo puedes cambiar tus propios registros.', 'NOT_OWNER');
     if (cita.date !== todayKey()) throw new RegistroError(403, 'Solo puedes cambiar registros de hoy. Pide al administrador.', 'ONLY_SAME_DAY');

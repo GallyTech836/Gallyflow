@@ -44,7 +44,7 @@ const { openCash, closeCash, getCurrentCash, registerCommissionPayment } = await
 const { getAvailableSlots } = await import('../services/appointments/availability.js');
 const { isProfessionalFreeAt } = await import('../services/appointments/pendingModel.js');
 const { listBusyAppointments } = await import('../services/appointments/publicBooking.js');
-const { todayKey, DUPLICATE_WINDOW_MS } = await import('../services/registros/registroService.js');
+const { todayKey, DUPLICATE_WINDOW_MS, noonMillis, shiftDay, CASH_PLACEMENT, MAX_BACKDATE_DAYS } = await import('../services/registros/registroService.js');
 const { localDateKey } = await import('../services/cash/cashModel.js');
 
 const N = 'negocios/negA';
@@ -538,5 +538,83 @@ describe('los registros no ocupan horario; las citas normales sí (igual que ant
     db._set(`${N}/citas/r`, { ...registro, date: fecha });
     const r = await listBusyAppointments('negA', fecha);
     assert.equal(r.citas.length, 1);
+  });
+});
+
+// ─────────────────────────── Otra fecha (solo admin) ───────────────────────────
+
+describe('otra fecha', () => {
+  beforeEach(() => seed());
+  const hace = (n) => shiftDay(hoy(), -n);
+  const corregir = (id, body, actor = ADMIN) => call('POST', `/servicios-registrados/${id}/correct`, body, actor);
+
+  test('el barbero siempre registra "ahora": la fecha que mande se ignora', async () => {
+    const r = await registrar({ date: hace(2) }, BARBER);
+    const d = cita(r.body.registro.id);
+    assert.equal(d.date, hoy());
+    assert.equal(d.backdated, undefined);
+    assert.equal(d.paidAt, d.createdAt);
+  });
+
+  test('admin: solo hoy o hasta 7 días atrás, nunca futuro (validado en el servidor)', async () => {
+    assert.equal((await registrar({ professionalId: 'p1', date: shiftDay(hoy(), 1) }, ADMIN)).body.code, 'DATE_IN_FUTURE');
+    assert.equal((await registrar({ professionalId: 'p1', date: hace(MAX_BACKDATE_DAYS + 1) }, ADMIN)).body.code, 'DATE_TOO_OLD');
+    assert.equal((await registrar({ professionalId: 'p1', date: '2026-02-31' }, ADMIN)).body.code, 'DATE_INVALID');
+    assert.equal((await registrar({ professionalId: 'p1', date: 'ayer' }, ADMIN)).body.code, 'DATE_INVALID');
+    assert.equal((await registrar({ professionalId: 'p1', date: hace(MAX_BACKDATE_DAYS) }, ADMIN)).status, 201);
+    const hoyMismo = cita((await registrar({ professionalId: 'p1', date: hoy(), services: [{ serviceId: 'barba' }] }, ADMIN)).body.registro.id);
+    assert.equal(hoyMismo.backdated, undefined, 'hoy = ahora, no se marca como otra fecha');
+  });
+
+  test('se guarda con date del día, 12:00, paidAt = ese mediodía y backdated', async () => {
+    const r = await registrar({ professionalId: 'p1', date: hace(2) }, ADMIN);
+    const d = cita(r.body.registro.id);
+    assert.equal(d.date, hace(2));
+    assert.equal(d.time, '12:00');
+    assert.equal(d.paidAt, new Date(noonMillis(hace(2))).toISOString());
+    assert.equal(localDateKey(Date.parse(d.paidAt)), hace(2));
+    assert.ok(Date.parse(d.createdAt) > Date.parse(d.paidAt));
+    assert.equal(d.backdated, true);
+    assert.equal(d.cashPlacement, CASH_PLACEMENT.NONE, 'el negocio nunca usó la caja');
+  });
+
+  test('el aviso dice la fecha', async () => {
+    await registrar({ professionalId: 'p1', date: hace(2) }, ADMIN);
+    const dd = `${hace(2).slice(8, 10)}/${hace(2).slice(5, 7)}`;
+    assert.match(pushes[0].mensaje.cuerpo, new RegExp(`Corte del ${dd} a tu nombre`));
+  });
+
+  test('caja de ese día todavía abierta: entra en ella', async () => {
+    // Caja abierta desde hace 3 días (su ventana empieza ese día).
+    db._set(`${N}/cajaEstado/s0`, { openSessionId: 'caja1' });
+    db._set(`${N}/cajas/caja1`, { status: 'open', scopeKey: 's0', scopeName: 'Central', openingFund: 0, openedAt: new Date(noonMillis(hace(3))).toISOString(), windowStart: new Date(noonMillis(hace(3)) - 12 * 3600000).toISOString() });
+    const r = await registrar({ professionalId: 'p1', date: hace(2) }, ADMIN);
+    assert.equal(r.body.registro.cashPlacement, CASH_PLACEMENT.OPEN);
+    const c = await getCurrentCash('negA', { branchName: 'Central' });
+    assert.equal(c.cobros.filter((x) => x.kind === 'cita').length, 1);
+  });
+
+  test('caja de ese día ya cerrada: queda fuera de caja, no entra en la caja de hoy y corregirlo pide PIN', async () => {
+    // Se cerró ayer; hoy hay otra abierta (su ventana empieza en ese cierre).
+    const cierre = new Date(noonMillis(hace(1))).toISOString();
+    db._set(`${N}/cajaEstado/s0`, { openSessionId: 'caja2', lastClosedAt: cierre });
+    db._set(`${N}/cajas/caja2`, { status: 'open', scopeKey: 's0', scopeName: 'Central', openingFund: 0, openedAt: new Date().toISOString(), windowStart: cierre });
+    const r = await registrar({ professionalId: 'p1', date: hace(2) }, ADMIN);
+    assert.equal(r.body.registro.cashPlacement, CASH_PLACEMENT.OUTSIDE);
+    const c = await getCurrentCash('negA', { branchName: 'Central' });
+    assert.equal(c.cobros.filter((x) => x.kind === 'cita').length, 0);
+    // Sí cuenta en la analítica de su día.
+    assert.equal((await getFinanceSummary('negA', { startDate: hace(2), endDate: hace(2) })).ingresosBrutos, 50);
+
+    await setPin('1234');
+    const id = r.body.registro.id;
+    assert.equal((await corregir(id, { reason: 'Era por QR', paymentMethod: 'QR' })).body.code, 'PIN_REQUIRED');
+    assert.equal((await corregir(id, { reason: 'Era por QR', paymentMethod: 'QR', pin: '1234' })).status, 200);
+  });
+
+  test('caja cerrada antes de ese día y sin abrir todavía: irá en la próxima caja', async () => {
+    db._set(`${N}/cajaEstado/s0`, { openSessionId: null, lastClosedAt: new Date(noonMillis(hace(4))).toISOString() });
+    const r = await registrar({ professionalId: 'p1', date: hace(2) }, ADMIN);
+    assert.equal(r.body.registro.cashPlacement, CASH_PLACEMENT.NEXT);
   });
 });
