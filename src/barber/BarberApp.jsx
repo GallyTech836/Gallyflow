@@ -1029,7 +1029,7 @@ const fetchByDate = async (subcollection, date) => {
     });
 
     const finalizedAppts = barbtAppts.filter(a => a.status === STATUS.COMPLETED);
-    // Del más antiguo al más reciente (fecha y hora).
+    // Del más reciente al más antiguo (fecha y hora).
     const ordenCita = (a) => `${a.date || ''} ${a.startTime || a.time || ''}`;
     const finalizedWithCommission = finalizedAppts
       .map(item => {
@@ -1040,7 +1040,7 @@ const fetchByDate = async (subcollection, date) => {
           commission: result.totalAmount
         };
       })
-      .sort((a, b) => ordenCita(a).localeCompare(ordenCita(b)));
+      .sort((a, b) => ordenCita(b).localeCompare(ordenCita(a)));
     const totalServicios = finalizedAppts.length;
 
     let comisionTotal = 0;
