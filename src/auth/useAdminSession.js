@@ -3,11 +3,13 @@
 // sesión del servidor. Si ya tiene 2 abiertas, devuelve status 'limit'
 // para que elija cuál cerrar. Si el backend no responde, no bloquea la
 // entrada (la sesión se crea en el próximo intento).
+// La sesión guardada solo se descarta si el servidor lo dice (sessionRules).
 
 import { useCallback, useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { getSessionId, setSessionId, sessionEndMessage } from '../shared/session/sessionStore';
+import { getSessionId, setSessionId, sessionEndMessage, consumeFreshLogin } from '../shared/session/sessionStore';
+import { restoreDecision, startDecision } from '../shared/session/sessionRules';
 import { startAdminSession, checkSession } from '../shared/session/sessionApi';
 import { useSessionGuard } from '../shared/session/useSessionGuard';
 
@@ -16,23 +18,37 @@ export function useAdminSession(user) {
 
   const start = useCallback(async (replaceSid) => {
     setState((s) => ({ ...s, status: 'checking' }));
-    try {
-      if (!replaceSid && getSessionId()) {
-        const c = await checkSession();
-        if (c.ok) return setState({ status: 'ready', sessions: [], message: '' });
-        setSessionId(null);
+    const ready = () => setState({ status: 'ready', sessions: [], message: '' });
+    // Recién entró con correo y contraseña: la sesión guardada (si quedó una)
+    // se reemplaza por la nueva, sin revisarla.
+    const fresh = consumeFreshLogin();
+    let replace = replaceSid;
+    if (!replace && getSessionId()) {
+      if (fresh) {
+        replace = getSessionId();
+      } else {
+        let c = null;
+        try { c = await checkSession(); } catch { /* sin conexión o sin token */ }
+        const d = restoreDecision(c);
+        if (d === 'ready' || d === 'keep') return ready(); // 'keep': el guard reintenta
+        if (d === 'end') {
+          setSessionId(null);
+          await signOut(auth);
+          return setState({ status: 'idle', sessions: [], message: sessionEndMessage(c.data.code) });
+        }
+        // 'renew': el servidor no la reconoce; se abre una nueva.
       }
-      const r = await startAdminSession(replaceSid);
-      if (r.ok) return setState({ status: 'ready', sessions: [], message: '' });
-      if (r.status === 409) return setState({ status: 'limit', sessions: r.data.sessions || [], message: '' });
-      if (r.status === 401 || r.status === 403) {
-        await signOut(auth);
-        return setState({ status: 'idle', sessions: [], message: 'No se pudo validar tu cuenta. Ingresa de nuevo.' });
-      }
-      setState({ status: 'ready', sessions: [], message: '' }); // error del servidor: no bloquear
-    } catch (_) {
-      setState({ status: 'ready', sessions: [], message: '' }); // sin conexión: no bloquear
+      setSessionId(null);
     }
+    let r = null;
+    try { r = await startAdminSession(replace); } catch { /* sin conexión o sin token */ }
+    const d = startDecision(r);
+    if (d === 'limit') return setState({ status: 'limit', sessions: r.data.sessions || [], message: '' });
+    if (d === 'signout') {
+      await signOut(auth);
+      return setState({ status: 'idle', sessions: [], message: 'No se pudo validar tu cuenta. Ingresa de nuevo.' });
+    }
+    ready(); // 'ready', o 'retry': no bloquear (la sesión se abre en el próximo intento)
   }, []);
 
   useEffect(() => {

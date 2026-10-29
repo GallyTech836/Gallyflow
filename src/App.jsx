@@ -4,6 +4,7 @@ import { useAuth } from './auth/useAuth';
 import { useManifestByRoute } from './shared/pwa/useManifestByRoute';
 import { useAdminSession } from './auth/useAdminSession';
 import SessionLimitScreen from './shared/session/SessionLimitScreen';
+import ConnectionErrorScreen from './shared/session/ConnectionErrorScreen';
 import { isAppRoute, parsePublicBookingPath } from './shared/booking/publicRoutes';
 
 const AdminEntry = lazy(() => import('./admin/AdminEntry'));
@@ -55,8 +56,13 @@ function App() {
   }
 
   // Flujo normal del administrador
-  const { user, error, loading, login } = useAuth();
+  const { user, error, loading, unreachable, login, retry } = useAuth();
   const adminSession = useAdminSession(user);
+
+  // Firebase no restauró el usuario en 15 s: no mandar al login.
+  if (loading && unreachable) {
+    return <ConnectionErrorScreen onRetry={retry} />;
+  }
 
   if (loading || (user && (adminSession.status === 'idle' || adminSession.status === 'checking'))) {
     return LoadingScreen;
