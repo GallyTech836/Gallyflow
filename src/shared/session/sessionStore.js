@@ -23,12 +23,28 @@ export function setSessionId(sid) {
   } catch (_) { /* sin almacenamiento disponible */ }
 }
 
-export async function sessionHeaders(extra = {}) {
+// Login con correo y contraseña en curso: la próxima apertura de sesión
+// reemplaza la guardada en vez de revisarla (ver useAdminSession).
+let freshLogin = false;
+export function markFreshLogin() { freshLogin = true; }
+export function consumeFreshLogin() {
+  const f = freshLogin;
+  freshLogin = false;
+  return f;
+}
+
+// requireToken: si no se puede obtener el token de Firebase (ej. no se pudo
+// renovar por la red), lanza en vez de mandar la consulta sin token. Sin
+// token el backend responde 401 y eso no debe confundirse con sesión cerrada.
+export async function sessionHeaders(extra = {}, { requireToken = false } = {}) {
   const headers = { 'Content-Type': 'application/json', ...extra };
   try {
     const token = await auth.currentUser?.getIdToken();
     if (token) headers.Authorization = 'Bearer ' + token;
-  } catch (_) { /* sin sesión de Firebase */ }
+    else if (requireToken) throw new Error('Sin usuario de Firebase.');
+  } catch (err) {
+    if (requireToken) throw err;
+  }
   const sid = getSessionId();
   if (sid) headers['x-session-id'] = sid;
   return headers;

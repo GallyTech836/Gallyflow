@@ -6,7 +6,8 @@ import { sessionHeaders, getSessionId, setSessionId } from './sessionStore';
 async function call(method, path, body) {
   const res = await fetch(BASE_URL + path, {
     method,
-    headers: await sessionHeaders(),
+    // Sin token no se consulta (lanza): quien llama lo trata como sin conexión.
+    headers: await sessionHeaders({}, { requireToken: true }),
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const data = await res.json().catch(() => ({}));
