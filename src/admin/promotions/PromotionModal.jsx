@@ -168,15 +168,20 @@ export default function PromotionModal({ negocioId, promotion = null, services =
           </Field>
         )}
 
-        <Field label={`Comisión ${g('professional', 'del', 'de la')} ${tl('professional')}`}>
+        <Field
+          label={`Comisión ${g('professional', 'del', 'de la')} ${tl('professional')}`}
+          hint={form.commissionBase === COMMISSION_BASES.NORMAL
+            ? 'Se calcula como si no hubiera promo.'
+            : 'Se calcula sobre lo que paga el cliente.'}
+        >
           <SegmentedControl
             ariaLabel="Base de la comisión"
             className="w-full sm:w-auto"
             value={form.commissionBase}
             onChange={(v) => set('commissionBase', v)}
             options={[
-              { value: COMMISSION_BASES.FINAL, label: 'Sobre el precio con promo' },
-              { value: COMMISSION_BASES.NORMAL, label: 'Sobre el precio normal' },
+              { value: COMMISSION_BASES.FINAL, label: 'Precio con promo' },
+              { value: COMMISSION_BASES.NORMAL, label: 'Precio normal' },
             ]}
           />
         </Field>

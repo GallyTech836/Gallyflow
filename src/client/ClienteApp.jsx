@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Sparkles, Tag, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
@@ -509,6 +509,12 @@ export default function App({ negocioSlug, proId } = {}) {
       return { ...base, ...summarizeCitaServices(lines), services: lines, promo, normalMin: base.priceMin };
     }, [selectedServices, services, chosenPro, pendingPricePool, isTuesday, promosOn, selectedDate, allPromotions, promoBranchId]);
   
+    // Promo que tendrían los servicios elegidos en una fecha (para marcar el calendario).
+    const promoOfDate = useCallback((dateStr) => {
+      if (!promosOn || !dateStr || !bookingPricing.services?.length) return null;
+      return applyPromotions(bookingPricing.services, allPromotions, { date: dateStr, branchId: promoBranchId }).promo;
+    }, [promosOn, bookingPricing.services, allPromotions, promoBranchId]);
+
     const hasVariablePrice = bookingPricing.hasVariable;
     const calculateTotal = bookingPricing.priceMin;
     const calculateTotalMax = bookingPricing.priceMax;
@@ -789,6 +795,7 @@ export default function App({ negocioSlug, proId } = {}) {
         isTuesday={isTuesday}
         isDayDisabled={isDayDisabled}
         closedLabelOf={(d) => { const c = closureOf(d); return c ? closureLabel(c) : null; }}
+        promoOf={promoOfDate}
         currentMonth={currentCalendarMonth}
         setCurrentMonth={setCurrentCalendarMonth}
         onNext={() => setStep(5)} 
@@ -1269,7 +1276,7 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
   );
 };
 
-const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, currentMonth, setCurrentMonth }) => {
+const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, promoOf = () => null, currentMonth, setCurrentMonth }) => {
   const terms = useBusinessTerms();
   
   const handlePrevMonth = () => {
@@ -1353,6 +1360,8 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
               const isPast = cell.isPast || isDayDisabled(cell.dateString);
               // Día cerrado / feriado (no pasado): se marca para que el cliente sepa por qué.
               const closedLabel = !cell.isPast ? closedLabelOf(cell.dateString) : null;
+              // Día con promoción para los servicios elegidos.
+              const promoDay = !isPast && !closedLabel ? promoOf(cell.dateString) : null;
 
               return (
                 <button
@@ -1376,6 +1385,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
                 >
                   <span className={closedLabel ? 'line-through' : ''}>{cell.dayNum}</span>
                   {closedLabel && <span className="text-[8px] leading-none font-semibold mt-0.5">Cerrado</span>}
+                  {promoDay && <span className={`text-[8px] leading-none font-semibold mt-0.5 ${isSelected ? 'text-white' : 'text-nexus-success-text'}`}>Promo</span>}
                 </button>
               );
             })}
@@ -1386,6 +1396,11 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         {date ? (
           hours.length > 0 ? (
             <div className="space-y-2">
+              {promoOf(date) && (
+                <p className="rounded-lg bg-nexus-success-bg px-3 py-2 text-xs font-semibold text-nexus-success-text">
+                  Este día: promo «{promoOf(date).name}», Bs {promoOf(date).discount} menos.
+                </p>
+              )}
               <span className="text-xs text-nexus-text-secondary font-bold block">Horarios disponibles</span>
               <div className="grid grid-cols-4 gap-2">
                 {hours.map((h) => (
