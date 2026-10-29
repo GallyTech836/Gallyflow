@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList, Tag } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList, Tag, Filter } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -314,6 +314,8 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const [searchClientQuery, setSearchClientQuery] = useState('');
   const [searchBarberQuery, setSearchBarberQuery] = useState('');
+  // Filtro por sucursal en Gestión de profesionales ('all' = todas).
+  const [barberBranchFilter, setBarberBranchFilter] = useState('all');
   const [searchBranchQuery, setSearchBranchQuery] = useState('');
   const [toasts, setToasts] = useState([]);
 
@@ -2594,12 +2596,18 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const filteredBarbersList = useMemo(() => {
     if (!Array.isArray(barbers)) return [];
-    if (!searchBarberQuery) return barbers;
-    return barbers.filter(b => 
+    const porSucursal = barberBranchFilter === 'all' ? barbers : barbers.filter(b => (b?.branch || '') === barberBranchFilter);
+    if (!searchBarberQuery) return porSucursal;
+    return porSucursal.filter(b => 
       b?.name?.toLowerCase().includes(searchBarberQuery.toLowerCase()) ||
       b?.branch?.toLowerCase().includes(searchBarberQuery.toLowerCase())
     );
-  }, [barbers, searchBarberQuery]);
+  }, [barbers, searchBarberQuery, barberBranchFilter]);
+  // Sucursales con profesionales (para el filtro; solo si hay más de una).
+  const barberBranchOptions = useMemo(
+    () => [...new Set((barbers || []).map(b => b?.branch).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+    [barbers],
+  );
 
   const filteredClientsList = useMemo(() => {
     if (!Array.isArray(clients)) return [];
@@ -2902,6 +2910,25 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </span>
               </h2>
             </div>
+
+            {activeTab === 'barbers' && barberBranchOptions.length > 1 && (
+              // Filtro por sucursal: el select nativo va encima del ícono (abre la lista del sistema).
+              <span className="relative shrink-0">
+                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${barberBranchFilter !== 'all' ? 'border-nexus-primary bg-nexus-primary text-white' : 'border-nexus-border bg-nexus-surface text-nexus-text-secondary'}`}>
+                  <Filter className="w-[18px] h-[18px]" aria-hidden="true" />
+                </span>
+                <select
+                  aria-label="Filtrar por sucursal"
+                  title="Filtrar por sucursal"
+                  value={barberBranchFilter}
+                  onChange={(e) => setBarberBranchFilter(e.target.value)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                >
+                  <option value="all">Todas las sucursales</option>
+                  {barberBranchOptions.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </span>
+            )}
 
             {agendaTab && canUseCapability('registroServicios') && (
               <span className="xl:hidden shrink-0">
@@ -3553,43 +3580,42 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </Button>
               </div>
 
-              <ResponsiveTable
-                rows={filteredBarbersList}
-                rowKey={(b) => b?.id}
-                breakpoint="lg"
-                empty={(
-                  <div className="rounded-xl border border-nexus-border bg-nexus-surface">
-                    <EmptyState icon={Users} title={`No se encontraron ${tl('professionals')} ${g('professional', 'registrados', 'registradas')}.`} />
-                  </div>
-                )}
-                columns={[
-                  {
-                    key: 'name',
-                    header: 'Nombre completo',
-                    primary: true,
-                    render: (b) => (
-                      <span className="flex items-center gap-3 min-w-0">
-                        <Avatar src={b?.avatar} name={b?.name} className="w-10 h-10 rounded-xl object-cover border border-nexus-border shrink-0" textClassName="text-xs" />
-                        <span className="font-semibold text-nexus-text truncate">{b?.name}</span>
-                      </span>
-                    ),
-                  },
-                  { key: 'username', header: 'Usuario', render: (b) => <span className="text-nexus-text-secondary">@{b?.username}</span> },
-                  { key: 'branch', header: 'Sucursal', render: (b) => b?.branch || '—' },
-                  { key: 'pin', header: 'PIN', render: (b) => <span className="nx-num font-semibold tracking-widest text-nexus-primary">{b?.pin || '—'}</span> },
-                  {
-                    key: 'active',
-                    header: 'Estado',
-                    render: (b) => <Badge tone={b?.active ? 'success' : 'danger'}>{b?.active ? 'Activo' : 'Inactivo'}</Badge>,
-                  },
-                ]}
-                actions={(b) => (
-                  <>
-                    <IconButton icon={Edit3} tone="primary" label={`Editar a ${b?.name}`} onClick={() => handleEditBarber(b)} />
-                    <IconButton icon={Trash2} tone="danger" label={`Eliminar a ${b?.name}`} onClick={() => handleDeleteBarber(b?.id)} />
-                  </>
-                )}
-              />
+              {barberBranchFilter !== 'all' && (
+                <div className="flex items-center gap-2 text-sm text-nexus-text-secondary">
+                  <span>Sucursal: <strong className="text-nexus-text">{barberBranchFilter}</strong></span>
+                  <button type="button" onClick={() => setBarberBranchFilter('all')} className="text-xs font-semibold text-nexus-primary underline cursor-pointer">Ver todas</button>
+                </div>
+              )}
+
+              {filteredBarbersList.length === 0 ? (
+                <div className="rounded-xl border border-nexus-border bg-nexus-surface">
+                  <EmptyState icon={Users} title={`No se encontraron ${tl('professionals')} ${g('professional', 'registrados', 'registradas')}.`} />
+                </div>
+              ) : (
+                // Tarjetas: una columna en celular, cuadrícula en tablet y escritorio.
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredBarbersList.map((b) => (
+                    <div key={b?.id} className="rounded-xl border border-nexus-border bg-nexus-surface p-4 shadow-[var(--nx-shadow-sm)]">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={b?.avatar} name={b?.name} className="w-12 h-12 rounded-xl object-cover border border-nexus-border shrink-0" textClassName="text-sm" />
+                        <span className="min-w-0 flex-1 truncate font-semibold text-nexus-text">{b?.name}</span>
+                        <IconButton icon={Edit3} tone="primary" label={`Editar a ${b?.name}`} onClick={() => handleEditBarber(b)} />
+                        <IconButton icon={Trash2} tone="danger" label={`Eliminar a ${b?.name}`} onClick={() => handleDeleteBarber(b?.id)} />
+                      </div>
+                      <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-nexus-border pt-3 text-sm">
+                        <div className="min-w-0">
+                          <dt className="text-xs text-nexus-text-muted">Sucursal</dt>
+                          <dd className="mt-0.5 truncate text-nexus-text">{b?.branch || '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-nexus-text-muted">Estado</dt>
+                          <dd className="mt-0.5"><Badge tone={b?.active ? 'success' : 'danger'}>{b?.active ? 'Activo' : 'Inactivo'}</Badge></dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

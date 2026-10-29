@@ -1091,14 +1091,31 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
   const today = todayLaPaz();
   const combos = combosAvailable(services, promotions);
   const byId = new Map(services.map((s) => [String(s.id), s]));
+  // Pestañas como el filtro de la agenda: Servicios / Combos (solo si hay combos).
+  const [tab, setTab] = useState('servicios');
+  const showCombos = combos.length > 0 && selectMany && tab === 'combos';
+  const tabChip = (on) => `h-9 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors cursor-pointer ${on
+    ? 'border-nexus-primary bg-nexus-primary text-white shadow-sm'
+    : 'border-nexus-border bg-nexus-surface text-nexus-text-secondary hover:text-nexus-text'}`;
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
       <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir {terms.g('service', 'varios', 'varias')}.</p>
 
-      {/* Combos: un toque marca todos sus servicios. El precio final se ve al elegir la fecha. */}
       {combos.length > 0 && selectMany && (
-        <div className="mb-4 space-y-2">
+        <div role="tablist" aria-label="Ver" className="mb-4 flex items-center gap-2">
+          <button type="button" role="tab" aria-selected={tab === 'servicios'} onClick={() => setTab('servicios')} className={tabChip(tab === 'servicios')}>
+            {terms.t('services')}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'combos'} onClick={() => setTab('combos')} className={tabChip(tab === 'combos')}>
+            Combos <span className="nx-num opacity-70">({combos.length})</span>
+          </button>
+        </div>
+      )}
+
+      {/* Combos: un toque marca todos sus servicios. El precio final se ve al elegir la fecha. */}
+      {showCombos && (
+        <div className="space-y-2">
           {combos.map((c) => {
             const items = c.serviceIds.map((id) => byId.get(String(id))).filter(Boolean);
             const normal = items.reduce((sum, s) => sum + Number(s.price || 0), 0);
@@ -1124,6 +1141,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
         </div>
       )}
       
+      {!showCombos && (
       <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
         {services.map((s) => {
           const isSelected = !!selected.find(serv => serv.id === s.id);
@@ -1189,6 +1207,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
           );
         })}
       </ul>
+      )}
     </div>
 
     {/* CONTENEDOR Y BOTÓN: Máxima altura, padding generoso y presencia de pantalla */}
