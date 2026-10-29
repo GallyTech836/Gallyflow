@@ -5,6 +5,7 @@ import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import ServicePicker from './ServicePicker';
 import { estimateTotal, toServiceInputs } from './servicePickerModel';
 import { MonthCalendar, YearCalendar } from '../calendar/AgendaCalendars';
+import { BarberMonthGrid, BarberYearCards } from '../calendar/BarberCalendars';
 import { listRegistros, listCorrecciones, correctRegistro, voidRegistro, getRegistrosResumen } from './registrosApi';
 import {
   PERIODS, periodRange, shiftPeriod, canGoNext, clampRef, periodLabel, dayTitle, groupByDay, countByDay,
@@ -12,6 +13,9 @@ import {
 } from './registroModel';
 
 const money = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
+// Mes del barbero: con más servicios que esto en un día, se muestra el número
+// en vez de los puntos (la agenda del barbero no lo resuelve: los apila).
+const MAX_DOTS = 6;
 
 /**
  * Lista de "Servicios registrados" (plan Nexus Control), con detalle,
@@ -27,6 +31,8 @@ const money = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
  * - isAdmin: admin ve todos, filtra por profesional, corrige y anula. El
  *   barbero solo ve los suyos y su detalle (no corrige ni anula).
  * - showPrices / showCommissions: permisos del barbero (solo en pantalla).
+ * - calendarStyle: 'admin' (calendario de la agenda del AdminApp) o 'barber'
+ *   (el de la agenda de BarberApp) para las vistas Mes y Año.
  * - professionals, services, clients, paymentMethods
  * - refreshKey: cambia para volver a cargar (ej. después de registrar).
  * - onRegister: abre el modal de registrar (botón del encabezado).
@@ -34,7 +40,7 @@ const money = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
  * - onToast(msg, tipo)
  */
 export default function RegistrosPanel({
-  isAdmin = false, showPrices = true, showCommissions = true,
+  isAdmin = false, showPrices = true, showCommissions = true, calendarStyle = 'admin',
   professionals = [], services = [], clients = [], paymentMethods = [],
   refreshKey = 0, onRegister, registerDesktopOnly = false, onToast,
 }) {
@@ -78,6 +84,16 @@ export default function RegistrosPanel({
   const totals = useMemo(() => summarize(items || []), [items]);
   const groups = useMemo(() => (period === 'semana' ? groupByDay(items || []) : null), [period, items]);
   const dayCounts = useMemo(() => (period === 'mes' ? countByDay(items || []) : null), [period, items]);
+  // Mes del barbero: un punto por servicio (sin anulados).
+  const dayDots = useMemo(() => {
+    if (period !== 'mes' || calendarStyle !== 'barber') return null;
+    const out = {};
+    for (const r of items || []) {
+      if (r.status === 'cancelled') continue;
+      (out[r.date] ||= []).push({ key: r.id, className: 'bg-nexus-success', title: `${r.serviceName} · ${r.clientName || GENERAL_CLIENT}` });
+    }
+    return out;
+  }, [period, calendarStyle, items]);
   // Año: datos del resumen por índice de mes (0–11).
   const monthByIndex = useMemo(() => Object.fromEntries((yearData?.months || []).map((m) => [Number(m.month.slice(5, 7)) - 1, m])), [yearData]);
   const today = todayKey();
@@ -130,7 +146,16 @@ export default function RegistrosPanel({
       {error && <p role="alert" className="rounded-lg bg-nexus-error-bg px-3 py-2 text-sm text-nexus-error-text">{error}</p>}
 
       {isYear ? (
-        yearData === null ? <LoadingState /> : (
+        yearData === null ? <LoadingState /> : calendarStyle === 'barber' ? (
+          <BarberYearCards
+            title={`${terms.t('services')} registrados (${year})`}
+            countFor={(idx) => monthByIndex[idx]?.count || 0}
+            unitLabel={terms.t('services')}
+            extraFor={showPrices ? (idx) => money(monthByIndex[idx]?.total || 0) : undefined}
+            onPick={openMonth}
+            isDisabled={(idx) => `${year}-${String(idx + 1).padStart(2, '0')}-01` > today}
+          />
+        ) : (
           <YearCalendar
             countFor={(idx) => monthByIndex[idx]?.count || 0}
             unitLabel={terms.t('services')}
@@ -140,7 +165,16 @@ export default function RegistrosPanel({
           />
         )
       ) : period === 'mes' ? (
-        items === null ? <LoadingState /> : (
+        items === null ? <LoadingState /> : calendarStyle === 'barber' ? (
+          <BarberMonthGrid
+            dateStr={range.from}
+            selected={today}
+            dotsFor={(dateStr) => dayDots?.[dateStr] || []}
+            onPick={openDay}
+            isDisabled={(dateStr) => dateStr > today}
+            maxDots={MAX_DOTS}
+          />
+        ) : (
           <MonthCalendar
             dateStr={range.from}
             countFor={(dateStr) => dayCounts?.[dateStr] || 0}

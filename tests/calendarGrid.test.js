@@ -3,7 +3,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { monthDays, WEEKDAY_HEADERS, MONTH_CARDS } from '../src/shared/calendar/calendarGrid.js';
+import { monthDays, monthGrid42, WEEKDAY_HEADERS, MONTH_CARDS } from '../src/shared/calendar/calendarGrid.js';
 
 // Copia del getMonthDays que tenía AdminApp.jsx (fechas locales), para
 // comprobar que el compartido da exactamente lo mismo.
@@ -57,5 +57,56 @@ describe('calendario mensual', () => {
   test('fecha inválida: sin celdas', () => {
     assert.deepEqual(monthDays(''), []);
     assert.deepEqual(monthDays(null), []);
+  });
+});
+
+// Copia de monthlyGridDays que tenía BarberApp.jsx (agenda Mes del barbero).
+function barberMonthGrid(selectedDate) {
+  const targetDate = new Date(selectedDate + 'T00:00:00');
+  const year = targetDate.getFullYear();
+  const month = targetDate.getMonth();
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+  let startOffset = firstDayOfMonth.getDay() - 1;
+  if (startOffset < 0) startOffset = 6;
+  const days = [];
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  for (let i = startOffset - 1; i >= 0; i--) {
+    const d = new Date(year, month - 1, prevMonthLastDay - i);
+    days.push({ dateStr: d.toISOString().split('T')[0], dayNum: d.getDate(), isCurrentMonth: false });
+  }
+  for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
+    const d = new Date(year, month, i);
+    days.push({ dateStr: d.toISOString().split('T')[0], dayNum: i, isCurrentMonth: true });
+  }
+  const remainingSlots = 42 - days.length;
+  for (let i = 1; i <= remainingSlots; i++) {
+    const d = new Date(year, month + 1, i);
+    days.push({ dateStr: d.toISOString().split('T')[0], dayNum: i, isCurrentMonth: false });
+  }
+  return days;
+}
+
+describe('calendario mensual del barbero (42 recuadros)', () => {
+  test('octubre 2026: empieza el lunes 28 sep y termina el domingo 8 nov', () => {
+    const g = monthGrid42('2026-10-15');
+    assert.equal(g.length, 42);
+    assert.deepEqual(g[0], { dateStr: '2026-09-28', dayNum: 28, isCurrentMonth: false });
+    assert.deepEqual(g[3], { dateStr: '2026-10-01', dayNum: 1, isCurrentMonth: true });
+    assert.deepEqual(g[41], { dateStr: '2026-11-08', dayNum: 8, isCurrentMonth: false });
+    assert.equal(g.filter((x) => x.isCurrentMonth).length, 31);
+  });
+
+  test('igual a la grilla que tenía la agenda del barbero, de 2025 a 2028', () => {
+    for (let y = 2025; y <= 2028; y++) {
+      for (let m = 1; m <= 12; m++) {
+        const key = `${y}-${String(m).padStart(2, '0')}-15`;
+        assert.deepEqual(monthGrid42(key), barberMonthGrid(key), key);
+      }
+    }
+  });
+
+  test('fecha inválida: sin celdas', () => {
+    assert.deepEqual(monthGrid42(''), []);
   });
 });

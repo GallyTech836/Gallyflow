@@ -39,6 +39,7 @@ import { getServicesFromCita } from '../shared/appointments/serviceSelection';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
+import { BarberMonthGrid, BarberYearCards } from '../shared/calendar/BarberCalendars';
 import RegistrosPanel from '../shared/registros/RegistrosPanel';
 import RegistrarServicioBar from '../shared/registros/RegistrarServicioBar';
 import { isRegistro } from '../shared/registros/registroModel';
@@ -993,56 +994,6 @@ const fetchByDate = async (subcollection, date) => {
     }).sort((a, b) => a.time.localeCompare(b.time));
   }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays]);
 
-  // --- DISTRIBUCIÓN MENSUAL SIMPLE PARA VISTA ANUAL ---
-  const annualMonthlyDistribution = useMemo(() => {
-    const targetYear = new Date(selectedDate + "T00:00:00").getFullYear();
-    const list = Array(12).fill(0).map((_, i) => ({ monthIndex: i, count: 0 }));
-    
-    appointments.forEach(appt => {
-      if (matchesBarber(appt, activeBarber.id)) {
-        const d = new Date(appt.date + "T00:00:00");
-        if (d.getFullYear() === targetYear) {
-          list[d.getMonth()].count += 1;
-        }
-      }
-    });
-    return list;
-  }, [appointments, activeBarber, selectedDate]);
-
-  // --- MATRIZ DE DÍAS DEL MES PARA LA VISTA MENSUAL ---
-  const monthlyGridDays = useMemo(() => {
-    const targetDate = new Date(selectedDate + "T00:00:00");
-    const year = targetDate.getFullYear();
-    const month = targetDate.getMonth();
-
-    const firstDayOfMonth = new Date(year, month, 1);
-    const lastDayOfMonth = new Date(year, month + 1, 0);
-
-    let startOffset = firstDayOfMonth.getDay() - 1;
-    if (startOffset < 0) startOffset = 6; 
-
-    const days = [];
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
-    for (let i = startOffset - 1; i >= 0; i--) {
-      const d = new Date(year, month - 1, prevMonthLastDay - i);
-      days.push({ dateStr: d.toISOString().split('T')[0], dayNum: d.getDate(), isCurrentMonth: false });
-    }
-
-    const totalDaysCurrent = lastDayOfMonth.getDate();
-    for (let i = 1; i <= totalDaysCurrent; i++) {
-      const d = new Date(year, month, i);
-      days.push({ dateStr: d.toISOString().split('T')[0], dayNum: i, isCurrentMonth: true });
-    }
-
-    const remainingSlots = 42 - days.length; 
-    for (let i = 1; i <= remainingSlots; i++) {
-      const d = new Date(year, month + 1, i);
-      days.push({ dateStr: d.toISOString().split('T')[0], dayNum: i, isCurrentMonth: false });
-    }
-
-    return days;
-  }, [selectedDate]);
-
   // --- CÁLCULO DE COMISIONES DEL BARBERO SEGÚN PERIODO ---
   const commissionSummary = useMemo(() => {
     const barbtAppts = appointments.filter(appt => {
@@ -1414,105 +1365,43 @@ const fetchByDate = async (subcollection, date) => {
                 {selectedRange === "Año" ? (
                   
                   /* ================= VISTA ANUAL SIMPLE ================= */
-                  <div className="space-y-6 animate-fade-in">
-                    <div className="bg-nexus-surface border border-nexus-border p-5 rounded-2xl">
-                      <h3 className="text-sm font-bold text-nexus-text mb-1">
-                        Distribución de Reservas Anuales ({new Date(selectedDate + "T00:00:00").getFullYear()})
-                      </h3>
-                      <p className="text-xs text-nexus-text-muted">
-                        Cantidad total de reservas completadas y agendadas distribuidas por mes.
-                      </p>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-5">
-                        {annualMonthlyDistribution.map((m) => {
-                          const targetYear = new Date(selectedDate + "T00:00:00").getFullYear();
-                          const count = appointments.filter(appt => {
-                            if (!matchesBarber(appt, activeBarber.id) || isRegistro(appt)) return false;
-                            const d = new Date(appt.date + "T00:00:00");
-                            return d.getFullYear() === targetYear && d.getMonth() === m.monthIndex;
-                          }).length;
-
-                          return (
-                            <div key={m.monthIndex} className="bg-nexus-surface-hover border border-nexus-border p-4 rounded-xl flex flex-col justify-between h-28">
-                              <span className="text-xs font-bold text-nexus-text-secondary">{MESES_NOMBRES[m.monthIndex]}</span>
-                              <div className="mt-2">
-                                <span className="text-2xl font-bold text-nexus-text">{count}</span>
-                                <span className="text-xs text-nexus-text-muted block">Reservas</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
+                  <BarberYearCards
+                    title={`Distribución de Reservas Anuales (${new Date(selectedDate + "T00:00:00").getFullYear()})`}
+                    subtitle="Cantidad total de reservas completadas y agendadas distribuidas por mes."
+                    unitLabel="Reservas"
+                    countFor={(monthIndex) => {
+                      const targetYear = new Date(selectedDate + "T00:00:00").getFullYear();
+                      return appointments.filter(appt => {
+                        if (!matchesBarber(appt, activeBarber.id) || isRegistro(appt)) return false;
+                        const d = new Date(appt.date + "T00:00:00");
+                        return d.getFullYear() === targetYear && d.getMonth() === monthIndex;
+                      }).length;
+                    }}
+                  />
 
                 ) : selectedRange === "Mes" ? (
                   
                   /* ================= VISTA MENSUAL: CALENDARIO TIPO GRILLA ================= */
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-4 shadow-lg overflow-hidden">
-                      {/* Cabecera de los días de la semana */}
-                      <div className="grid grid-cols-7 gap-1 text-center border-b border-nexus-border pb-3 select-none">
-                        {DIAS_SEMANA_NOMBRES.map(d => (
-                          <span key={d} className="text-xs  font-bold text-nexus-primary">
-                            {d.slice(0, 3)}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Grilla de Días */}
-                      <div className="grid grid-cols-7 gap-1.5 pt-3">
-                        {monthlyGridDays.map((gridItem, idx) => {
-                          const dayAppts = appointments.filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === gridItem.dateStr && appt.status !== 'cancelled' && !isRegistro(appt));
-                          const dayBlocks = blockedSlots.filter(block => block.barber === activeBarber.id && block.date === gridItem.dateStr);
-                          const isSelected = gridItem.dateStr === selectedDate;
-
-                          return (
-                            <div 
-                              key={idx}
-                              onClick={() => {
-                                setSelectedDate(gridItem.dateStr);
-                                triggerToast(`Día seleccionado: ${gridItem.dayNum} de ${MESES_NOMBRES[new Date(gridItem.dateStr + "T00:00:00").getMonth()]}`, "info");
-                              }}
-                              className={`min-h-[70px] sm:min-h-[85px] p-1.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all duration-200 ${
-                                isSelected 
-                                  ? "bg-nexus-primary-soft border-nexus-primary shadow-sm" 
-                                  : gridItem.isCurrentMonth
-                                  ? "bg-nexus-background border-nexus-border hover:bg-nexus-surface-hover"
-                                  : "bg-transparent border-transparent opacity-30 hover:opacity-50"
-                              }`}
-                            >
-                              <span className={`text-xs font-bold ${isSelected ? "text-nexus-primary" : "text-nexus-text-secondary"}`}>
-                                {gridItem.dayNum}
-                              </span>
-
-                              {/* Indicadores de Reservas / Bloqueos */}
-                              <div className="flex flex-wrap gap-1 mt-1 justify-start">
-                                {dayAppts.map((appt) => (
-                                  <div 
-                                    key={appt.id}
-                                    className={`w-2 h-2 rounded-full ${
-                                      appt.status === "Finalizado" ? "bg-nexus-success" :
-                                      appt.status === "Confirmado" ? "bg-nexus-info" :
-                                      "bg-nexus-warning"
-                                    }`}
-                                    title={`${appt.clientName}: ${appt.service}`}
-                                  />
-                                ))}
-                                {dayBlocks.map((block) => (
-                                  <div 
-                                    key={block.id}
-                                    className="w-2 h-2 rounded-full bg-nexus-error"
-                                    title={`Bloqueado: ${block.reason}`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
+                  <BarberMonthGrid
+                    dateStr={selectedDate}
+                    selected={selectedDate}
+                    onPick={(dateStr) => {
+                      setSelectedDate(dateStr);
+                      triggerToast(`Día seleccionado: ${Number(dateStr.slice(8, 10))} de ${MESES_NOMBRES[new Date(dateStr + "T00:00:00").getMonth()]}`, "info");
+                    }}
+                    dotsFor={(dateStr) => [
+                      ...appointments
+                        .filter(appt => matchesBarber(appt, activeBarber.id) && appt.date === dateStr && appt.status !== 'cancelled' && !isRegistro(appt))
+                        .map(appt => ({
+                          key: appt.id,
+                          className: appt.status === "Finalizado" ? "bg-nexus-success" : appt.status === "Confirmado" ? "bg-nexus-info" : "bg-nexus-warning",
+                          title: `${appt.clientName}: ${appt.service}`,
+                        })),
+                      ...blockedSlots
+                        .filter(block => block.barber === activeBarber.id && block.date === dateStr)
+                        .map(block => ({ key: block.id, className: "bg-nexus-error", title: `Bloqueado: ${block.reason}` })),
+                    ]}
+                  />
 
                 ) : selectedRange === "Semana" ? (
                   
@@ -1803,6 +1692,7 @@ const fetchByDate = async (subcollection, date) => {
                   </Button>
                 </div>
                 <RegistrosPanel
+                  calendarStyle="barber"
                   showPrices={!!staffPerms.viewFinancials}
                   showCommissions={!!canSeeCommissions}
                   professionals={activeBarber ? [activeBarber] : []}

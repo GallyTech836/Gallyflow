@@ -23,3 +23,27 @@ export function monthDays(dateStr) {
   for (let d = 1; d <= last; d++) days.push({ isCurrentMonth: true, dayNum: d, dateStr: `${y}-${pad2(m)}-${pad2(d)}` });
   return days;
 }
+
+/**
+ * 42 celdas (6 semanas, lunes a domingo) del mes de `dateStr`, con los días
+ * de los meses vecinos ({ isCurrentMonth: false }). Mismo resultado que la
+ * grilla de la agenda Mes de BarberApp.
+ * Cada celda: { dateStr, dayNum, isCurrentMonth }.
+ */
+export function monthGrid42(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return [];
+  const [y, m] = dateStr.split('-').map(Number);
+  if (!y || !m) return [];
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const offset = first === 0 ? 6 : first - 1;
+  const cell = (ms, isCurrentMonth) => {
+    const d = new Date(ms);
+    return { dateStr: d.toISOString().slice(0, 10), dayNum: d.getUTCDate(), isCurrentMonth };
+  };
+  const start = Date.UTC(y, m - 1, 1) - offset * 86400000;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return Array.from({ length: 42 }, (_, i) => {
+    const ms = start + i * 86400000;
+    return cell(ms, i >= offset && i < offset + last);
+  });
+}
