@@ -381,9 +381,9 @@ const hideAgenda = !canUseCapability('vistaAgenda') && canRegistrar;
 const homeTab = hideAgenda ? "registros" : "agenda";
 // La agenda no se pinta mientras carga el plan: así nunca aparece y se va.
 const agendaTab = activeTab === "agenda" && !planLoading;
-// Modo registros: "Registrar servicio" fijo abajo en celular y tablet, en
-// Servicios, Comisiones y Rendimiento (no en Perfil).
-const showRegistrarBar = hideAgenda && ["registros", "comisiones", "rendimiento"].includes(activeTab);
+// Modo registros: "Registrar servicio" fijo abajo en celular y tablet, solo
+// en Servicios (registros). En escritorio queda el botón normal arriba.
+const showRegistrarBar = hideAgenda && activeTab === "registros";
 useEffect(() => {
   if (activeTab === "comisiones" && !planLoading && !canSeeCommissions) setActiveTab(homeTab);
   if (activeTab === "rendimiento" && !staffPerms.viewFinancials) setActiveTab(homeTab);
