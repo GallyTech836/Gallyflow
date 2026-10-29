@@ -7,6 +7,8 @@
 // colección que solo lee el backend (las reglas la cierran).
 // Migración perezosa: si el hash todavía está en el negocio, se mueve la
 // primera vez que se lee.
+// negocios/{id}.financePinSet (true/false) es público a propósito: solo dice
+// SI hay PIN, para que Super Admin lo muestre (no puede leer negocioSecrets).
 
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../../config/firebase.js';
@@ -18,14 +20,19 @@ const negocioRef = (negocioId) => db.collection('negocios').doc(negocioId);
 export async function getPinHash(negocioId) {
   const sec = await secretRef(negocioId).get();
   const nuevo = sec.exists ? sec.data()?.financePinHash : null;
-  if (nuevo) return nuevo;
-
   const neg = await negocioRef(negocioId).get();
+  if (nuevo) {
+    if (neg.exists && neg.data()?.financePinSet !== true) {
+      negocioRef(negocioId).update({ financePinSet: true }).catch((err) => logger.warn('[pinStore] financePinSet:', err.message));
+    }
+    return nuevo;
+  }
+
   const viejo = neg.exists ? neg.data()?.financePinHash : null;
   if (!viejo) return null;
   try {
     await secretRef(negocioId).set({ financePinHash: viejo, updatedAt: new Date().toISOString() }, { merge: true });
-    await negocioRef(negocioId).update({ financePinHash: FieldValue.delete() });
+    await negocioRef(negocioId).update({ financePinHash: FieldValue.delete(), financePinSet: true });
     logger.info(`[pinStore] PIN movido a negocioSecrets (negocio=${negocioId}).`);
   } catch (err) {
     logger.warn('[pinStore] No se pudo mover el PIN:', err.message);
@@ -40,7 +47,8 @@ export async function setPinHash(negocioId, hash) {
     { merge: true },
   );
   const neg = await negocioRef(negocioId).get();
-  if (neg.exists && neg.data()?.financePinHash !== undefined) {
-    await negocioRef(negocioId).update({ financePinHash: FieldValue.delete() });
-  }
+  if (!neg.exists) return;
+  const patch = { financePinSet: !!hash };
+  if (neg.data()?.financePinHash !== undefined) patch.financePinHash = FieldValue.delete();
+  await negocioRef(negocioId).update(patch);
 }

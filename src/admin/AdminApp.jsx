@@ -45,6 +45,9 @@ import SettingsPage from './settings';
 import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
 import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars';
 import AnalyticsSection from './analytics/AnalyticsSection';
+import PinGate from './pinLock/PinGate';
+import { usePinLock } from './pinLock/usePinLock';
+import { LOCKABLE_MODULES } from '../shared/pinLock/pinLockModel';
 import InventoryPage from './inventory/InventoryPage';
 import SectionTabs from './SectionTabs';
 import PromotionsPage from './promotions/PromotionsPage';
@@ -153,6 +156,8 @@ const { logout } = useAuth();
   const { isBlocked, status: negocioStatus, statusKey } = useNegocioStatus(negocioId);
   const supportUrl = useSupportContact(isBlocked);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
+  // Módulos bloqueados con PIN (Super Admin). Un desbloqueo abre todos.
+  const pinLock = usePinLock(negocioId);
 console.log('[ADMIN] negocioId:', negocioId);
 const [activeTab, setActiveTab] = useState('agenda');
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
@@ -263,6 +268,10 @@ const homeTab = showAgenda ? 'agenda'
   : 'services';
 // La agenda no se pinta mientras carga el plan: así nunca aparece y se va.
 const agendaTab = activeTab === 'agenda' && !planLoading;
+// PIN: el módulo de la pestaña actual está bloqueado y no hay sesión abierta.
+const tabModule = TAB_MODULE[activeTab] || activeTab;
+const tabPinLoading = pinLock.loading && LOCKABLE_MODULES.includes(tabModule);
+const tabNeedsPin = !tabPinLoading && pinLock.isLocked(tabModule);
 // Modo registros (Nexus Control): agenda oculta + registro de servicios. El
 // Dashboard y la Analítica hablan de servicios registrados en vez de citas.
 const registrosMode = !showAgenda && canUseCapability('registroServicios');
@@ -2890,7 +2899,15 @@ const { heroConfig } = useHeroConfig(negocioId);
               </h2>
             </div>
 
-            {activeTab === 'barbers' && barberBranchOptions.length > 1 && (
+            {pinLock.hasLocks && pinLock.unlocked && (
+              <span className="shrink-0">
+                <Button size="sm" variant="secondary" icon={Lock} onClick={pinLock.lock} aria-label="Bloquear secciones protegidas" title="Bloquear secciones protegidas">
+                  <span className="hidden sm:inline">Bloquear</span>
+                </Button>
+              </span>
+            )}
+
+            {!tabNeedsPin && activeTab === 'barbers' && barberBranchOptions.length > 1 && (
               // Filtro por sucursal: el select nativo va encima del ícono (abre la lista del sistema).
               <span className="relative shrink-0">
                 <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${barberBranchFilter !== 'all' ? 'border-nexus-primary bg-nexus-primary text-white' : 'border-nexus-border bg-nexus-surface text-nexus-text-secondary'}`}>
@@ -3027,6 +3044,9 @@ const { heroConfig } = useHeroConfig(negocioId);
 
         {/* Modo registros: espacio abajo para la barra fija "Registrar servicio" (celular y tablet). */}
         <div className={`flex-1 p-3 sm:p-5 space-y-4 sm:space-y-5 ${registrosMode ? 'pb-24 sm:pb-24 lg:pb-5' : ''}`}>
+          {tabPinLoading ? <LoadingState /> : tabNeedsPin ? (
+            <PinGate onUnlock={pinLock.unlock} />
+          ) : (<>
           
           {/* ==========================================
               1. PESTAÑA: DASHBOARD (METRICAS FILTRADAS)
@@ -4014,6 +4034,8 @@ const { heroConfig } = useHeroConfig(negocioId);
            paymentMethods={businessSettings.paymentMethods}
            branches={branches}
            registros={registrosMode}
+           financeToken={pinLock.token}
+           onFinanceExpired={pinLock.lock}
            />
          )}
 
@@ -4031,6 +4053,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             registrosMode={registrosMode}
           />
           )}
+          </>)}
 
         </div>
 

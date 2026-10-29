@@ -59,7 +59,10 @@ router.use('/finance', identifyRequester, requireSession);
 const requireAnaliticas = requireCapability('analiticas');
 const requireComisiones = requireCapability('comisiones', 'analiticas');
 
-router.post('/finance/set-pin', requireAuth, requireAnaliticas, async (req, res) => {
+// set-pin y verify-pin no exigen 'analiticas': el mismo PIN desbloquea
+// otros módulos (Barberos, Servicios...) en planes sin Analítica. Los datos
+// financieros siguen pidiendo la capacidad en sus propias rutas.
+router.post('/finance/set-pin', requireAuth, async (req, res) => {
   const { pin } = req.body || {};
   if (!pin || String(pin).length < 4) {
     return res.status(400).json({ error: 'El PIN debe tener al menos 4 dígitos.' });
@@ -79,7 +82,7 @@ router.post('/finance/set-pin', requireAuth, requireAnaliticas, async (req, res)
   }
 });
 
-router.post('/finance/verify-pin', requireAuth, financePinRateLimit, requireAnaliticas, async (req, res) => {
+router.post('/finance/verify-pin', requireAuth, financePinRateLimit, async (req, res) => {
   try {
     const { pin } = req.body || {};
     const financePinHash = await getPinHash(req.negocioId);

@@ -1,17 +1,17 @@
 // AnalyticsSection.jsx
 //
 // Reutiliza el selector de período/sucursal que ya existe en AdminApp
-// (agendaView/selectedDate/selectedBranch). El PIN (si el negocio lo tiene
-// activado desde Super Admin) protege TODO el módulo de una sola vez.
+// (agendaView/selectedDate/selectedBranch). El PIN lo pide AdminApp antes de
+// mostrar el módulo (PinGate, compartido con los demás módulos bloqueados);
+// aquí solo llega el token de la sesión para las llamadas de /api/finance.
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { Lock } from 'lucide-react';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
 import { isRegistro } from '../../shared/registros/registroModel';
-import { verifyFinancePin, setFinancePin, getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
+import { getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 import CommissionPayModal from '../cash/CommissionPayModal';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 
@@ -93,13 +93,8 @@ function ingresoDeCita(cita) {
 // `registros` (modo registros: agenda oculta + registro de servicios, Nexus
 // Control): la Analítica normal, pero hablando de servicios registrados en vez
 // de reservas, sin "Canales de reservas" ni las tarjetas de clientes.
-export default function AnalyticsSection({ reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false }) {
+export default function AnalyticsSection({ financeToken = null, onFinanceExpired, reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false }) {
   const terms = useBusinessTerms();
-  const [analyticsPinEnabled, setAnalyticsPinEnabled] = useState(null);
-  const [financeSession, setFinanceSession] = useState(null);
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [needsPinSetup, setNeedsPinSetup] = useState(false);
   const [financeSummary, setFinanceSummary] = useState(null);
   const [financeCommissions, setFinanceCommissions] = useState([]);
   const [expandedBarberId, setExpandedBarberId] = useState(null);
@@ -110,17 +105,6 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   const [historyError, setHistoryError] = useState('');
   // Últimos 30 días (solo si el período seleccionado no los cubre ya).
   const [recent30Docs, setRecent30Docs] = useState(null);
-
-  useEffect(() => {
-    if (!negocioId) return;
-    const unsub = onSnapshot(doc(db, 'negocios', negocioId), (snap) => {
-      setAnalyticsPinEnabled(snap.data()?.analyticsPinEnabled === true);
-    });
-    return () => unsub();
-  }, [negocioId]);
-
-  const sessionValida = financeSession && financeSession.expiresAt > Date.now();
-  const isUnlocked = analyticsPinEnabled === false || sessionValida;
 
   const { startDate, endDate } = useMemo(() => getRangeBounds(selectedDate, agendaView), [selectedDate, agendaView]);
 
@@ -138,7 +122,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   const cubre30d = startDate <= hace30dias && endDate >= hoyStr;
   useEffect(() => {
     // Modo registros: las tarjetas de clientes no se muestran, no se lee nada.
-    if (registros || !isUnlocked || !negocioId || !selectedBranch || cubre30d) return;
+    if (registros || !negocioId || !selectedBranch || cubre30d) return;
     let cancelled = false;
     getDocs(query(
       collection(db, 'negocios', negocioId, 'citas'),
@@ -149,7 +133,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       .then((snap) => { if (!cancelled) setRecent30Docs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); })
       .catch((err) => { console.error('[Analítica] error al leer últimos 30 días:', err); if (!cancelled) setRecent30Docs([]); });
     return () => { cancelled = true; };
-  }, [registros, isUnlocked, negocioId, selectedBranch, cubre30d, hace30dias, hoyStr]);
+  }, [registros, negocioId, selectedBranch, cubre30d, hace30dias, hoyStr]);
 
   const activos30dRecientes = useMemo(() => {
     const fuente = cubre30d ? reservations : recent30Docs;
@@ -335,33 +319,11 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     });
   }, [profesionalesStats, financeCommissions]);
 
-  async function handlePinSubmit() {
-    setPinError('');
-    if (needsPinSetup) {
-      if (pinInput.length < 4) return setPinError('Mínimo 4 dígitos.');
-      await setFinancePin(pinInput);
-      setNeedsPinSetup(false);
-      setPinInput('');
-      return;
-    }
-    const result = await verifyFinancePin(pinInput);
-    if (result.status === 409) {
-      setNeedsPinSetup(true);
-      setPinError('Todavía no configuraste un PIN. Crea uno ahora.');
-      return;
-    }
-    if (!result.ok) {
-      setPinError(result.error || 'PIN incorrecto.');
-      return;
-    }
-    setFinanceSession({ token: result.sessionToken, expiresAt: Date.now() + result.expiresInMinutes * 60 * 1000 });
-    setPinInput('');
-  }
-
   async function loadFinanceData() {
-    const overviewRes = await getFinanceOverview(financeSession?.token, { startDate, endDate, branch: selectedBranch });
+    const overviewRes = await getFinanceOverview(financeToken, { startDate, endDate, branch: selectedBranch });
+    // Sesión vencida: AdminApp vuelve a bloquear y pide el PIN.
     if (overviewRes.status === 401) {
-      setFinanceSession(null);
+      onFinanceExpired?.();
       return;
     }
     setFinanceSummary(overviewRes.data?.summary ?? null);
@@ -374,7 +336,7 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
       return;
     }
     setExpandedBarberId(barberId);
-    const result = await getFinanceCommissionDetail(financeSession?.token, barberId, { startDate, endDate });
+    const result = await getFinanceCommissionDetail(financeToken, barberId, { startDate, endDate });
     setCommissionDetail(result.data);
   }
 
@@ -387,43 +349,14 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
   async function confirmarPagoComision(method) {
     const barber = (barbers || []).find((b) => b?.id === payingId);
     const branchId = (branches || []).find((b) => b?.name === barber?.branch)?.id || null;
-    const r = await payFinanceCommission(financeSession?.token, payingId, { startDate, endDate, method, branchId });
+    const r = await payFinanceCommission(financeToken, payingId, { startDate, endDate, method, branchId });
     if (r.ok) { loadFinanceData(); setExpandedBarberId(null); }
     return { ok: r.ok, data: r.data, error: r.data?.error };
   }
 
   useEffect(() => {
-    if (isUnlocked) loadFinanceData();
-  }, [isUnlocked, startDate, endDate, selectedBranch]);
-
-  if (analyticsPinEnabled === null) {
-    return <div className="p-6"><p className="text-sm text-nexus-text-secondary">Cargando…</p></div>;
-  }
-
-  if (!isUnlocked) {
-    return (
-      <div className="p-4 md:p-6 flex justify-center">
-        <div className="max-w-xs w-full bg-nexus-surface border border-nexus-border rounded-lg p-6 text-center mt-10">
-          <Lock className="w-8 h-8 text-nexus-primary mx-auto mb-3" />
-          <p className="font-bold text-sm text-nexus-text mb-3">
-            {needsPinSetup ? 'Crea tu PIN de Analítica' : 'Analítica protegida'}
-          </p>
-          <input
-            type="password"
-            inputMode="numeric"
-            value={pinInput}
-            onChange={(e) => setPinInput(e.target.value)}
-            className="w-full bg-nexus-bg border border-nexus-border rounded-lg px-3 py-2 text-center text-lg tracking-widest mb-2"
-            placeholder="••••"
-          />
-          {pinError && <p className="text-xs text-red-500 mb-2">{pinError}</p>}
-          <button onClick={handlePinSubmit} className="w-full bg-nexus-primary text-white rounded-lg py-2 text-sm font-bold">
-            {needsPinSetup ? 'Guardar PIN' : 'Desbloquear'}
-          </button>
-        </div>
-      </div>
-    );
-  }
+    loadFinanceData();
+  }, [financeToken, startDate, endDate, selectedBranch]);
 
   return (
     <div className="p-4 md:p-6 space-y-6">

@@ -8,6 +8,7 @@ import { getNegocioAccess, getUsage, currentPeriod } from '../services/capabilit
 import { getCapability, usageStatus } from '../services/capabilities/capabilityModel.js';
 import { hashPin } from '../services/finance/pin.js';
 import { setPinHash } from '../services/finance/pinStore.js';
+import { buildLockPatch } from '../services/finance/pinLockModules.js';
 import { isValidBusinessType, DEFAULT_BUSINESS_TYPE } from '../services/businessProfiles/businessProfileModel.js';
 import {
   NoticeError, getSoporteWhatsapp, setSoporteWhatsapp, listNoticePeriods,
@@ -162,16 +163,25 @@ router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) 
   }
 });
 // POST /api/superadmin/negocios/:negocioId/analytics-pin
-// Bloqueo por PIN de la sección Analítica de un negocio.
-// Body: { enabled?: boolean, pin?: string (4-8 dígitos), clearPin?: boolean }
-//  - enabled: activa/desactiva el bloqueo.
+// Bloqueo con PIN de los módulos de AdminApp (antes solo Analítica).
+// Body: { lockedModules?: string[], enabled?: boolean, pin?: string (4-8 dígitos), clearPin?: boolean }
+//  - lockedModules: lista completa de módulos que piden el PIN.
+//  - enabled: (viejo) activa/desactiva solo el bloqueo de Analítica.
 //  - pin: fija un PIN nuevo (se guarda solo el hash; nadie puede leerlo).
 //  - clearPin: borra el PIN (el dueño tendrá que crear uno al entrar).
 router.post('/negocios/:negocioId/analytics-pin', identifyRequester, requireSuperAdmin, async (req, res) => {
   const { negocioId } = req.params;
-  const { enabled, pin, clearPin } = req.body || {};
-  const patch = {};
-  if (typeof enabled === 'boolean') patch.analyticsPinEnabled = enabled;
+  const { lockedModules, enabled, pin, clearPin } = req.body || {};
+  let patch = {};
+  if (Array.isArray(lockedModules) || typeof enabled === 'boolean') {
+    try {
+      const snap = await db.collection('negocios').doc(negocioId).get();
+      if (!snap.exists) return res.status(404).json({ error: 'Negocio no encontrado.' });
+      patch = buildLockPatch(snap.data(), { lockedModules, enabled }) || {};
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
   // El hash va a negocioSecrets (privado), nunca al documento del negocio.
   let nuevoHash; // undefined = no tocar, null = borrar
   if (pin !== undefined && pin !== null && pin !== '') {
@@ -183,7 +193,7 @@ router.post('/negocios/:negocioId/analytics-pin', identifyRequester, requireSupe
     nuevoHash = null;
   }
   if (!Object.keys(patch).length && nuevoHash === undefined) {
-    return res.status(400).json({ error: 'Nada que cambiar (enabled, pin o clearPin).' });
+    return res.status(400).json({ error: 'Nada que cambiar (lockedModules, enabled, pin o clearPin).' });
   }
   try {
     if (Object.keys(patch).length) await db.collection('negocios').doc(negocioId).update(patch);
@@ -191,7 +201,7 @@ router.post('/negocios/:negocioId/analytics-pin', identifyRequester, requireSupe
     return res.status(200).json({
       ok: true,
       negocioId,
-      ...(typeof enabled === 'boolean' ? { analyticsPinEnabled: enabled } : {}),
+      ...patch,
       pinChanged: typeof nuevoHash === 'string',
     });
   } catch (err) {
