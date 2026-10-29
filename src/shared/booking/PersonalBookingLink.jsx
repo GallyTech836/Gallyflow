@@ -42,9 +42,6 @@ export default function PersonalBookingLink({ url, onToast = () => {} }) {
         <Link2 className="w-4 h-4 text-nexus-primary" />
         <h4 className="text-xs font-extrabold text-nexus-text">Mi link de reserva</h4>
       </div>
-      <p className="text-sm text-nexus-text-secondary leading-snug">
-        Tus clientes reservan directo contigo, sin elegir sucursal ni profesional.
-      </p>
       <input
         readOnly
         value={url}

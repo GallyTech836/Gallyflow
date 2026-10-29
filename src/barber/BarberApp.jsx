@@ -1941,7 +1941,7 @@ const fetchByDate = async (subcollection, date) => {
 
                   <h3 className="text-xl font-bold tracking-tight text-nexus-text mt-4">{activeBarber.name} </h3>
                   <span className="text-xs text-nexus-primary font-bold">{activeBarber.role}</span>
-                  <p className="text-xs text-nexus-text-muted mt-1">Nexus Staff</p>
+                  {activeBarber.branch && <p className="text-xs text-nexus-text-muted mt-1">{activeBarber.branch}</p>}
                 </div>
 
                 {canUseCapability('linkPersonalProfesional') && (
