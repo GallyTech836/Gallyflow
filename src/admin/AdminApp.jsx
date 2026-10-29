@@ -21,6 +21,7 @@ import { useNegocio } from '../firebase/useNegocio';
 import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPlan/useNegocioPlan';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
+import SubscriptionNoticeModal from '../shared/subscriptionNotice/SubscriptionNoticeModal';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
@@ -2593,6 +2594,7 @@ const { heroConfig } = useHeroConfig(negocioId);
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
+    {negocioId && <SubscriptionNoticeModal />}
     <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-hidden relative">
       
       {isMobileSidebarOpen && (

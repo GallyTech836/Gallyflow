@@ -9,6 +9,9 @@ import { getCapability, usageStatus } from '../services/capabilities/capabilityM
 import { hashPin } from '../services/finance/pin.js';
 import { setPinHash } from '../services/finance/pinStore.js';
 import { isValidBusinessType, DEFAULT_BUSINESS_TYPE } from '../services/businessProfiles/businessProfileModel.js';
+import {
+  NoticeError, getSoporteWhatsapp, setSoporteWhatsapp, listNoticePeriods,
+} from '../services/subscription/subscriptionNoticeService.js';
 
 const router = Router();
 
@@ -249,6 +252,41 @@ router.get('/negocios/:negocioId/access', identifyRequester, requireSuperAdmin, 
   } catch (err) {
     logger.error('[superadmin] Error leyendo acceso:', err.message);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ───────────── Soporte de Nexus y avisos de vencimiento ─────────────
+
+function noticeError(res, err, ctx) {
+  if (err instanceof NoticeError) return res.status(err.status).json({ error: err.message, code: err.code });
+  logger.error(`[superadmin] ${ctx}:`, err.message);
+  return res.status(500).json({ error: 'Error interno.' });
+}
+
+// GET /api/superadmin/config/soporte → { whatsapp } (solo dígitos, "" si no hay)
+router.get('/config/soporte', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.status(200).json({ whatsapp: await getSoporteWhatsapp() });
+  } catch (err) {
+    return noticeError(res, err, 'Error leyendo soporte');
+  }
+});
+
+// PUT /api/superadmin/config/soporte  body { whatsapp } ("" lo borra)
+router.put('/config/soporte', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.status(200).json(await setSoporteWhatsapp(req.body?.whatsapp, req.actor?.email));
+  } catch (err) {
+    return noticeError(res, err, 'Error guardando soporte');
+  }
+});
+
+// GET /api/superadmin/negocios/:negocioId/avisos-vencimiento → { periodos } (más reciente primero)
+router.get('/negocios/:negocioId/avisos-vencimiento', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.status(200).json(await listNoticePeriods(req.params.negocioId));
+  } catch (err) {
+    return noticeError(res, err, 'Error leyendo avisos de vencimiento');
   }
 });
 

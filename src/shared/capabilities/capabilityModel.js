@@ -629,10 +629,33 @@ export function cleanOverrides(overrides = {}) {
 
 // ───────────────────────── Estado del negocio / prueba ─────────────────────────
 
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+// "Hoy" y las fechas de vencimiento se comparan como días calendario en hora
+// de La Paz, sin importar la zona horaria del servidor o del navegador.
+export const STATUS_TIME_ZONE = 'America/La_Paz';
+
+/** Día "AAAA-MM-DD" de un instante, en hora de La Paz. */
+export function laPazDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: STATUS_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/**
+ * Día "AAAA-MM-DD" de una fecha de vencimiento (trialEnd / subscriptionEnd).
+ * Texto "AAAA-MM-DD..." => se toma ese día tal cual. Date o Timestamp => su
+ * día en La Paz. Vacío o inválido => null (sin vencimiento).
+ */
+export function expiryDateKey(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+    return m ? m[1] : null;
+  }
+  const d = typeof value.toDate === 'function' ? value.toDate() : value;
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
+  return laPazDateKey(d);
 }
 
 /**
@@ -640,14 +663,17 @@ function startOfToday() {
  *  - suspendido manual siempre gana
  *  - en prueba con trialEnd pasado => vencido
  *  - subscriptionEnd pasado => vencido
+ * El día del vencimiento sigue activo completo (hasta las 23:59 de La Paz).
  * Se recalcula al leer, no depende de ningún cron.
  */
-export function computeEffectiveStatus(status, subscriptionEnd, trialEnd) {
+export function computeEffectiveStatus(status, subscriptionEnd, trialEnd, now = new Date()) {
   const s = status || 'active';
   if (s === 'suspended') return 'suspended';
-  const today = startOfToday();
-  if (s === 'trial' && trialEnd && new Date(trialEnd) < today) return 'expired';
-  if (subscriptionEnd && new Date(subscriptionEnd) < today) return 'expired';
+  const today = laPazDateKey(now);
+  const trialKey = expiryDateKey(trialEnd);
+  const subKey = expiryDateKey(subscriptionEnd);
+  if (s === 'trial' && trialKey && trialKey < today) return 'expired';
+  if (subKey && subKey < today) return 'expired';
   return s;
 }
 

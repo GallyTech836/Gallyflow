@@ -8,6 +8,7 @@ import { useNegocioPlan } from '../../../shared/negocioPlan/useNegocioPlan';
 import { BusinessProfileContext, useBusinessProfile } from '../../../shared/businessProfiles/useBusinessProfile';
 import { useNotifications } from '../../../shared/notifications';
 import SuspendedScreen from '../../../shared/negocioStatus/SuspendedScreen';
+import SubscriptionNoticeModal from '../../../shared/subscriptionNotice/SubscriptionNoticeModal';
 import { LoadingState } from '../../../shared/ui';
 import BusinessSection from '../../../admin/settings/BusinessSection';
 import AssistantSection from '../../../admin/settings/AssistantSection';
@@ -70,6 +71,7 @@ export default function RestauranteAdminApp({ user, negocioId }) {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
+      {negocioId && <SubscriptionNoticeModal />}
       <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row overflow-hidden relative">
         {mobileOpen && (
           <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-xs z-40 md:hidden" onClick={() => setMobileOpen(false)} />
