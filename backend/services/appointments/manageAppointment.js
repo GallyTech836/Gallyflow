@@ -16,6 +16,7 @@ import { professionalCanDo, getCitaServiceIds, PENDING_ID } from './pendingModel
 import { variantesTelefono } from './clientRecord.js';
 import { repriceCitaServices } from '../pricing/professionalPricing.js';
 import { readServicesInTx } from '../pricing/catalogInTx.js';
+import { promotionsEnabled, readPromotionContextInTx, withPromotions } from '../pricing/promotionsInTx.js';
 import { getServicesFromCita } from '../finance/serviceSelection.js';
 
 const ACTIVAS = new Set(['confirmed', 'pending']);
@@ -100,6 +101,7 @@ export async function rescheduleAppointment({
   if (!date || !time || !duration) throw new Error('Faltan datos para reprogramar.');
   const negocioRef = db.collection('negocios').doc(negocioId);
   const ref = negocioRef.collection('citas').doc(citaId);
+  const promosOn = await promotionsEnabled(negocioId);
 
   return db.runTransaction(async (tx) => {
     const [citaSnap, prosSnap, citasSnap, bloqSnap, negocioSnap] = await Promise.all([
@@ -144,6 +146,16 @@ export async function rescheduleAppointment({
       if (citaServices.length) {
         const priced = repriceCitaServices(citaServices, catalog, elegido);
         precio = { services: priced.services, price: priced.totalPrice, priceProvisional: false };
+      }
+    }
+    // Promociones: valen según el día y la sucursal nuevos (sin promo antes,
+    // con promo ahora, o al revés). Se recalculan sobre el precio sin promo.
+    if (precio.services || date !== cita.date || (elegido.branch || cita.branch || '') !== (cita.branch || '')) {
+      const lineas = precio.services || getServicesFromCita(cita);
+      if (lineas.length) {
+        const promoCtx = await readPromotionContextInTx(tx, negocioRef, { enabled: promosOn });
+        const conPromo = withPromotions({ services: lineas, priceProvisional: false }, promoCtx, { date, branch: elegido.branch || cita.branch || '' });
+        precio = { ...precio, services: conPromo.services, price: conPromo.totalPrice, promo: conPromo.promo || null };
       }
     }
 

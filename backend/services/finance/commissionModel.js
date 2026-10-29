@@ -102,8 +102,12 @@ export function calculateCommissionForCita(cita, barber, allServices = null) {
   const snapshot = getCommissionSnapshot(cita);
   if (snapshot) return fromSnapshot(snapshot);
   const services = getServicesFromCita(cita);
+  // Promo con comisión "sobre el precio normal": se usa el precio de antes de la promo.
+  const normalBase = cita?.promo?.commissionBase === 'normal';
   const breakdown = services.map((service) => {
-    const result = calculateCommission({ serviceId: service.serviceId, serviceName: service.serviceName, price: service.price }, barber, allServices);
+    const pre = Number(service?.prePromoPrice);
+    const price = normalBase && Number.isFinite(pre) ? pre : service.price;
+    const result = calculateCommission({ serviceId: service.serviceId, serviceName: service.serviceName, price }, barber, allServices);
     return { ...service, ...result };
   });
   const totalAmount = breakdown.reduce((sum, item) => sum + item.amount, 0);

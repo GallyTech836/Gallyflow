@@ -19,6 +19,7 @@ import * as firestoreAdmin from 'firebase-admin/firestore';
 import { db } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
 import { readServicesInTx } from '../pricing/catalogInTx.js';
+import { promotionsEnabled, readPromotionContextInTx, withPromotions } from '../pricing/promotionsInTx.js';
 import { buildCitaService, summarizeCitaServices } from '../pricing/professionalPricing.js';
 import { professionalCanDo } from '../appointments/pendingModel.js';
 import { calculateCommission, COMMISSION_TYPE } from '../finance/commissionModel.js';
@@ -219,17 +220,22 @@ export function priceServices(inputs, catalog, professional) {
  * del MISMO profesional) ya tenía su tipo/valor, se reutiliza (una corrección
  * de precio no cambia la tasa pactada); si no, se calcula con la
  * configuración actual del profesional.
+ * Con una promo "comisión sobre el precio normal" (promo.commissionBase ===
+ * 'normal') la comisión se calcula sobre el precio de antes de la promo.
  */
-export function buildCommissionSnapshot(services, professional, catalog, previous = null) {
+export function buildCommissionSnapshot(services, professional, catalog, previous = null, promo = null) {
   const prev = new Map((previous?.breakdown || []).filter((b) => b?.isConfigured).map((b) => [String(b.serviceId), b]));
+  const normalBase = promo?.commissionBase === 'normal';
   const breakdown = services.map((s) => {
     const p = prev.get(String(s.serviceId));
+    const pre = Number(s.prePromoPrice);
+    const base = normalBase && Number.isFinite(pre) ? pre : Number(s.price);
     let r;
     if (p && (p.type === COMMISSION_TYPE.PERCENTAGE || p.type === COMMISSION_TYPE.FIXED)) {
-      const amount = p.type === COMMISSION_TYPE.PERCENTAGE ? (Number(s.price) * Number(p.value)) / 100 : Number(p.value);
+      const amount = p.type === COMMISSION_TYPE.PERCENTAGE ? (base * Number(p.value)) / 100 : Number(p.value);
       r = { amount, isConfigured: true, issue: null, type: p.type, value: Number(p.value) };
     } else {
-      const c = calculateCommission({ serviceId: s.serviceId, serviceName: s.serviceName, price: s.price }, professional, catalog);
+      const c = calculateCommission({ serviceId: s.serviceId, serviceName: s.serviceName, price: base }, professional, catalog);
       r = { amount: c.amount, isConfigured: c.isConfigured, issue: c.issue || null, type: c.type ?? null, value: c.value ?? null };
     }
     return { serviceId: String(s.serviceId), serviceName: s.serviceName || '', price: Number(s.price) || 0, ...r, amount: round2(r.amount) };
@@ -313,6 +319,7 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
   const { date, backdated } = resolveRegistroDate(body.date, { isBarber, nowMs });
   const time = backdated ? BACKDATE_TIME : localTimeKey(nowMs);
   const paidAtMs = backdated ? noonMillis(date) : nowMs;
+  const promosOn = await promotionsEnabled(negocioId);
 
   const result = await runCreate(async (tx) => {
     const existing = await tx.get(citaRef);
@@ -329,10 +336,12 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
     const catalog = await readServicesInTx(tx, nRef, inputs.map((i) => i.serviceId));
     const client = await readClient(tx, negocioId, body.clientId);
     const delDia = await tx.get(nRef.collection('citas').where('professionalId', '==', pro.id).where('date', '==', date));
+    const promoCtx = await readPromotionContextInTx(tx, nRef, { enabled: promosOn });
 
-    const priced = priceServices(inputs, catalog, pro);
-    const paymentMethod = resolvePaymentMethod(body.paymentMethod, negocio);
     const branch = resolveBranch(pro, sucursales);
+    // Promociones del día y la sucursal (descuentos y combos), sobre el precio del profesional.
+    const priced = withPromotions(priceServices(inputs, catalog, pro), promoCtx, { date, branch });
+    const paymentMethod = resolvePaymentMethod(body.paymentMethod, negocio);
     const cashPlacement = backdated ? await readCashPlacement(tx, negocioId, branch, sucursales, paidAtMs) : null;
 
     // Posible duplicado: mismo profesional, mismos servicios, hace menos de 3 min.
@@ -365,7 +374,8 @@ export async function createRegistro({ negocioId, actor, body = {} }) {
       ...citaServiceFields(priced),
       paymentMethod,
       branch,
-      commissionSnapshot: buildCommissionSnapshot(priced.services, pro, catalog),
+      commissionSnapshot: buildCommissionSnapshot(priced.services, pro, catalog, null, priced.promo),
+      ...(priced.promo ? { promo: priced.promo } : {}),
       commissionPaid: false,
       notes: '',
       ...(dup ? { duplicateConfirmed: true } : {}),
@@ -495,6 +505,7 @@ export async function correctRegistro({ negocioId, actor, id, body = {} }) {
   const reason = texto(body.reason, 300);
   const inputs = body.services !== undefined ? parseServiceInputs(body.services) : null;
   const pinState = await preparePin(negocioId, body.pin);
+  const promosOn = await promotionsEnabled(negocioId);
 
   const nRef = negRef(negocioId);
   const ref = nRef.collection('citas').doc(String(id));
@@ -518,15 +529,18 @@ export async function correctRegistro({ negocioId, actor, id, body = {} }) {
     const clientTouched = Object.prototype.hasOwnProperty.call(body, 'clientId');
     const client = clientTouched ? await readClient(tx, negocioId, body.clientId) : undefined;
     const sucursales = proChanged ? await readSucursales(tx, negocioId) : null;
+    const promoCtx = reprice ? await readPromotionContextInTx(tx, nRef, { enabled: promosOn }) : null;
 
     const next = { ...cita };
-    if (reprice) {
-      const priced = priceServices(nextInputs, catalog, pro);
-      Object.assign(next, citaServiceFields(priced));
-      next.commissionSnapshot = buildCommissionSnapshot(priced.services, pro, catalog, proChanged ? null : cita.commissionSnapshot);
-    }
     if (proChanged) {
       Object.assign(next, { professionalId: pro.id, barberId: pro.id, branch: resolveBranch(pro, sucursales) });
+    }
+    if (reprice) {
+      // Promociones del día del registro, sobre el precio del profesional.
+      const priced = withPromotions(priceServices(nextInputs, catalog, pro), promoCtx, { date: cita.date, branch: next.branch });
+      Object.assign(next, citaServiceFields(priced));
+      next.promo = priced.promo || null;
+      next.commissionSnapshot = buildCommissionSnapshot(priced.services, pro, catalog, proChanged ? null : cita.commissionSnapshot, priced.promo);
     }
     if (body.paymentMethod !== undefined) next.paymentMethod = resolvePaymentMethod(body.paymentMethod, negocio);
     if (clientTouched) Object.assign(next, clientFields(client));
@@ -539,7 +553,7 @@ export async function correctRegistro({ negocioId, actor, id, body = {} }) {
     const at = nowIso();
     tx.set(corrRef, { type: 'correct', at, by: actorInfo(actor), reason, pinVerified: pinState.ok, changes, before, after });
     const update = {
-      ...Object.fromEntries(['services', 'serviceId', 'serviceName', 'service', 'price', 'duration', 'commissionSnapshot',
+      ...Object.fromEntries(['services', 'serviceId', 'serviceName', 'service', 'price', 'duration', 'commissionSnapshot', 'promo',
         'professionalId', 'barberId', 'branch', 'paymentMethod', 'clientId', 'clientName', 'clientPhone']
         .filter((k) => next[k] !== undefined).map((k) => [k, next[k]])),
       updatedAt: at,

@@ -18,11 +18,13 @@ import {
 } from './pendingModel.js';
 import { repriceCitaServices } from '../pricing/professionalPricing.js';
 import { readServicesInTx } from '../pricing/catalogInTx.js';
+import { promotionsEnabled, readPromotionContextInTx, withPromotions } from '../pricing/promotionsInTx.js';
 import { getServicesFromCita } from '../finance/serviceSelection.js';
 
 async function evaluateOne(negocioId, citaId) {
   const negocioRef = db.collection('negocios').doc(negocioId);
   const citasRef = negocioRef.collection('citas');
+  const promosOn = await promotionsEnabled(negocioId);
 
   const outcome = await db.runTransaction(async (tx) => {
     const citaRef = citasRef.doc(citaId);
@@ -65,7 +67,10 @@ async function evaluateOne(negocioId, citaId) {
       // provisional (rango) y toma el precio de ESE profesional.
       const citaServices = getServicesFromCita(cita);
       const catalog = await readServicesInTx(tx, negocioRef, citaServices.map((s) => s.serviceId));
-      const priced = citaServices.length ? repriceCitaServices(citaServices, catalog, assignee) : null;
+      const promoCtx = await readPromotionContextInTx(tx, negocioRef, { enabled: promosOn });
+      const priced = citaServices.length
+        ? withPromotions(repriceCitaServices(citaServices, catalog, assignee), promoCtx, { date: cita.date, branch: assignee.branch || cita.branch || '' })
+        : null;
       tx.update(citaRef, {
         professionalId: assignee.id,
         barberId: assignee.id,
@@ -73,7 +78,7 @@ async function evaluateOne(negocioId, citaId) {
         assignedFromPending: true,
         assignmentMode: 'auto',
         pendingAssignedAt: nowIso,
-        ...(priced ? { services: priced.services, price: priced.totalPrice, priceProvisional: false } : {}),
+        ...(priced ? { services: priced.services, price: priced.totalPrice, priceProvisional: false, promo: priced.promo || null } : {}),
         updatedAt: nowIso,
       });
       return { action: 'assigned', cita, assignee };

@@ -221,3 +221,96 @@ describe('Histórico', () => {
     assert.equal(calculateCommissionForCita(guardada, ana).totalAmount, 60); // 40% de 150, no de 300
   });
 });
+
+describe('Promociones al guardar citas', () => {
+  // DATE (2030-01-15) es martes; DATE2 es miércoles.
+  const promo = (id, data) => db._set(`${N}/promociones/${id}`, {
+    active: true, startDate: '2030-01-01', endDate: null, weekdays: [], branchIds: [], commissionBase: 'final', ...data,
+  });
+  beforeEach(() => { seed(); sent.length = 0; });
+
+  test('descuento sobre el precio del profesional; guarda la promo en la cita', async () => {
+    promo('p20', { name: '20% corte', type: 'descuento', serviceIds: ['s1'], discountKind: 'percent', discountValue: 20 });
+    const cita = await createAppointment({
+      negocioId: NEG, professionalId: 'ana', date: DATE, time: '10:00', serviceDuration: 60,
+      services: [svc('s1', 'Corte'), svc('s2', 'Barba')], clientName: 'X', clientPhone: PHONE,
+    });
+    assert.equal(cita.services[0].price, 120); // 150 de Ana − 20%
+    assert.equal(cita.services[0].prePromoPrice, 150);
+    assert.equal(cita.price, 170);
+    assert.equal(cita.promo.id, 'p20');
+    assert.equal(db._get(`${N}/citas/${cita.id}`).promo.discount, 30);
+  });
+
+  test('combo con todos sus servicios; sin ellos no aplica', async () => {
+    promo('cb', { name: 'Corte + barba', type: 'combo', serviceIds: ['s1', 's2'], comboPrice: 120 });
+    const con = await createAppointment({
+      negocioId: NEG, professionalId: 'beto', date: DATE, time: '10:00', serviceDuration: 60,
+      services: [svc('s1', 'Corte'), svc('s2', 'Barba')], clientName: 'X', clientPhone: PHONE,
+    });
+    assert.equal(con.price, 120);
+    const sin = await createAppointment({
+      negocioId: NEG, professionalId: 'beto', date: DATE, time: '12:00', serviceDuration: 30,
+      services: [svc('s1', 'Corte')], clientName: 'Y', clientPhone: PHONE,
+    });
+    assert.equal(sin.price, 100);
+    assert.equal(sin.promo, undefined);
+  });
+
+  test('solo los días de la promo y en su sucursal', async () => {
+    promo('mie', { name: 'Miércoles', type: 'descuento', serviceIds: ['s1'], discountKind: 'amount', discountValue: 10, weekdays: [3] });
+    db._set(`${N}/sucursales/c1`, { name: 'Centro' });
+    db._set(`${N}/sucursales/n1`, { name: 'Norte' });
+    promo('norte', { name: 'Norte', type: 'descuento', serviceIds: ['s1'], discountKind: 'percent', discountValue: 50, branchIds: ['n1'] });
+    const martes = await createAppointment({
+      negocioId: NEG, professionalId: 'beto', date: DATE, time: '10:00', serviceDuration: 30,
+      services: [svc('s1', 'Corte')], clientName: 'X', clientPhone: PHONE, branch: 'Centro',
+    });
+    assert.equal(martes.price, 100);
+    const miercoles = await createAppointment({
+      negocioId: NEG, professionalId: 'beto', date: DATE2, time: '10:00', serviceDuration: 30,
+      services: [svc('s1', 'Corte')], clientName: 'X', clientPhone: PHONE, branch: 'Centro',
+    });
+    assert.equal(miercoles.price, 90);
+  });
+
+  test('Pendiente: promo sobre el mínimo y se recalcula al asignarse', async () => {
+    promo('p20', { name: '20% corte', type: 'descuento', serviceIds: ['s1'], discountKind: 'percent', discountValue: 20 });
+    db._set(`${N}/profesionales/beto`, { ...db._get(`${N}/profesionales/beto`), active: false }); // Ana, única candidata
+    const cita = await createPendingAppointment({
+      negocioId: NEG, date: DATE, time: '10:00', serviceDuration: 30,
+      services: [svc('s1', 'Corte')], clientName: 'X', clientPhone: PHONE,
+    });
+    assert.equal(cita.price, 120); // 150 de Ana (único candidato) − 20%
+    await processPendingCita({ negocioId: NEG, citaId: cita.id });
+    const guardada = db._get(`${N}/citas/${cita.id}`);
+    assert.equal(guardada.professionalId, 'ana');
+    assert.equal(guardada.price, 120);
+    assert.equal(guardada.promo.id, 'p20');
+  });
+
+  test('reprogramar a un día sin promo vuelve al precio normal', async () => {
+    promo('mar', { name: 'Martes', type: 'descuento', serviceIds: ['s1'], discountKind: 'percent', discountValue: 50, weekdays: [2] });
+    const cita = await createAppointment({
+      negocioId: NEG, professionalId: 'beto', date: DATE, time: '10:00', serviceDuration: 30,
+      services: [svc('s1', 'Corte')], clientName: 'X', clientPhone: PHONE,
+    });
+    assert.equal(cita.price, 50);
+    const ahora = new Date('2030-01-10T12:00:00Z');
+    await rescheduleAppointment({ negocioId: NEG, citaId: cita.id, phone: PHONE, ahora, minHours: 2, date: DATE2, time: '11:00', duration: 30, professionalId: 'beto' });
+    const guardada = db._get(`${N}/citas/${cita.id}`);
+    assert.equal(guardada.price, 100);
+    assert.equal(guardada.promo, null);
+  });
+
+  test('comisión sobre el precio normal si la promo lo indica', async () => {
+    promo('p20', { name: '20% corte', type: 'descuento', serviceIds: ['s1'], discountKind: 'percent', discountValue: 20, commissionBase: 'normal' });
+    const cita = await createAppointment({
+      negocioId: NEG, professionalId: 'ana', date: DATE, time: '10:00', serviceDuration: 30,
+      services: [svc('s1', 'Corte')], clientName: 'X', clientPhone: PHONE,
+    });
+    const ana = { id: 'ana', ...db._get(`${N}/profesionales/ana`) };
+    assert.equal(cita.price, 120);
+    assert.equal(calculateCommissionForCita(db._get(`${N}/citas/${cita.id}`), ana).totalAmount, 60); // 40% de 150
+  });
+});

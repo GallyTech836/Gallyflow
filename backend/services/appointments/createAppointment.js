@@ -8,6 +8,7 @@ import { getAvailableSlots } from './availability.js';
 import { getPendingCandidates, PENDING_ID } from './pendingModel.js';
 import { repriceCitaServices } from '../pricing/professionalPricing.js';
 import { readServicesInTx } from '../pricing/catalogInTx.js';
+import { promotionsEnabled, readPromotionContextInTx, withPromotions } from '../pricing/promotionsInTx.js';
 
 // Precio por profesional: el precio NUNCA se toma de quien llama (el endpoint
 // es público); se recalcula aquí con el catálogo y el profesional, dentro de
@@ -41,6 +42,7 @@ export async function createAppointment({
   const citasRef = negocioRef.collection('citas');
   const profesionalRef = negocioRef.collection('profesionales').doc(professionalId);
   const bloqueosRef = negocioRef.collection('horariosBloqueados');
+  const promosOn = await promotionsEnabled(negocioId);
 
   return db.runTransaction(async (tx) => {
     const [negocioSnap, profesionalSnap] = await Promise.all([tx.get(negocioRef), tx.get(profesionalRef)]);
@@ -55,6 +57,7 @@ export async function createAppointment({
     const bloqueosDelDiaSnap = await tx.get(bloqueosRef.where('date', '==', date));
     const bloqueos = bloqueosDelDiaSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const catalog = await readServicesInTx(tx, negocioRef, services.map((s) => s.serviceId));
+    const promoCtx = await readPromotionContextInTx(tx, negocioRef, { enabled: promosOn });
 
     const slotsLibres = getAvailableSlots({
       fecha: date,
@@ -70,7 +73,7 @@ export async function createAppointment({
       throw new Error('El horario ya no está disponible. Elige otro horario.');
     }
 
-    const priced = priceServicesOrThrow(services, catalog, profesional, { promoActive });
+    const priced = withPromotions(priceServicesOrThrow(services, catalog, profesional, { promoActive }), promoCtx, { date, branch });
 
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
@@ -85,6 +88,7 @@ export async function createAppointment({
       serviceName: services.map((s) => s.serviceName).join(' + '),
       duration: serviceDuration,
       price: priced.totalPrice,
+      ...(priced.promo ? { promo: priced.promo } : {}),
       date,
       time,
       status: 'confirmed',
@@ -130,6 +134,7 @@ export async function createPendingAppointment({
   const negocioRef = db.collection('negocios').doc(negocioId);
   const citasRef = negocioRef.collection('citas');
   const soloEstos = Array.isArray(candidateIds) && candidateIds.length ? new Set(candidateIds) : null;
+  const promosOn = await promotionsEnabled(negocioId);
 
   return db.runTransaction(async (tx) => {
     const [negocioSnap, prosSnap, citasSnap, bloqSnap] = await Promise.all([
@@ -158,7 +163,8 @@ export async function createPendingAppointment({
     // Pendiente: precio = mínimo entre candidatos (rango guardado); se
     // recalcula con el del profesional cuando se asigna.
     const catalog = await readServicesInTx(tx, negocioRef, services.map((s) => s.serviceId));
-    const priced = priceServicesOrThrow(services, catalog, null, { candidates: candidatos, promoActive });
+    const promoCtx = await readPromotionContextInTx(tx, negocioRef, { enabled: promosOn });
+    const priced = withPromotions(priceServicesOrThrow(services, catalog, null, { candidates: candidatos, promoActive }), promoCtx, { date, branch });
 
     const nowIso = new Date().toISOString();
     const nuevaCitaRef = citasRef.doc();
@@ -173,6 +179,7 @@ export async function createPendingAppointment({
       serviceName: services.map((s) => s.serviceName).join(' + '),
       duration: serviceDuration,
       price: priced.totalPrice,
+      ...(priced.promo ? { promo: priced.promo } : {}),
       priceProvisional: true,
       date,
       time,

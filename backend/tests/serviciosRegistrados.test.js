@@ -725,3 +725,38 @@ describe('resumen anual (periodo Año)', () => {
     assert.equal((await resumen()).status, 403);
   });
 });
+
+describe('promociones en servicios registrados', () => {
+  const promo = (id, data) => db._set(`${N}/promociones/${id}`, {
+    active: true, startDate: '2020-01-01', endDate: null, weekdays: [], branchIds: [], commissionBase: 'final', ...data,
+  });
+  beforeEach(() => seed());
+
+  test('combo al registrar sus servicios; comisión sobre el precio con promo', async () => {
+    promo('cb', { name: 'Corte + barba', type: 'combo', serviceIds: ['corte', 'barba'], comboPrice: 60 });
+    const r = await registrar({ services: [{ serviceId: 'corte' }, { serviceId: 'barba' }] });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    const d = cita(r.body.registro.id);
+    assert.equal(d.price, 60);
+    assert.equal(d.promo.id, 'cb');
+    // corte 50 y barba 30 → 37.5 + 22.5; comisión 40% de 37.5 + Bs 10 fijo.
+    assert.equal(d.commissionSnapshot.amount, 25);
+  });
+
+  test('comisión sobre el precio normal', async () => {
+    promo('p', { name: '50% corte', type: 'descuento', serviceIds: ['corte'], discountKind: 'percent', discountValue: 50, commissionBase: 'normal' });
+    const r = await registrar();
+    const d = cita(r.body.registro.id);
+    assert.equal(d.price, 25);
+    assert.equal(d.commissionSnapshot.amount, 20); // 40% de 50, no de 25
+  });
+
+  test('si el plan no incluye promociones, no se aplican', async () => {
+    promo('p', { name: '50% corte', type: 'descuento', serviceIds: ['corte'], discountKind: 'percent', discountValue: 50 });
+    db._set(N, { ...db._get(N), capabilityOverrides: { promociones: false } });
+    invalidateNegocioAccess('negA');
+    const r = await registrar();
+    assert.equal(cita(r.body.registro.id).price, 50);
+    assert.equal(cita(r.body.registro.id).promo, undefined);
+  });
+});
