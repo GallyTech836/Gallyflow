@@ -26,6 +26,10 @@ import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } fr
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
 import { fetchBusyAppointments, createPublicBooking } from '../shared/appointments/publicBookingApi';
 import { BusinessProfileContext, useBusinessProfile, useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
+import { usePromotions } from '../shared/promotions/usePromotions';
+import { applyPromotions, resolveBranchId } from '../shared/promotions/promotionPricing';
+import { visiblePromotions, discountBadgeFor, combosAvailable, whenText, featuredFirst, todayLaPaz } from '../shared/promotions/promotionModel';
+import { summarizeCitaServices } from '../shared/servicePricing/professionalPricing';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -94,6 +98,9 @@ export default function App({ negocioSlug, proId } = {}) {
   // `linkPersonalProfesional` el link ?pro=ID. (También se valida en reglas
   // de Firestore / backend; esto solo decide qué se muestra.)
   const { can: canUseCapability, loading: capabilitiesLoading } = useNegocioPlan(negocioId);
+  // Promociones del negocio (si el plan las incluye). El backend las vuelve a aplicar al reservar.
+  const promosOn = !capabilitiesLoading && canUseCapability('promociones');
+  const { promotions: allPromotions } = usePromotions(negocioId, promosOn);
   const { businessSettings } = useBusinessSettings(negocioId);
   // Tipo de negocio -> terminología (los pasos la leen con useBusinessTerms).
   const businessProfile = useBusinessProfile(negocioId);
@@ -162,13 +169,15 @@ export default function App({ negocioSlug, proId } = {}) {
           description: data.description || '',
           image: typeof data.image === 'string' ? data.image : '',
           availableDays: data.availableDays || [],
+          featured: data.featured === true,
           createdAt: data.createdAt || 0,
           order: Number.isFinite(data.order) ? data.order : undefined
         };
       });
       // Mismo orden que en Admin: por fecha de creación real, no por el ID.
       lista.sort(compareServicios);
-      setServices(lista);
+      // Destacados primero (mismo orden entre ellos).
+      setServices(featuredFirst(lista));
     });
     return () => unsub();
   }, [negocioId]);
@@ -481,13 +490,24 @@ export default function App({ negocioSlug, proId } = {}) {
       return candidates.length ? candidates : canDoAll;
     }, [chosenPro, selectedServices, realBarbers, selectedDate, selectedHour, citasFecha, bloqueosFecha, citasNegocio, blockouts, businessSettings]);
   
+    // Sucursal de la reserva para las promos que son por sucursal.
+    const promoBranchId = resolveBranchId(selectedBarber?.branch || selectedBranch?.name || '', branches);
+    const shownPromotions = useMemo(
+      () => (promosOn ? visiblePromotions(allPromotions, todayLaPaz(), promoBranchId) : []),
+      [promosOn, allPromotions, promoBranchId],
+    );
+
     // Siempre con los datos actuales del catálogo (por id).
     const bookingPricing = useMemo(() => {
       // Promo de martes heredada: solo servicios 'sr'/'jr' (igual que antes).
       const promoFor = (service) => isTuesday && (service?.id === 'sr' || service?.id === 'jr');
       const catalog = selectedServices.map(sel => services.find(s => s.id === sel.id) || sel);
-      return buildCitaServices(catalog, { professional: chosenPro, candidates: pendingPricePool, promoActive: promoFor });
-    }, [selectedServices, services, chosenPro, pendingPricePool, isTuesday]);
+      const base = buildCitaServices(catalog, { professional: chosenPro, candidates: pendingPricePool, promoActive: promoFor });
+      // Promociones del día elegido y la sucursal (mismo cálculo que el backend).
+      if (!promosOn || !selectedDate) return { ...base, promo: null, normalMin: base.priceMin };
+      const { services: lines, promo } = applyPromotions(base.services, allPromotions, { date: selectedDate, branchId: promoBranchId });
+      return { ...base, ...summarizeCitaServices(lines), services: lines, promo, normalMin: base.priceMin };
+    }, [selectedServices, services, chosenPro, pendingPricePool, isTuesday, promosOn, selectedDate, allPromotions, promoBranchId]);
   
     const hasVariablePrice = bookingPricing.hasVariable;
     const calculateTotal = bookingPricing.priceMin;
@@ -496,6 +516,11 @@ export default function App({ negocioSlug, proId } = {}) {
   // Selección única de servicio (igual que el modelo de Admin/Barber: un
   // serviceId por cita). Se mantiene un array de 1 elemento para no tocar
   // el resto de los componentes que ya leen `selected` como lista.
+  // Combo: marca todos sus servicios (los que falten).
+  const selectServices = (list) => {
+    setSelectedServices(prev => [...prev, ...list.filter(s => !prev.some(p => p.id === s.id))]);
+  };
+
   const toggleService = (service) => {
     setSelectedServices(prev =>
       prev.find(s => s.id === service.id)
@@ -618,7 +643,7 @@ export default function App({ negocioSlug, proId } = {}) {
       // Sin "await" a propósito: la confirmación visual (SuccessStep) no
       // debe esperar al diálogo de permiso de notificaciones del navegador.
       confirmBookingToClient({ time: selectedHour, negocioId }); // negocioId: solo para la terminología del push
-      setBookedPricing({ min: bookingPricing.priceMin, max: bookingPricing.priceMax, hasVariable: bookingPricing.hasVariable });
+      setBookedPricing({ min: bookingPricing.priceMin, max: bookingPricing.priceMax, hasVariable: bookingPricing.hasVariable, promo: bookingPricing.promo, normalMin: bookingPricing.normalMin });
       setStep(6); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);
@@ -725,6 +750,7 @@ export default function App({ negocioSlug, proId } = {}) {
         onReserve={startFreshBooking}
         onReserveService={reserveService}
         onBack={() => setStep(0)}
+        promotions={shownPromotions}
       />;
       case 1: return <BranchStep 
         branches={branches}
@@ -752,6 +778,8 @@ export default function App({ negocioSlug, proId } = {}) {
         hasVariable={hasVariablePrice}
         professional={chosenPro}
         professionals={realBarbers}
+        promotions={shownPromotions}
+        selectMany={selectServices}
         showImages={(heroConfig || DEFAULT_HERO_CONFIG).showServiceImages !== false}
       />;
       case 4: return <DateTimeStep 
@@ -777,6 +805,8 @@ export default function App({ negocioSlug, proId } = {}) {
         selectedHour={selectedHour}
         branch={selectedBranch}
         hasVariable={hasVariablePrice}
+        promo={bookingPricing.promo}
+        normalTotal={bookingPricing.normalMin}
         onConfirm={handleBooking} 
         loading={loading}
         onBack={() => setStep(4)} 
@@ -790,6 +820,8 @@ export default function App({ negocioSlug, proId } = {}) {
         total={bookedPricing ? bookedPricing.min : calculateTotal}
         totalMax={bookedPricing ? bookedPricing.max : calculateTotalMax}
         hasVariable={bookedPricing ? bookedPricing.hasVariable : hasVariablePrice}
+        promo={bookedPricing ? bookedPricing.promo : bookingPricing.promo}
+        normalTotal={bookedPricing ? bookedPricing.normalMin : bookingPricing.normalMin}
         branch={selectedBranch}
       />;
       default: return <Home heroConfig={heroConfig} />;
@@ -1027,18 +1059,51 @@ const SelectMark = ({ selected, className = '' }) => (
   )
 );
 
-const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [], showImages = true }) => {
+const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [], showImages = true, promotions = [], selectMany = null }) => {
   const terms = useBusinessTerms();
+  const today = todayLaPaz();
+  const combos = combosAvailable(services, promotions);
+  const byId = new Map(services.map((s) => [String(s.id), s]));
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
       <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir {terms.g('service', 'varios', 'varias')}.</p>
+
+      {/* Combos: un toque marca todos sus servicios. El precio final se ve al elegir la fecha. */}
+      {combos.length > 0 && selectMany && (
+        <div className="mb-4 space-y-2">
+          {combos.map((c) => {
+            const items = c.serviceIds.map((id) => byId.get(String(id))).filter(Boolean);
+            const normal = items.reduce((sum, s) => sum + Number(s.price || 0), 0);
+            const on = items.every((it) => selected.some((x) => x.id === it.id));
+            const when = whenText(c, today);
+            return (
+              <button key={c.id} type="button" onClick={() => selectMany(items)} aria-pressed={on}
+                className={`w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors cursor-pointer ${on ? 'border-nexus-primary bg-nexus-primary-soft' : 'border-nexus-border bg-nexus-surface hover:bg-nexus-surface-hover'}`}>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="rounded-md bg-nexus-primary px-1.5 py-0.5 text-[11px] font-bold text-white">Combo</span>
+                    <span className="truncate text-[15px] font-semibold text-nexus-text">{c.name}</span>
+                  </span>
+                  <span className="mt-0.5 block text-xs text-nexus-text-secondary">{items.map((it) => it.name).join(' + ')}{when ? ` · ${when}` : ''}</span>
+                </span>
+                <span className="shrink-0 text-right nx-num">
+                  {normal > c.comboPrice && <span className="block text-xs text-nexus-text-muted line-through">Bs {normal}</span>}
+                  <span className="block text-sm font-bold text-nexus-text">Bs {c.comboPrice}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       
       <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
         {services.map((s) => {
           const isSelected = !!selected.find(serv => serv.id === s.id);
           const isTodayTuesday = new Date().getDay() === 2;
           const enPromo = isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null);
+          const badge = !s.priceVariable ? discountBadgeFor(s.id, promotions) : null;
+          const badgeWhen = badge ? whenText(badge.promo, today) : '';
 
           return (
             <li key={s.id}>
@@ -1056,6 +1121,14 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                     <span className={`text-[15px] font-semibold break-words ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</span>
                     {enPromo && (
                       <span className="rounded-md bg-nexus-primary-soft px-1.5 py-0.5 text-xs font-bold text-nexus-primary">Promo hoy</span>
+                    )}
+                    {s.featured && (
+                      <span className="rounded-md bg-nexus-surface-hover px-1.5 py-0.5 text-xs font-bold text-nexus-text">Destacado</span>
+                    )}
+                    {badge && (
+                      <span className="rounded-md bg-nexus-success-bg px-1.5 py-0.5 text-xs font-bold text-nexus-success-text">
+                        {badge.label}{badgeWhen ? ` · ${badgeWhen}` : ''}
+                      </span>
                     )}
                   </span>
                   {s.description && (
@@ -1409,6 +1482,8 @@ const ConfirmStep = ({
   selectedHour, 
   branch,
   hasVariable = false,
+  promo = null,
+  normalTotal = null,
   onConfirm, 
   loading 
 }) => {
@@ -1458,9 +1533,18 @@ const ConfirmStep = ({
             <span className="font-bold text-nexus-primary">{selectedDate} - {selectedHour} Hrs</span>
           </div>
           
+          {promo && (
+            <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
+              <span className="font-semibold text-nexus-text-secondary shrink-0">Promo:</span>
+              <span className="font-bold text-right text-nexus-success-text">{promo.name} · Bs {promo.discount} menos</span>
+            </div>
+          )}
           <div className="flex justify-between pt-1">
             <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-            <span className="text-base font-bold text-nexus-success-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
+            <span className="text-right nx-num">
+              {promo && Number(normalTotal) > total && <span className="mr-2 text-xs text-nexus-text-muted line-through">Bs {normalTotal}</span>}
+              <span className="text-base font-bold text-nexus-success-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
+            </span>
           </div>
         </div>
       </form>
@@ -1486,7 +1570,7 @@ const ConfirmStep = ({
   );
 };
 
-const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, totalMax, hasVariable = false, branch = null }) => {
+const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, totalMax, hasVariable = false, branch = null, promo = null, normalTotal = null }) => {
   const terms = useBusinessTerms();
 
   useEffect(() => {
@@ -1547,10 +1631,19 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
               </span>
             </div>
           )}
+          {promo && (
+            <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
+              <span className="font-semibold text-nexus-text-secondary shrink-0">Promo:</span>
+              <span className="font-bold text-right text-nexus-success-text">{promo.name} · Bs {promo.discount} menos</span>
+            </div>
+          )}
           {typeof total === 'number' && (
             <div className="flex justify-between pt-1">
               <span className="font-bold text-nexus-text-secondary">Total a pagar:</span>
-              <span className="text-base font-bold text-nexus-success-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
+              <span className="text-right nx-num">
+                {promo && Number(normalTotal) > total && <span className="mr-2 text-xs text-nexus-text-muted line-through">Bs {normalTotal}</span>}
+                <span className="text-base font-bold text-nexus-success-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
+              </span>
             </div>
           )}
         </div>

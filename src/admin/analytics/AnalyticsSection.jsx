@@ -230,6 +230,20 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
     };
   }, [citasEnRango, completadas, historyDocs, startDate]);
 
+  // Promociones usadas en el período (citas finalizadas con `promo`).
+  const promoStats = useMemo(() => {
+    const stats = {};
+    completadas.forEach((cita) => {
+      const p = cita?.promo;
+      if (!p?.id) return;
+      if (!stats[p.id]) stats[p.id] = { id: p.id, name: p.name || 'Promoción', type: p.type, usos: 0, descuento: 0, ingreso: 0 };
+      stats[p.id].usos += 1;
+      stats[p.id].descuento += Number(p.discount || 0);
+      stats[p.id].ingreso += Number(cita.price || 0);
+    });
+    return Object.values(stats).sort((a, b) => b.usos - a.usos);
+  }, [completadas]);
+
   const serviciosStats = useMemo(() => {
     const stats = {};
     completadas.forEach((cita) => {
@@ -539,6 +553,38 @@ export default function AnalyticsSection({ reservations, barbers, agendaView, se
           )}
         </div>
       </section>
+
+      {promoStats.length > 0 && (
+        <section>
+          <h3 className="text-base font-semibold text-nexus-text mb-3">Promociones</h3>
+          <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-nexus-text-secondary">Usos</p>
+                <p className="nx-num text-lg font-bold text-nexus-text">{promoStats.reduce((s, p) => s + p.usos, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-nexus-text-secondary">Descontado</p>
+                <p className="nx-num text-lg font-bold text-nexus-text">Bs {promoStats.reduce((s, p) => s + p.descuento, 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-nexus-text-secondary">Ingreso con promo</p>
+                <p className="nx-num text-lg font-bold text-nexus-text">Bs {promoStats.reduce((s, p) => s + p.ingreso, 0).toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="space-y-2 border-t border-nexus-border pt-3">
+              {promoStats.map((p) => (
+                <div key={p.id}>
+                  <DashedRow label={`${p.name}${p.type === 'combo' ? ' (combo)' : ''}`} value={`${p.usos} ${p.usos === 1 ? 'uso' : 'usos'}`} />
+                  <p className="text-xs text-nexus-text-secondary pl-1">
+                    Bs {p.descuento.toFixed(2)} descontados · Bs {p.ingreso.toFixed(2)} cobrados
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {!basic && (
       <section>

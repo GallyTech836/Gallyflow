@@ -6,6 +6,7 @@ import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { WhatsAppIcon } from '../shared/location/WhatsAppButton';
 import { formatServicePriceFor } from '../shared/servicePricing/servicePricing';
 import { useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
+import { discountBadgeFor, whenText } from '../shared/promotions/promotionModel';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import {
   visibleProfessionals,
@@ -33,6 +34,7 @@ export default function BusinessInfoPage({
   onReserve,
   onReserveService = null,
   onBack,
+  promotions = [],
 }) {
   const terms = useBusinessTerms();
 
@@ -118,6 +120,8 @@ export default function BusinessInfoPage({
         <Section title={`${terms.t('services')} y precios`}>
           <ul className="divide-y divide-nexus-border">
             {serviceList.map((s) => {
+              const badge = !s.priceVariable ? discountBadgeFor(s.id, promotions) : null;
+              const badgeWhen = badge ? whenText(badge.promo) : '';
               const content = (
                 <>
                   {showImages && s.image && (
@@ -129,7 +133,15 @@ export default function BusinessInfoPage({
                     />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold text-nexus-text leading-snug break-words">{s.name}</span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="text-[15px] font-semibold text-nexus-text leading-snug break-words">{s.name}</span>
+                      {s.featured && <span className="rounded-md bg-nexus-surface-hover px-1.5 py-0.5 text-xs font-bold text-nexus-text">Destacado</span>}
+                      {badge && (
+                        <span className="rounded-md bg-nexus-success-bg px-1.5 py-0.5 text-xs font-bold text-nexus-success-text">
+                          {badge.label}{badgeWhen ? ` · ${badgeWhen}` : ''}
+                        </span>
+                      )}
+                    </span>
                     {s.description && (
                       <span className="mt-0.5 block text-xs text-nexus-text-secondary leading-relaxed line-clamp-2">{s.description}</span>
                     )}

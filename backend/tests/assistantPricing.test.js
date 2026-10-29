@@ -35,6 +35,7 @@ mock.module('../services/capabilities/capabilityService.js', {
 });
 
 const { assistantEngine } = await import('../services/assistantEngine/engine.js');
+const { invalidateBusinessContext } = await import('../services/appointments/businessContext.js');
 
 const N = 'negocios/neg';
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -121,5 +122,37 @@ describe('Asistente WhatsApp: precio por profesional', () => {
     assert.equal(cita.price, 150);
     const aviso = sent.find((n) => n.tipo === 'RESERVA_MODIFICADA');
     assert.ok(aviso.data.changes.some((c) => c === 'Precio: Bs 100 → Bs 150'));
+  });
+});
+
+describe('Asistente WhatsApp: promociones y destacados', () => {
+  beforeEach(() => { seed(); invalidateBusinessContext('neg'); });
+  const promo = (id, data) => db._set(`${N}/promociones/${id}`, {
+    active: true, startDate: '2020-01-01', endDate: null, weekdays: [], branchIds: [], commissionBase: 'final', ...data,
+  });
+
+  test('la lista avisa la promo, el resumen muestra el precio con promo y se guarda igual', async () => {
+    promo('p20', { name: '20% corte', type: 'descuento', serviceIds: ['s1'], discountKind: 'percent', discountValue: 20 });
+    invalidateBusinessContext('neg');
+    await say('hola');
+    const servicios = await say('1');
+    assert.match(servicios.replyText, /Corte - Bs 100 – 150 · 20% menos/);
+    await say('1'); // Corte
+    await say('1'); // Ana
+    await say('1'); // primera hora
+    const resumen = await say('Juan Perez');
+    assert.match(resumen.replyText, /Precio: Bs 120 \(antes Bs 150, promo «20% corte»\)/);
+    await say('1'); // confirmar
+    const [cita] = db._list(`${N}/citas`);
+    assert.equal(cita.price, 120);
+    assert.equal(cita.promo.id, 'p20');
+  });
+
+  test('un servicio destacado aparece primero', async () => {
+    db._set(`${N}/servicios/s3`, { ...db._get(`${N}/servicios/s3`), featured: true });
+    invalidateBusinessContext('neg');
+    await say('hola');
+    const servicios = await say('1');
+    assert.ok(servicios.replyText.indexOf('Color') < servicios.replyText.indexOf('Corte'), servicios.replyText);
   });
 });

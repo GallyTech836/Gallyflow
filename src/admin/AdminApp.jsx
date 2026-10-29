@@ -2109,6 +2109,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         name: newService.name,
         price: Number(newService.price),
         priceVariable: !!newService.priceVariable,
+        featured: !!newService.featured,
         duration: durationMin,
         availableDays: newService.availableDays || [],
         image: (newService.image || '').trim()
@@ -2119,6 +2120,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         name: newService.name,
         price: Number(newService.price),
         priceVariable: !!newService.priceVariable,
+        featured: !!newService.featured,
         promoPrice: null,
         duration: durationMin,
         category: 'Tratamiento',
@@ -2129,7 +2131,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     }
     setActiveModal(null);
     setEditingServiceId(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, featured: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
   };
 
   // Interruptor global: mostrar u ocultar las fotos de servicios en el link público.
@@ -2145,7 +2147,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const openNewServiceModal = () => {
     setEditingServiceId(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, featured: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
     setActiveModal('add-service');
   };
 
@@ -2158,6 +2160,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       category: s.category || 'Tratamiento',
       promoPrice: s.promoPrice || '',
       priceVariable: s.priceVariable === true,
+      featured: s.featured === true,
       image: s.image || '',
       availableDays: Array.isArray(s.availableDays) && s.availableDays.length > 0
         ? s.availableDays
@@ -5241,6 +5244,20 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {' '}<span className="nx-num text-nexus-primary">Desde Bs {newService.price || 'XX'}</span>.
                 </span>
               </label>
+
+              {!registrosMode && (
+                <label className="flex items-start gap-2 p-2.5 bg-nexus-background border border-nexus-border rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={!!newService.featured}
+                    onChange={(e) => setNewService(prev => ({ ...prev, featured: e.target.checked }))}
+                  />
+                  <span className="text-xs text-nexus-text-secondary leading-snug">
+                    <strong className="text-nexus-text">Destacado.</strong> Aparece primero en el link de reservas y en WhatsApp.
+                  </span>
+                </label>
+              )}
 
               {/* Modo registros (sin agenda ni link público): oculto. El servicio nuevo
                   se guarda con todos los días; uno existente conserva los suyos. */}

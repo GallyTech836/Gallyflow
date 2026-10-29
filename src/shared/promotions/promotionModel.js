@@ -220,3 +220,47 @@ export function describeBranches(branchIds, branches = []) {
   const names = branches.filter((b) => ids.includes(String(b.id))).map((b) => b.name);
   return names.length ? names.join(', ') : 'Todas las sucursales';
 }
+
+// ───────────── Para mostrar al cliente (link público y WhatsApp) ─────────────
+
+/** Promos que el cliente puede usar hoy o más adelante (no pausadas ni vencidas). */
+export function visiblePromotions(promotions = [], today = todayLaPaz(), branchId = null) {
+  return (promotions || []).filter((p) => {
+    const st = promotionStatus(p, today);
+    if (st !== PROMO_STATUS.ACTIVE && st !== PROMO_STATUS.SCHEDULED) return false;
+    const ids = uniqStrings(p.branchIds);
+    return ids.length === 0 || !branchId || ids.includes(String(branchId));
+  });
+}
+
+/** "hoy" / "mar y jue" / "desde el 1 nov": cuándo vale, en pocas palabras. */
+export function whenText(p, today = todayLaPaz()) {
+  if (p?.startDate && p.startDate > today) return `desde el ${fmtDay(p.startDate)}`;
+  const days = (p?.weekdays || []).map(Number);
+  if (days.length > 0 && days.length < 7) {
+    const names = WEEKDAYS.filter((d) => days.includes(d.value)).map((d) => d.short.toLowerCase());
+    return names.length === 1 ? `los ${WEEKDAYS.find((d) => d.value === days[0]).label.toLowerCase()}` : names.join(', ');
+  }
+  return p?.endDate ? `hasta el ${fmtDay(p.endDate)}` : '';
+}
+
+/** Etiqueta corta de descuento para un servicio: "−20%" / "Bs 10 menos", o null. */
+export function discountBadgeFor(serviceId, promotions = []) {
+  const p = (promotions || []).find((x) => x.type !== PROMO_TYPES.COMBO && uniqStrings(x.serviceIds).includes(String(serviceId)));
+  if (!p) return null;
+  const label = p.discountKind === DISCOUNT_KINDS.AMOUNT ? `Bs ${round2(p.discountValue)} menos` : `−${round2(p.discountValue)}%`;
+  return { promo: p, label };
+}
+
+/** Combos cuyos servicios están todos en `services` (los que se pueden reservar). */
+export function combosAvailable(services = [], promotions = []) {
+  const ids = new Set((services || []).map((s) => String(s.id)));
+  return (promotions || []).filter((p) => p.type === PROMO_TYPES.COMBO
+    && uniqStrings(p.serviceIds).length > 1
+    && uniqStrings(p.serviceIds).every((id) => ids.has(id)));
+}
+
+/** Servicios destacados primero (sin cambiar el orden entre ellos). */
+export function featuredFirst(services = []) {
+  return [...(services || [])].sort((a, b) => (b?.featured === true) - (a?.featured === true));
+}

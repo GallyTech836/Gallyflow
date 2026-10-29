@@ -23,7 +23,8 @@ import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
 import { canUse } from '../capabilities/capabilityModel.js';
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
-import { getServicePriceRange, buildCitaServices, formatPriceRange } from '../pricing/professionalPricing.js';
+import { getServicePriceRange, buildCitaServices, formatPriceRange, summarizeCitaServices } from '../pricing/professionalPricing.js';
+import { applyPromotions, resolveBranchId } from '../pricing/promotionPricing.js';
 import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
 import { crearVoz, aplicarVoz } from './personalidad.js';
 import { findClosure, findSpecialHours, isClosedOn } from '../appointments/closedDays.js';
@@ -99,9 +100,57 @@ function precioServicio(s, pros = []) {
   return formatPriceRange(r.min, r.max, { variable: r.priceVariable });
 }
 
+// ───────────── Promociones (descuentos y combos) ─────────────
+const DIAS_PROMO = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES_PROMO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const diaCorto = (iso) => { const [, m, d] = String(iso).split('-'); return `${Number(d)} ${MESES_PROMO[Number(m) - 1]}`; };
+
+/** Promos que el cliente todavía puede usar (no pausadas ni vencidas), de su sucursal. */
+function promosVigentes(ctx, branchName = '') {
+  const hoy = isoLocal(ahoraNegocio());
+  const branchId = resolveBranchId(branchName, ctx.sucursales || []);
+  return (ctx.promociones || []).filter((p) => p.active !== false
+    && !(p.endDate && p.endDate < hoy)
+    && (!(p.branchIds || []).length || !branchId || p.branchIds.map(String).includes(String(branchId))));
+}
+
+/** "los martes" / "lunes, jueves" / "desde el 1 nov" / "hasta el 15 nov". */
+function cuandoPromo(p) {
+  const hoy = isoLocal(ahoraNegocio());
+  if (p.startDate && p.startDate > hoy) return `desde el ${diaCorto(p.startDate)}`;
+  const dias = (p.weekdays || []).map(Number);
+  if (dias.length === 1) return `los ${DIAS_PROMO[dias[0]]}`;
+  if (dias.length > 1 && dias.length < 7) return dias.map((d) => DIAS_PROMO[d]).join(', ');
+  return p.endDate ? `hasta el ${diaCorto(p.endDate)}` : '';
+}
+
+/** " · 20% menos los martes" para la línea de un servicio, o ''. */
+function sufijoPromo(ctx, s, branchName = '') {
+  if (s?.priceVariable === true) return '';
+  const p = promosVigentes(ctx, branchName).find((x) => x.type !== 'combo' && (x.serviceIds || []).map(String).includes(String(s.id)));
+  if (!p) return '';
+  const v = Math.round(Number(p.discountValue) * 100) / 100;
+  const cuanto = p.discountKind === 'amount' ? `Bs ${v} menos` : `${v}% menos`;
+  const cuando = cuandoPromo(p);
+  return ` · ${cuanto}${cuando ? ` ${cuando}` : ''}`;
+}
+
+/** Líneas "• Combo X — Bs 70 (antes Bs 90)" de los combos que se pueden reservar. */
+function textoCombos(ctx, servicios = []) {
+  const ids = new Set(servicios.map((s) => String(s.id)));
+  const combos = promosVigentes(ctx).filter((p) => p.type === 'combo' && (p.serviceIds || []).length > 1 && p.serviceIds.every((id) => ids.has(String(id))));
+  return combos.map((c) => {
+    const items = c.serviceIds.map((id) => ctx.servicios.find((s) => String(s.id) === String(id))).filter(Boolean);
+    const normal = items.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+    const cuando = cuandoPromo(c);
+    return `• ${c.name}: ${items.map((s) => s.name).join(' + ')} — Bs ${c.comboPrice}${normal > c.comboPrice ? ` (antes Bs ${normal})` : ''}${cuando ? ` · ${cuando}` : ''}`;
+  });
+}
+
 // Precio total de los servicios elegidos: exacto con UN profesional, rango con
 // varios (cualquier profesional). null si no se pueden leer los servicios.
-function precioServicios(ctx, serviciosElegidos = [], pros = []) {
+// Con `date`, aplica la mejor promoción de ese día (igual que al guardar).
+function precioServicios(ctx, serviciosElegidos = [], pros = [], { date = null, branch = '' } = {}) {
   const catalogo = serviciosElegidos
     .map((x) => ctx.servicios.find((s) => String(s.id) === String(x.serviceId)))
     .filter(Boolean);
@@ -109,7 +158,12 @@ function precioServicios(ctx, serviciosElegidos = [], pros = []) {
   const r = pros.length === 1
     ? buildCitaServices(catalogo, { professional: pros[0] })
     : buildCitaServices(catalogo, { candidates: pros });
-  return formatPriceRange(r.priceMin, r.priceMax, { variable: r.hasVariable });
+  const normal = formatPriceRange(r.priceMin, r.priceMax, { variable: r.hasVariable });
+  if (!date || !(ctx.promociones || []).length) return normal;
+  const { services, promo } = applyPromotions(r.services, ctx.promociones, { date, branchId: resolveBranchId(branch, ctx.sucursales || []) });
+  if (!promo) return normal;
+  const t = summarizeCitaServices(services);
+  return `${formatPriceRange(t.priceMin, t.priceMax, { variable: t.hasVariable })} (antes ${normal}, promo «${promo.name}»)`;
 }
 
 function duracionServicio(servicio) {
@@ -126,10 +180,11 @@ function ordenServicios(a, b) {
   return (a?.createdAt || 0) - (b?.createdAt || 0);
 }
 
-// Servicios que al menos un profesional activo realiza.
+// Servicios que al menos un profesional activo realiza. Destacados primero.
 function serviciosOfrecidos(ctx) {
   return [...ctx.servicios]
     .sort(ordenServicios)
+    .sort((a, b) => (b?.featured === true) - (a?.featured === true))
     .filter((s) => ctx.profesionales.some((p) => professionalCanDo(p, [s.id])));
 }
 
@@ -1084,10 +1139,16 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       const aviso = `Por ahora no hay ${tl('services')} disponibles para reservar. Toca «Hablar con alguien» y el equipo te ayuda.`;
       return menuBotones({ texto: aviso, cuerpo: aviso, botones: botones.slice(1) });
     }
-    const { completo, corto } = textoServicios(servicios, {
-      precioDe: (s) => precioServicio(s, context.profesionales),
+    const combos = textoCombos(context, servicios);
+    const bloqueCombos = combos.length ? `\n\nCombos:\n${combos.join('\n')}`.slice(0, 400) : '';
+    // El cuerpo de los botones de WhatsApp admite ~1024 caracteres: los combos restan espacio a la lista.
+    const { completo: lista, corto: listaCorta } = textoServicios(servicios, {
+      precioDe: (s) => `${precioServicio(s, context.profesionales)}${sufijoPromo(context, s, branch)}`,
       duracionDe: duracionServicio,
+      max: 900 - bloqueCombos.length,
     });
+    const completo = `${lista}${bloqueCombos}`;
+    const corto = `${listaCorta}${bloqueCombos}`;
     const titulo = `Nuestros ${tl('services')}:`;
     const cierre = `¿Te gustaría agendar ${g('appointment', 'un', 'una')} ${cita}?`;
     return menuBotones({
@@ -1433,13 +1494,13 @@ ${cierre}`,
     const { tl } = ctx.terms;
     const servicios = serviciosDelPaso();
     if (servicios.length === 0) return `Por ahora no hay ${tl('services')} disponibles para reservar.`;
-    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s, context.profesionales)}`);
+    const lista = listaNumerada(servicios, (s) => `${s.name} - ${precioServicio(s, context.profesionales)}${sufijoPromo(context, s, branch)}`);
     const pregunta = `¿Qué ${tl('service')} deseas?`;
     return menuLista({
       texto: `${pregunta}\n\n${lista}`,
       cuerpo: pregunta,
       boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
-      items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min` })),
+      items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min${sufijoPromo(context, s, branch)}`.slice(0, 72) })),
       page: paginaActual(),
     });
   }
@@ -1449,10 +1510,10 @@ ${cierre}`,
     const todos = serviciosOfrecidos(context);
     const extras = serviciosExtraCompatibles();
     return menuLista({
-      texto: `¿Qué ${tl('service')} agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s, context.profesionales)}`).join('\n')}`,
+      texto: `¿Qué ${tl('service')} agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s, context.profesionales)}${sufijoPromo(context, s, branch)}`).join('\n')}`,
       cuerpo: `Elegiste: ${nombresServicios(conversation)}.\n¿Qué ${tl('service')} agregas?`,
       boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
-      items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min` })),
+      items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min${sufijoPromo(context, s, branch)}`.slice(0, 72) })),
       page: paginaActual(),
     });
   }
@@ -1519,7 +1580,9 @@ ${cierre}`,
     });
   }
   function mensajeResumen(conv) {
-    const precio = precioServicios(context, serviciosDe(conv), prosElegidos(context, conv));
+    const precio = precioServicios(context, serviciosDe(conv), prosElegidos(context, conv), {
+      date: conv.selectedDate, branch: conv.selectedStaff?.branch || branch || '',
+    });
     const lineaPrecio = precio ? `\nPrecio: ${precio}${conv.selectedStaff?.id === PENDING_ID && /–/.test(precio) ? ` (según quién te atienda)` : ''}` : '';
     const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}\nA nombre de: ${conv.clientName}`;
     return menuBotones({
@@ -1572,7 +1635,11 @@ function mensajeResumenReprogramar(conv) {
   const conQuien = staff.id && staff.id !== PENDING_ID ? ` con ${staff.name}` : '';
     // Si cambia el profesional, el precio pasa a ser el del nuevo: se avisa.
     const cambiaPro = !!anterior && staff.id && staff.id !== anterior.professionalId;
-    const precioNuevo = cambiaPro ? precioServicios(context, serviciosDe(conv), prosElegidos(context, conv)) : null;
+    // Con otro día puede entrar o salir una promoción: se recalcula también.
+    const cambiaDia = !!anterior && conv.selectedDate && conv.selectedDate !== anterior.date;
+    const precioNuevo = (cambiaPro || cambiaDia) ? precioServicios(context, serviciosDe(conv), prosElegidos(context, conv), {
+      date: conv.selectedDate, branch: staff.branch || anterior?.branch || branch || '',
+    }) : null;
     const precioAntes = anterior ? formatPriceRange(anterior.services.reduce((acc, s) => acc + (Number(s.price) || 0), 0)) : null;
     const lineaPrecio = precioNuevo && precioNuevo !== precioAntes ? `\nPrecio: ${precioNuevo}${precioAntes ? ` (antes ${precioAntes})` : ''}` : '';
     const resumen = `Confirma el cambio de tu ${tl('appointment')}:\n${anterior ? `Antes: ${fechaLegible(anterior.date)} ${anterior.time}\n` : ''}Ahora: ${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${conQuien}\n${nombresServicios(conv)}${lineaPrecio}`;

@@ -23,6 +23,11 @@ export async function getBusinessContext(negocioId) {
   return data;
 }
 
+/** Olvida el contexto guardado (pruebas, o cuando se sabe que cambió). */
+export function invalidateBusinessContext(negocioId) {
+  cache.delete(negocioId);
+}
+
 async function leerContexto(negocioId) {
   const negocioRef = db.collection('negocios').doc(negocioId);
   const negocioSnap = await negocioRef.get();
@@ -48,6 +53,11 @@ async function leerContexto(negocioId) {
   // suspendido, prueba vencida o subscriptionEnd vencido => bloqueado.
   const effectiveStatus = computeEffectiveStatus(negocio.status, negocio.subscriptionEnd || null, negocio.trialEnd || null);
   const access = await getNegocioAccess(negocioId);
+  // Promociones (descuentos y combos), solo si el plan las incluye.
+  const promosOn = access.capabilities?.promociones ? access.capabilities.promociones.enabled !== false : true;
+  const promociones = promosOn
+    ? (await negocioRef.collection('promociones').get()).docs.map((d) => ({ id: d.id, ...d.data() }))
+    : [];
 
   return {
     negocioId,
@@ -66,5 +76,6 @@ async function leerContexto(negocioId) {
     servicios,
     profesionales,
     sucursales,
+    promociones,
   };
 }
