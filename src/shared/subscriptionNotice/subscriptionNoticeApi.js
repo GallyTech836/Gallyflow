@@ -13,9 +13,15 @@ async function request(method, path, body) {
       headers: await sessionHeaders(),
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let code = null;
+      try { code = (await res.json())?.code || null; } catch { /* sin cuerpo */ }
+      console.warn(`[subscriptionNotice] ${method} ${path} → HTTP ${res.status}`, code || '');
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    console.warn(`[subscriptionNotice] ${method} ${path} → sin conexión`, err?.message || '');
     return null;
   }
 }

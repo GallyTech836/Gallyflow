@@ -253,6 +253,33 @@ describe('GET/POST /subscription-notice', () => {
   });
 });
 
+describe('caso real torricogali (29/10/2026)', () => {
+  const now = new Date('2026-10-29T15:14:04Z'); // 11:14 en La Paz
+  const negocio = { status: 'active', subscriptionEnd: '2026-11-04', trialEnd: null };
+  const aceptado = { aceptadoAt: '2026-10-29T15:00:00.000Z', diasRestantes: 6, email: 'torricogali@gmail.com' };
+
+  test('04/11 sin aceptar: tramo 7, 6 días', () => {
+    const n = M.computeNotice(negocio, null, now);
+    assert.equal(n.show, true);
+    assert.equal(n.tramo, '7');
+    assert.equal(n.diasRestantes, 6);
+  });
+
+  test('04/11 con aviso7 ya aceptado: no sale (comportamiento esperado)', () => {
+    const reg = { tipo: 'subscription', fechaVencimiento: '2026-11-04', aviso7: aceptado, aviso5: null };
+    assert.deepEqual(M.computeNotice(negocio, reg, now), { show: false });
+  });
+
+  test('cambiar a 05/11 es otro período: el aviso vuelve a salir', () => {
+    const nuevo = { ...negocio, subscriptionEnd: '2026-11-05' };
+    assert.equal(M.periodDocId(M.noticePeriod(nuevo)), 'subscription_2026-11-05');
+    const n = M.computeNotice(nuevo, null, now);
+    assert.equal(n.show, true);
+    assert.equal(n.tramo, '7');
+    assert.equal(n.diasRestantes, 7);
+  });
+});
+
 // ───────────────────────── Super Admin ─────────────────────────
 
 describe('Super Admin: soporte y avisos', () => {
