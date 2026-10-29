@@ -515,6 +515,19 @@ export default function App({ negocioSlug, proId } = {}) {
       return applyPromotions(bookingPricing.services, allPromotions, { date: dateStr, branchId: promoBranchId }).promo;
     }, [promosOn, bookingPricing.services, allPromotions, promoBranchId]);
 
+    // Texto de la promo para el cliente. Con "Pendiente" (o si el precio es un
+    // rango) no se da un monto, porque depende de quién atienda: se da la regla.
+    const promoText = useCallback((summary, { exact = false } = {}) => {
+      if (!summary) return '';
+      const p = allPromotions.find((x) => String(x.id) === String(summary.id));
+      const names = (p?.serviceIds || []).map((id) => services.find((sv) => String(sv.id) === String(id))?.name).filter(Boolean);
+      let regla = '';
+      if (p?.type === 'combo') regla = `${names.join(' + ')} a Bs ${p.comboPrice}`;
+      else if (p) regla = `${p.discountKind === 'amount' ? `Bs ${p.discountValue}` : `${p.discountValue}%`} menos en ${names.join(', ')}`;
+      if (exact) return `«${summary.name}»: Bs ${summary.discount} menos`;
+      return regla ? `«${summary.name}»: ${regla}` : `«${summary.name}»`;
+    }, [allPromotions, services]);
+
     const hasVariablePrice = bookingPricing.hasVariable;
     const calculateTotal = bookingPricing.priceMin;
     const calculateTotalMax = bookingPricing.priceMax;
@@ -796,6 +809,7 @@ export default function App({ negocioSlug, proId } = {}) {
         isDayDisabled={isDayDisabled}
         closedLabelOf={(d) => { const c = closureOf(d); return c ? closureLabel(c) : null; }}
         promoOf={promoOfDate}
+        promoTextOf={(summary) => promoText(summary)}
         currentMonth={currentCalendarMonth}
         setCurrentMonth={setCurrentCalendarMonth}
         onNext={() => setStep(5)} 
@@ -813,6 +827,7 @@ export default function App({ negocioSlug, proId } = {}) {
         branch={selectedBranch}
         hasVariable={hasVariablePrice}
         promo={bookingPricing.promo}
+        promoText={promoText(bookingPricing.promo, { exact: !bookingPricing.hasVariable && bookingPricing.priceMin === bookingPricing.priceMax })}
         normalTotal={bookingPricing.normalMin}
         onConfirm={handleBooking} 
         loading={loading}
@@ -828,6 +843,10 @@ export default function App({ negocioSlug, proId } = {}) {
         totalMax={bookedPricing ? bookedPricing.max : calculateTotalMax}
         hasVariable={bookedPricing ? bookedPricing.hasVariable : hasVariablePrice}
         promo={bookedPricing ? bookedPricing.promo : bookingPricing.promo}
+        promoText={(() => {
+          const bp = bookedPricing || { promo: bookingPricing.promo, min: bookingPricing.priceMin, max: bookingPricing.priceMax, hasVariable: bookingPricing.hasVariable };
+          return promoText(bp.promo, { exact: !bp.hasVariable && bp.min === bp.max });
+        })()}
         normalTotal={bookedPricing ? bookedPricing.normalMin : bookingPricing.normalMin}
         branch={selectedBranch}
       />;
@@ -1276,7 +1295,7 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
   );
 };
 
-const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, promoOf = () => null, currentMonth, setCurrentMonth }) => {
+const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, promoOf = () => null, promoTextOf = () => '', currentMonth, setCurrentMonth }) => {
   const terms = useBusinessTerms();
   
   const handlePrevMonth = () => {
@@ -1398,7 +1417,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
             <div className="space-y-2">
               {promoOf(date) && (
                 <p className="rounded-lg bg-nexus-success-bg px-3 py-2 text-xs font-semibold text-nexus-success-text">
-                  Este día: promo «{promoOf(date).name}», Bs {promoOf(date).discount} menos.
+                  Este día hay promo {promoTextOf(promoOf(date))}.
                 </p>
               )}
               <span className="text-xs text-nexus-text-secondary font-bold block">Horarios disponibles</span>
@@ -1498,6 +1517,7 @@ const ConfirmStep = ({
   branch,
   hasVariable = false,
   promo = null,
+  promoText = '',
   normalTotal = null,
   onConfirm, 
   loading 
@@ -1551,7 +1571,7 @@ const ConfirmStep = ({
           {promo && (
             <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
               <span className="font-semibold text-nexus-text-secondary shrink-0">Promo:</span>
-              <span className="font-bold text-right text-nexus-success-text">{promo.name} · Bs {promo.discount} menos</span>
+              <span className="font-bold text-right text-nexus-success-text">{promoText || promo.name}</span>
             </div>
           )}
           <div className="flex justify-between pt-1">
@@ -1585,7 +1605,7 @@ const ConfirmStep = ({
   );
 };
 
-const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, totalMax, hasVariable = false, branch = null, promo = null, normalTotal = null }) => {
+const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, selectedServices, total, totalMax, hasVariable = false, branch = null, promo = null, promoText = '', normalTotal = null }) => {
   const terms = useBusinessTerms();
 
   useEffect(() => {
@@ -1649,7 +1669,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           {promo && (
             <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
               <span className="font-semibold text-nexus-text-secondary shrink-0">Promo:</span>
-              <span className="font-bold text-right text-nexus-success-text">{promo.name} · Bs {promo.discount} menos</span>
+              <span className="font-bold text-right text-nexus-success-text">{promoText || promo.name}</span>
             </div>
           )}
           {typeof total === 'number' && (
