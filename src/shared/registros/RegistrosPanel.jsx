@@ -113,19 +113,16 @@ export default function RegistrosPanel({
 
   return (
     <div className="space-y-4">
-      <PeriodTabs value={period} onChange={changePeriod} />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <PeriodNav period={period} refDay={ref} onChange={setRef} />
-        {isAdmin && (
-          <Select value={proFilter} onChange={(e) => setProFilter(e.target.value)} aria-label={terms.t('professional')} className="w-auto min-w-40">
-            <option value="all">Todos</option>
-            {professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
-        )}
+      {/* Celular: periodo, fecha centrada. Tablet/escritorio: todo en una fila
+          y "Registrar" a la derecha. */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center">
+        <PeriodTabs value={period} onChange={changePeriod} />
+        <div className="flex shrink-0 justify-center md:justify-start">
+          <PeriodNav period={period} refDay={ref} onChange={setRef} />
+        </div>
         {onRegister && (
           // Con la barra fija de celular (registerDesktopOnly), aquí solo en escritorio.
-          <span className={registerDesktopOnly ? 'ml-auto hidden lg:block' : 'ml-auto'}>
+          <span className={registerDesktopOnly ? 'hidden shrink-0 lg:block md:ml-auto' : 'shrink-0 self-end md:ml-auto md:self-auto'}>
             <Button icon={Plus} onClick={onRegister}>Registrar {terms.tl('service')}</Button>
           </span>
         )}
@@ -142,6 +139,33 @@ export default function RegistrosPanel({
           />
         )}
       </div>
+
+      {/* Filtro de profesional: los mismos chips que la agenda, arriba de la lista. */}
+      {isAdmin && professionals.length > 1 && (
+        <div className="-mx-3 overflow-x-auto px-3 scrollbar-none sm:mx-0 sm:px-0">
+          <div role="radiogroup" aria-label={`Ver ${terms.tl('professionals')}`} className="flex w-max items-center gap-2">
+            {[{ id: 'all', name: 'Todos' }, ...professionals].map((p) => {
+              const isOn = proFilter === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isOn}
+                  onClick={() => setProFilter(p.id)}
+                  className={`h-9 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors cursor-pointer ${
+                    isOn
+                      ? 'border-nexus-primary bg-nexus-primary text-white shadow-sm'
+                      : 'border-nexus-border bg-nexus-surface text-nexus-text-secondary hover:border-nexus-primary/40 hover:text-nexus-text'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {error && <p role="alert" className="rounded-lg bg-nexus-error-bg px-3 py-2 text-sm text-nexus-error-text">{error}</p>}
 
