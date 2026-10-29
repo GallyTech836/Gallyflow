@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList, BadgePercent } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList, Tag } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -2720,7 +2720,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
           {hasFeature(planFeatures, 'promociones') && hasModule('services') && (
             <SidebarItem
-              icon={BadgePercent}
+              icon={Tag}
               label="Promociones"
               collapsed={navCollapsed}
               active={activeTab === 'promotions'}

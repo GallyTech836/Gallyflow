@@ -3,7 +3,7 @@
 // citas todavía no cambia.
 
 import { useMemo, useState } from 'react';
-import { BadgePercent, Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
+import { Tag, Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
 import { Button, IconButton, Badge, EmptyState, LoadingState, useConfirm } from '../../shared/ui';
 import {
   PROMO_TYPES, PROMO_STATUS, PROMO_STATUS_LABELS, sortPromotions, promotionStatus, todayLaPaz,
@@ -66,7 +66,7 @@ export default function PromotionsPage({ negocioId, services = [], branches = []
       {loading ? <LoadingState /> : list.length === 0 ? (
         <div className="rounded-xl border border-nexus-border bg-nexus-surface">
           <EmptyState
-            icon={BadgePercent}
+            icon={Tag}
             title="Sin promociones"
             description="Crea un descuento o un combo con fechas y días."
             action={<Button icon={Plus} onClick={() => setEditing('new')}>Nueva promoción</Button>}
