@@ -17,7 +17,7 @@ export async function send(oneSignalId, mensaje, url) {
     // Logo de Nexus: ícono de la notificación y silueta blanca en la barra de Android.
     chrome_web_icon: 'https://gallyflow.vercel.app/icon-256.png',
     firefox_icon: 'https://gallyflow.vercel.app/icon-256.png',
-    chrome_web_badge: 'https://gallyflow.vercel.app/badge-96.png',
+    chrome_web_badge: 'https://gallyflow.vercel.app/badge-96-v2.png',
   };
 
   if (url) {
