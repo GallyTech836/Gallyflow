@@ -20,7 +20,8 @@
 //   CAPABILITIES[].default                   -> valor si nadie dice nada
 // Prioridad: excepción del negocio > restricción del tipo > plan + complementos > default.
 // El tipo de negocio NUNCA habilita una capacidad que el plan no incluye.
-// Un plan NUNCA activa el Asistente de WhatsApp: es un complemento aparte.
+// El Asistente de WhatsApp se incluye (o no) en el plan, con límite por sucursal.
+// Complementos que se venden aparte: profesionales y sucursales adicionales.
 //
 // Formato de un valor (plan u override), todos opcionales:
 //   true | false                       (atajo de { enabled })
@@ -147,7 +148,7 @@ export const CAPABILITIES = [
   { key: 'asistenteWhatsapp', module: 'settings', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,
     legacyKeys: ['automatizaciones'],
     limit: { unit: 'respuestas/mes por sucursal', period: 'month', usageKey: 'whatsappMensajes', perBranch: true, defaultLimit: null },
-    description: 'Bot de reservas por WhatsApp (Railway). Complemento aparte (ver ADDONS). El límite es POR SUCURSAL: respuestas que el bot envía desde el número de cada sucursal en el mes.',
+    description: 'Bot de reservas por WhatsApp (Railway). Lo incluye el plan (o el complemento antiguo, ver LEGACY_ADDONS). El límite es POR SUCURSAL: respuestas que el bot envía desde el número de cada sucursal en el mes.',
     enforcedIn: ['ui', 'backend'] },
   { key: 'recordatoriosPush', module: 'settings', label: 'Recordatorios push al profesional', status: 'implemented', kind: 'toggle', default: true,
     description: 'Aviso push al profesional antes de cada cita.', enforcedIn: ['backend'] },
@@ -250,28 +251,45 @@ function readFromMap(map, cap) {
 // ───────────────────────── Complementos (add-ons) ─────────────────────────
 //
 // Se contratan por negocio, aparte del plan. Se guardan en
-//   negocios/{id}.addons = { profesionalesExtra: number, asistenteWhatsapp: boolean }
+//   negocios/{id}.addons = { profesionalesExtra: number, sucursalesExtra: number,
+//                            asistenteWhatsapp: boolean (antiguo) }
 // y el precio de cada uno lo define el plan en
 //   planes/{id}.addons[key] = { available: boolean, price: number }
 // Contratar un plan NO activa ningún complemento.
 //   kind 'quantity' -> suma `businessField` unidades al límite de `capability`
 //   kind 'toggle'   -> activa `capability` (si el tipo de negocio lo permite)
+// ADDONS = los que se ofrecen hoy. Una sucursal adicional puede conectar su
+// número de WhatsApp si el plan incluye el asistente (el límite es por sucursal).
 export const ADDONS = [
   { key: 'profesionalExtra', label: 'Profesional adicional', kind: 'quantity', capability: 'profesionales',
     businessField: 'profesionalesExtra', unit: 'profesional', defaultPrice: 45, max: 50 },
-  { key: 'asistenteWhatsapp', label: 'Asistente de WhatsApp', kind: 'toggle', capability: 'asistenteWhatsapp',
-    businessField: 'asistenteWhatsapp', defaultPrice: 350,
-    description: 'Solo para negocios compatibles con la integración de WhatsApp.' },
+  { key: 'sucursalExtra', label: 'Sucursal adicional', kind: 'quantity', capability: 'sucursales',
+    businessField: 'sucursalesExtra', unit: 'sucursal', defaultPrice: 100, max: 20,
+    description: 'Si el plan incluye el Asistente de WhatsApp, la sucursal puede conectar su número.' },
 ];
 
-const ADDON_BY_CAPABILITY = Object.fromEntries(ADDONS.map((a) => [a.capability, a]));
+// Complementos que ya NO se ofrecen. Siguen funcionando para los negocios que
+// los tienen contratados (no se migran datos) hasta que Super Admin los quite.
+export const LEGACY_ADDONS = [
+  { key: 'asistenteWhatsapp', label: 'Asistente de WhatsApp (complemento antiguo)', kind: 'toggle', capability: 'asistenteWhatsapp',
+    businessField: 'asistenteWhatsapp', defaultPrice: 350, legacy: true },
+];
+
+const ALL_ADDONS = [...ADDONS, ...LEGACY_ADDONS];
+const ADDON_BY_CAPABILITY = Object.fromEntries(ALL_ADDONS.map((a) => [a.capability, a]));
+
+function cleanCount(raw, max) {
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+}
 
 /** Normaliza negocios/{id}.addons. Valores inválidos = sin complemento. */
 export function normalizeAddons(raw) {
-  const out = { profesionalesExtra: 0, asistenteWhatsapp: false };
+  const out = { profesionalesExtra: 0, sucursalesExtra: 0, asistenteWhatsapp: false };
   if (!raw || typeof raw !== 'object') return out;
-  const n = Math.floor(Number(raw.profesionalesExtra));
-  if (Number.isFinite(n) && n > 0) out.profesionalesExtra = Math.min(n, ADDONS[0].max);
+  for (const a of ADDONS) {
+    if (a.kind === 'quantity') out[a.businessField] = cleanCount(raw[a.businessField], a.max);
+  }
   out.asistenteWhatsapp = raw.asistenteWhatsapp === true;
   return out;
 }
@@ -288,6 +306,8 @@ function addonExtraFor(cap, extras) {
 function applyAddon(cap, planValue, extras) {
   const addon = ADDON_BY_CAPABILITY[cap.key];
   if (!addon || addon.kind !== 'toggle' || extras[addon.businessField] !== true) return planValue;
+  // Si el plan ya la incluye, el complemento no cambia nada (cuenta como del plan).
+  if (planValue?.enabled === true) return planValue;
   return { ...(planValue || {}), enabled: true, viaAddon: true };
 }
 
@@ -298,7 +318,7 @@ export function getAddonForCapability(capKey) {
 
 /** Precio y disponibilidad de un complemento en un plan (con valores por defecto). */
 export function getAddonOffer(plan, addonKey) {
-  const addon = ADDONS.find((a) => a.key === addonKey);
+  const addon = ALL_ADDONS.find((a) => a.key === addonKey);
   if (!addon) return null;
   const raw = plan?.addons?.[addonKey] || {};
   const price = Number(raw.price);
@@ -316,14 +336,19 @@ export function getAddonOffer(plan, addonKey) {
 export function computeMonthlyTotal(plan, addons) {
   const a = normalizeAddons(addons);
   const base = Number(plan?.price) || 0;
-  const pro = getAddonOffer(plan, 'profesionalExtra');
-  const wa = getAddonOffer(plan, 'asistenteWhatsapp');
   const lines = [];
   if (plan) lines.push({ key: 'plan', label: plan.name || 'Plan', amount: base });
-  if (a.profesionalesExtra > 0) {
-    lines.push({ key: 'profesionalExtra', label: `${a.profesionalesExtra} × ${pro.label}`, amount: a.profesionalesExtra * pro.price });
+  for (const addon of ADDONS) {
+    const qty = a[addon.businessField];
+    if (addon.kind !== 'quantity' || !(qty > 0)) continue;
+    const offer = getAddonOffer(plan, addon.key);
+    lines.push({ key: addon.key, label: `${qty} × ${offer.label}`, amount: qty * offer.price });
   }
-  if (a.asistenteWhatsapp) lines.push({ key: 'asistenteWhatsapp', label: wa.label, amount: wa.price });
+  // Complemento antiguo: se sigue cobrando mientras el negocio lo tenga.
+  if (a.asistenteWhatsapp) {
+    const wa = getAddonOffer(plan, 'asistenteWhatsapp');
+    lines.push({ key: 'asistenteWhatsapp', label: wa.label, amount: wa.price });
+  }
   return { total: lines.reduce((s, l) => s + l.amount, 0), currency: plan?.currency || 'Bs', lines };
 }
 
@@ -381,8 +406,8 @@ const ESENCIAL_FEATURES = {
   comisiones: false, analiticas: false, dashboard: true, recordatoriosPush: true,
   // Maquetas: no se venden.
   asistencia: false, inventario: false,
-  // Complemento aparte, nunca incluido en el plan. El límite (mensajes que
-  // envía el bot por mes) aplica cuando el negocio contrata el complemento.
+  // Asistente de WhatsApp: no incluido en estos planes (se activa en el plan
+  // desde Super Admin). El límite son respuestas por mes POR SUCURSAL.
   asistenteWhatsapp: { enabled: false, limit: 1000 },
   // Vertical restaurante: fuera de estos planes.
   pedidos: false, appMesero: false, mesas: false, menuRestaurante: false, cajaRestaurante: false,
@@ -402,7 +427,7 @@ const NEXUS_CONTROL_FEATURES = {
 };
 const LAUNCH_ADDONS = {
   profesionalExtra: { available: true, price: 45 },
-  asistenteWhatsapp: { available: true, price: 350 },
+  sucursalExtra: { available: true, price: 100 }, // precio provisional
 };
 
 export const LAUNCH_PLAN_PRESETS = [
@@ -427,8 +452,6 @@ export const LAUNCH_PLAN_PRESETS = [
     id: 'nexus-control', name: 'Nexus Control', order: 4, price: 150, active: false,
     description: 'Registro de servicios por orden de llegada, comisiones por profesional, caja y analítica básica. Sin reservas online.',
     features: { ...NEXUS_CONTROL_FEATURES, profesionales: { limit: 5 }, sucursales: { limit: 1 } },
-    // Sin agenda: el Asistente de WhatsApp (agenda citas) no se ofrece.
-    addons: { ...LAUNCH_ADDONS, asistenteWhatsapp: { ...LAUNCH_ADDONS.asistenteWhatsapp, available: false } },
   },
 ].map(({ active = true, addons = LAUNCH_ADDONS, ...p }) => ({
   ...p,
@@ -578,9 +601,6 @@ export function buildPlanFeatures(draft = {}, { vertical = null } = {}) {
     if (cap.status === 'soon' || cap.core) continue;
     // Capacidades de otra vertical: quedan apagadas en el plan.
     let v = isCapabilityInVertical(cap, vertical) ? readFromMap(draft, cap) || {} : { enabled: false };
-    // En planes comerciales (con vertical) un complemento nunca va incluido:
-    // queda apagado y solo se guarda su límite de uso.
-    if (vertical && ADDON_BY_CAPABILITY[cap.key]?.kind === 'toggle') v = { ...v, enabled: false };
     if (cap.kind === 'quota') {
       out[cap.key] = { limit: hasOwn(v, 'limit') ? v.limit : null };
     } else if (cap.limit) {

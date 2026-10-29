@@ -6,6 +6,13 @@
 // `fixtures/capabilityModel.before.js` es una copia congelada del modelo tal
 // como estaba en main antes de este cambio. No editarla.
 //
+// Cambios intencionales posteriores al modelo congelado (se excluyen de la
+// comparación y se prueban aparte):
+//   - El Asistente de WhatsApp lo puede incluir el plan (buildPlanFeatures ya
+//     no lo fuerza a false en planes con vertical).
+//   - Si el plan ya incluye el asistente, el complemento antiguo no cambia nada.
+//   - ADDONS = profesionalExtra + sucursalExtra; el asistente pasó a LEGACY_ADDONS.
+//
 // Ejecutar:  cd backend && npm test
 
 import { test, describe } from 'node:test';
@@ -25,9 +32,17 @@ const NEW_KEYS = ['registroServicios', 'vistaAgenda'];
 // no tiene la clave registroServicios.
 const storedFeatures = (id) => before.buildPlanFeatures(OLD_PRESETS[id].features, { vertical: OLD_PRESETS[id].vertical });
 
+// ¿El plan (sin complementos) ya incluye el asistente?
+const planIncludesWa = (planFeatures) => now.resolveCapabilities({ planFeatures }).asistenteWhatsapp.plan?.enabled === true;
+
 /** Compara las capacidades viejas entre el modelo anterior y el nuevo. */
 function assertSameResolution(args, label) {
-  const a = before.resolveCapabilities(args);
+  // Si el plan ya incluye el asistente, el complemento antiguo no cambia nada:
+  // se espera lo mismo que el modelo anterior resolvía sin el complemento.
+  const expectedArgs = args.addons?.asistenteWhatsapp === true && planIncludesWa(args.planFeatures)
+    ? { ...args, addons: { ...args.addons, asistenteWhatsapp: false } }
+    : args;
+  const a = before.resolveCapabilities(expectedArgs);
   const b = now.resolveCapabilities(args);
   for (const key of OLD_KEYS) assert.deepEqual(b[key], a[key], `${label} -> ${key}`);
   assert.equal(b.registroServicios.enabled, false, `${label} -> registroServicios debe quedar apagada`);
@@ -50,6 +65,14 @@ function randomMap(rand, keys, density = 0.5) {
   return out;
 }
 const LEGACY_KEYS = ['staff', 'automatizaciones'];
+// Lo que guarda el modelo nuevo = lo del anterior, salvo el asistente en planes
+// con vertical (antes se forzaba a false; ahora se guarda lo que diga el plan).
+function expectedBuild(draft, opts) {
+  const out = before.buildPlanFeatures(draft, opts);
+  if (opts?.vertical) out.asistenteWhatsapp = { ...out.asistenteWhatsapp, enabled: before.buildPlanFeatures(draft).asistenteWhatsapp.enabled };
+  return out;
+}
+const withoutAddons = ({ addons: _omit, ...p }) => p;
 
 const PROFILES = Object.entries(BUSINESS_PROFILES).map(([type, p]) => ({
   type, profileDefaults: p.capabilityDefaults || null, relevantModules: p.modules || null,
@@ -69,14 +92,16 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
   });
 
   test('el catálogo anterior no cambió: mismas capacidades, en el mismo orden, con la misma definición', () => {
+    // Solo cambió el texto de la descripción del asistente.
+    const sinDescWa = (c) => (c.key === 'asistenteWhatsapp' ? { ...c, description: undefined } : c);
     const nuevas = now.CAPABILITIES.filter((c) => !NEW_KEYS.includes(c.key));
-    assert.deepEqual(nuevas, before.CAPABILITIES);
+    assert.deepEqual(nuevas.map(sinDescWa), before.CAPABILITIES.map(sinDescWa));
     assert.deepEqual(now.CAPABILITY_MODULES, before.CAPABILITY_MODULES);
-    assert.deepEqual(now.ADDONS, before.ADDONS);
   });
 
   test('los presets de Esencial, Profesional y Premium no cambiaron', () => {
-    for (const id of EXISTING_PLANS) assert.deepEqual(NEW_PRESETS[id], OLD_PRESETS[id], id);
+    // Funciones, límites y precio iguales; solo cambian los complementos ofrecidos.
+    for (const id of EXISTING_PLANS) assert.deepEqual(withoutAddons(NEW_PRESETS[id]), withoutAddons(OLD_PRESETS[id]), id);
   });
 
   test('planes ya guardados (sin la clave nueva) y negocios sin plan', () => {
@@ -134,8 +159,8 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
       // Guardar un plan viejo (sin vertical) da lo mismo + las claves nuevas con su default.
       if (planFeatures) {
         const nuevas = { registroServicios: false, vistaAgenda: true };
-        assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...before.buildPlanFeatures(planFeatures), ...nuevas }, `buildPlanFeatures caso ${i}`);
-        assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...before.buildPlanFeatures(planFeatures, { vertical: 'citas' }), ...nuevas });
+        assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...expectedBuild(planFeatures), ...nuevas }, `buildPlanFeatures caso ${i}`);
+        assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...expectedBuild(planFeatures, { vertical: 'citas' }), ...nuevas }, `buildPlanFeatures citas caso ${i}`);
       }
       if (overrides) assert.deepEqual(now.cleanOverrides(overrides), before.cleanOverrides(overrides));
     }
@@ -173,9 +198,11 @@ describe('plan Nexus Control', () => {
     assert.equal(now.getLimit(r, 'sucursales'), 1);
   });
 
-  test('el asistente de WhatsApp no se ofrece como complemento (sin agenda); profesional extra sí', () => {
-    assert.equal(now.getAddonOffer(p, 'asistenteWhatsapp').available, false);
+  test('ofrece profesional y sucursal adicional; el plan no incluye el asistente', () => {
+    assert.deepEqual(Object.keys(p.addons), ['profesionalExtra', 'sucursalExtra']);
     assert.equal(now.getAddonOffer(p, 'profesionalExtra').available, true);
+    assert.equal(now.getAddonOffer(p, 'sucursalExtra').available, true);
+    assert.equal(r.asistenteWhatsapp.enabled, false);
   });
 
   test('si igual se activa el complemento a mano, el modelo lo respeta (como antes)', () => {
@@ -201,5 +228,102 @@ describe('vistaAgenda: ajuste de pantalla, no se vende', () => {
       const b = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }) });
       assert.deepEqual(now.sellableCapabilities(b).map((c) => c.key), before.sellableCapabilities(a).map((c) => c.key), id);
     }
+  });
+});
+
+describe('Asistente de WhatsApp en el plan y sucursal adicional', () => {
+  const conAsistente = (id, wa = { enabled: true, limit: 500 }) => {
+    const p = NEW_PRESETS[id];
+    return now.buildPlanFeatures({ ...p.features, asistenteWhatsapp: wa }, { vertical: p.vertical });
+  };
+
+  test('complementos: se ofrecen profesional y sucursal adicional; el asistente es antiguo', () => {
+    assert.deepEqual(now.ADDONS.map((a) => a.key), ['profesionalExtra', 'sucursalExtra']);
+    assert.deepEqual(now.ADDONS[0], before.ADDONS.find((a) => a.key === 'profesionalExtra'));
+    const suc = now.ADDONS[1];
+    assert.equal(suc.kind, 'quantity');
+    assert.equal(suc.capability, 'sucursales');
+    assert.equal(suc.businessField, 'sucursalesExtra');
+    assert.deepEqual(now.LEGACY_ADDONS.map((a) => a.key), ['asistenteWhatsapp']);
+    const viejo = before.ADDONS.find((a) => a.key === 'asistenteWhatsapp');
+    const legacy = now.LEGACY_ADDONS[0];
+    for (const k of ['kind', 'capability', 'businessField', 'defaultPrice']) assert.equal(legacy[k], viejo[k], k);
+    assert.equal(now.getAddonForCapability('asistenteWhatsapp').key, 'asistenteWhatsapp');
+    assert.equal(now.getAddonForCapability('sucursales').key, 'sucursalExtra');
+  });
+
+  test('un plan con asistente lo activa (con su límite por sucursal) y se promociona', () => {
+    for (const id of [...EXISTING_PLANS, 'nexus-control']) {
+      const features = conAsistente(id);
+      assert.deepEqual(features.asistenteWhatsapp, { enabled: true, limit: 500 }, id);
+      const r = now.resolveCapabilities({ planFeatures: features });
+      assert.equal(r.asistenteWhatsapp.enabled, true, id);
+      assert.equal(r.asistenteWhatsapp.source, 'plan', id);
+      assert.equal(now.getLimit(r, 'asistenteWhatsapp'), 500, id);
+      assert.ok(now.sellableCapabilities(r).some((c) => c.key === 'asistenteWhatsapp'), id);
+    }
+    // El tipo de negocio y las excepciones siguen mandando.
+    assert.equal(now.resolveCapabilities({ planFeatures: conAsistente('premium'), relevantModules: ['agenda', 'services'] }).asistenteWhatsapp.enabled, false);
+    assert.equal(now.resolveCapabilities({ planFeatures: conAsistente('premium'), overrides: { asistenteWhatsapp: false } }).asistenteWhatsapp.enabled, false);
+  });
+
+  test('si el plan ya incluye el asistente, el complemento antiguo no cambia nada', () => {
+    const planFeatures = conAsistente('profesional');
+    const sin = now.resolveCapabilities({ planFeatures });
+    const con = now.resolveCapabilities({ planFeatures, addons: { asistenteWhatsapp: true } });
+    assert.deepEqual(con.asistenteWhatsapp, sin.asistenteWhatsapp);
+    assert.equal(con.asistenteWhatsapp.plan.viaAddon, undefined);
+  });
+
+  test('el complemento antiguo sigue activo en negocios que lo tienen', () => {
+    for (const id of [...EXISTING_PLANS, 'nexus-control']) {
+      const p = NEW_PRESETS[id];
+      const r = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }), addons: { asistenteWhatsapp: true } });
+      assert.equal(r.asistenteWhatsapp.enabled, true, id);
+      assert.equal(r.asistenteWhatsapp.source, 'addon', id);
+      assert.equal(now.getLimit(r, 'asistenteWhatsapp'), 1000, id);
+      // Como complemento no cuenta como "incluido en el plan".
+      assert.ok(!now.sellableCapabilities(r).some((c) => c.key === 'asistenteWhatsapp'), id);
+    }
+    // Planes ya guardados con el modelo anterior: igual que antes.
+    for (const id of EXISTING_PLANS) {
+      const args = { planFeatures: storedFeatures(id), addons: { asistenteWhatsapp: true } };
+      assert.deepEqual(now.resolveCapabilities(args).asistenteWhatsapp, before.resolveCapabilities(args).asistenteWhatsapp, id);
+    }
+    assert.equal(now.normalizeAddons({ asistenteWhatsapp: true }).asistenteWhatsapp, true);
+  });
+
+  test('sucursalesExtra suma al límite de sucursales; una excepción con límite propio manda', () => {
+    const lim = (id, extra) => now.getLimit(now.resolveCapabilities({ planFeatures: storedFeatures(id), ...extra }), 'sucursales');
+    assert.equal(lim('esencial', {}), 1);
+    assert.equal(lim('esencial', { addons: { sucursalesExtra: 2 } }), 3);
+    assert.equal(lim('premium', { addons: { sucursalesExtra: 1 } }), 3);
+    assert.equal(lim('esencial', { addons: { sucursalesExtra: 2 }, overrides: { sucursales: { limit: 5 } } }), 5);
+    assert.equal(lim('esencial', { addons: { sucursalesExtra: -1 } }), 1);
+    assert.equal(lim('esencial', { addons: { sucursalesExtra: 'x' } }), 1);
+    assert.equal(lim('esencial', { addons: { sucursalesExtra: 999 } }), 1 + now.ADDONS[1].max);
+    // Sin plan también suma (límite mínimo 1).
+    assert.equal(now.getLimit(now.resolveCapabilities({ addons: { sucursalesExtra: 1 } }), 'sucursales'), 2);
+    // No toca profesionales.
+    assert.equal(now.getLimit(now.resolveCapabilities({ planFeatures: storedFeatures('esencial'), addons: { sucursalesExtra: 2 } }), 'profesionales'), 2);
+  });
+
+  test('los planes actuales sin asistente resuelven igual que antes', () => {
+    for (const id of EXISTING_PLANS) {
+      const p = NEW_PRESETS[id];
+      const r = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }) });
+      const a = before.resolveCapabilities({ planFeatures: storedFeatures(id) });
+      assert.equal(r.asistenteWhatsapp.enabled, false, id);
+      for (const key of OLD_KEYS) assert.deepEqual(r[key], a[key], `${id} -> ${key}`);
+    }
+  });
+
+  test('total mensual: plan + profesionales + sucursales + asistente antiguo', () => {
+    const plan = { ...withoutAddons(NEW_PRESETS.esencial), addons: NEW_PRESETS.esencial.addons };
+    const t = now.computeMonthlyTotal(plan, { profesionalesExtra: 2, sucursalesExtra: 1, asistenteWhatsapp: true });
+    assert.deepEqual(t.lines.map((l) => [l.key, l.amount]), [['plan', 150], ['profesionalExtra', 90], ['sucursalExtra', 100], ['asistenteWhatsapp', 350]]);
+    assert.equal(t.total, 690);
+    // Precio del complemento antiguo definido por el plan (si lo tiene guardado).
+    assert.equal(now.computeMonthlyTotal({ price: 0, addons: { asistenteWhatsapp: { price: 200 } } }, { asistenteWhatsapp: true }).total, 200);
   });
 });

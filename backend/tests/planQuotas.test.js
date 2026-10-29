@@ -68,9 +68,9 @@ describe('planes de lanzamiento (modelo)', () => {
       assert.equal(p.vertical, 'citas');
       // Nexus Control se siembra inactivo hasta confirmar precio y límites.
       assert.equal(p.active, p.id !== 'nexus-control');
-      // Nexus Control no tiene agenda: el Asistente de WhatsApp no se ofrece.
-      const asistenteDisponible = p.id !== 'nexus-control';
-      assert.deepEqual(p.addons, { profesionalExtra: { available: true, price: 45 }, asistenteWhatsapp: { available: asistenteDisponible, price: 350 } });
+      // Complementos que se ofrecen: profesional y sucursal adicional (el
+      // asistente ya no se vende como complemento, ver LEGACY_ADDONS).
+      assert.deepEqual(p.addons, { profesionalExtra: { available: true, price: 45 }, sucursalExtra: { available: true, price: 100 } });
     }
   });
 
@@ -91,7 +91,7 @@ describe('planes de lanzamiento (modelo)', () => {
     }
   });
 
-  test('ningún plan activa WhatsApp; el complemento sí (y el tipo de negocio puede restringirlo)', () => {
+  test('ningún plan de lanzamiento incluye WhatsApp; el complemento antiguo sí (y el tipo de negocio puede restringirlo)', () => {
     for (const id of Object.keys(PRESET)) assert.equal(resolvedOf(id).asistenteWhatsapp.enabled, false, id);
     const con = resolvedOf('esencial', { addons: { asistenteWhatsapp: true } });
     assert.equal(con.asistenteWhatsapp.enabled, true);
@@ -102,11 +102,14 @@ describe('planes de lanzamiento (modelo)', () => {
     assert.equal(excepcion.asistenteWhatsapp.enabled, false);
   });
 
-  test('WhatsApp: 1000 mensajes/mes al contratar el complemento; un plan comercial nunca lo incluye', () => {
+  test('WhatsApp: 1000 mensajes/mes con el complemento antiguo; un plan comercial puede incluirlo', () => {
     const con = resolvedOf('esencial', { addons: { asistenteWhatsapp: true } });
     assert.equal(getLimit(con, 'asistenteWhatsapp'), 1000);
-    const forzado = buildPlanFeatures({ asistenteWhatsapp: { enabled: true, limit: 500 } }, { vertical: 'citas' });
-    assert.deepEqual(forzado.asistenteWhatsapp, { enabled: false, limit: 500 });
+    const incluido = buildPlanFeatures({ asistenteWhatsapp: { enabled: true, limit: 500 } }, { vertical: 'citas' });
+    assert.deepEqual(incluido.asistenteWhatsapp, { enabled: true, limit: 500 });
+    const r = resolveCapabilities({ planFeatures: incluido });
+    assert.equal(r.asistenteWhatsapp.source, 'plan');
+    assert.equal(getLimit(r, 'asistenteWhatsapp'), 500);
     // Plan anterior (sin vertical) que ya incluía WhatsApp: se respeta.
     assert.equal(buildPlanFeatures({ asistenteWhatsapp: { enabled: true } }).asistenteWhatsapp.enabled, true);
   });
@@ -115,6 +118,13 @@ describe('planes de lanzamiento (modelo)', () => {
     assert.equal(getLimit(resolvedOf('esencial', { addons: { profesionalesExtra: 3 } }), 'profesionales'), 5);
     assert.equal(getLimit(resolvedOf('esencial', { addons: { profesionalesExtra: 3 }, overrides: { profesionales: { limit: 4 } } }), 'profesionales'), 4);
     assert.equal(getLimit(resolvedOf('esencial', { addons: { profesionalesExtra: -2 } }), 'profesionales'), 2);
+  });
+
+  test('sucursal adicional suma al límite de sucursales; una excepción con límite propio manda', () => {
+    assert.equal(getLimit(resolvedOf('esencial', { addons: { sucursalesExtra: 2 } }), 'sucursales'), 3);
+    assert.equal(getLimit(resolvedOf('premium', { addons: { sucursalesExtra: 1 } }), 'sucursales'), 3);
+    assert.equal(getLimit(resolvedOf('esencial', { addons: { sucursalesExtra: 2 }, overrides: { sucursales: { limit: 4 } } }), 'sucursales'), 4);
+    assert.equal(getLimit(resolvedOf('esencial', { addons: { sucursalesExtra: -1 } }), 'sucursales'), 1);
   });
 
   test('prioridad: excepción > tipo de negocio > plan', () => {
@@ -163,9 +173,10 @@ describe('planes de lanzamiento (modelo)', () => {
     assert.equal(getLimit(resolveCapabilities({ planFeatures: viejo }), 'profesionales'), null);
   });
 
-  test('total mensual: plan + complementos', () => {
-    const t = computeMonthlyTotal(planDoc('esencial'), { profesionalesExtra: 2, asistenteWhatsapp: true });
-    assert.equal(t.total, 150 + 2 * 45 + 350);
+  test('total mensual: plan + complementos (incluido el asistente antiguo)', () => {
+    const t = computeMonthlyTotal(planDoc('esencial'), { profesionalesExtra: 2, sucursalesExtra: 1, asistenteWhatsapp: true });
+    assert.equal(t.total, 150 + 2 * 45 + 100 + 350);
+    assert.equal(computeMonthlyTotal(planDoc('esencial'), { sucursalesExtra: 2 }).total, 150 + 2 * 100);
     assert.equal(t.currency, 'Bs');
     assert.equal(computeMonthlyTotal(planDoc('premium'), null).total, 450);
   });
@@ -268,6 +279,38 @@ describe('altas validadas en el backend', () => {
     seed({ plan: 'esencial', pros: 2, extra: { addons: { profesionalesExtra: 1 } } });
     assert.equal((await altaPro()).status, 201);
     assert.equal((await altaPro()).status, 403);
+  });
+
+  test('complemento de sucursales adicionales amplía el cupo sin cambiar de plan', async () => {
+    seed({ plan: 'esencial', sucs: 1, extra: { addons: { sucursalesExtra: 1 } } });
+    assert.equal((await altaSuc()).status, 201);
+    assert.equal((await altaSuc()).status, 403);
+    assert.equal(contar('sucursales'), 2);
+    const q = await llamar('GET', '/negocio/quotas');
+    assert.equal(q.body.quotas.sucursales.limit, 2);
+  });
+
+  test('webhook: checkCapability del asistente responde según el plan', async () => {
+    const { checkCapability } = await import('../services/capabilities/capabilityService.js');
+    const fresh = async () => { await getNegocioAccess('negA', { fresh: true }); return checkCapability('negA', 'asistenteWhatsapp'); };
+    // Plan sin asistente: no responde.
+    seed({ plan: 'esencial' });
+    assert.equal((await fresh()).reason, 'capacidad_no_incluida');
+    // Plan que incluye el asistente: responde con el límite del plan.
+    seed({ plan: 'esencial' });
+    const p = planDoc('esencial');
+    db._set('planes/esencial', { ...p, features: buildPlanFeatures({ ...PRESET.esencial.features, asistenteWhatsapp: { enabled: true, limit: 300 } }, { vertical: 'citas' }) });
+    const conPlan = await fresh();
+    assert.equal(conPlan.allowed, true);
+    assert.equal(conPlan.limit, 300);
+    // Complemento antiguo: sigue activo.
+    seed({ plan: 'esencial', extra: { addons: { asistenteWhatsapp: true } } });
+    const antiguo = await fresh();
+    assert.equal(antiguo.allowed, true);
+    assert.equal(antiguo.limit, 1000);
+    // Excepción del Super Admin: activa sin plan ni complemento.
+    seed({ plan: 'esencial', extra: { capabilityOverrides: { asistenteWhatsapp: true } } });
+    assert.equal((await fresh()).allowed, true);
   });
 
   test('desactivar un plan no borra negocios ni datos, y sus límites siguen aplicando', async () => {
