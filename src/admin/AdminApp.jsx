@@ -2604,7 +2604,9 @@ const { heroConfig } = useHeroConfig(negocioId);
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
     {negocioId && <SubscriptionNoticeModal refreshKey={statusKey} />}
-    <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-hidden relative">
+    {/* h-dvh: alto real visible (100vh en algunos navegadores de tablet/celular
+        no coincide con lo visible y dejaba una franja blanca abajo). */}
+    <div className="h-dvh bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-hidden relative">
       
       {isMobileSidebarOpen && (
         <div

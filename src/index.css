@@ -22,6 +22,8 @@
 body {
   margin: 0;
   font-family: var(--nx-font-sans);
+  /* Si el navegador deja un espacio fuera de la app, que no se vea blanco. */
+  background: var(--nx-background, #FAFAFA);
 }
 
 #root {
