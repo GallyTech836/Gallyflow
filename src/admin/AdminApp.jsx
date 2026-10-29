@@ -41,6 +41,7 @@ import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
 import { useNotifications, notify, NotificationType } from '../shared/notifications';
 import SettingsPage from './settings';
 import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
+import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars';
 import AnalyticsSection from './analytics/AnalyticsSection';
 import InventoryPage from './inventory/InventoryPage';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
@@ -3441,68 +3442,35 @@ const { heroConfig } = useHeroConfig(negocioId);
               )}
 
               {agendaView === 'mes' && (
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-2 sm:p-4">
-                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center mb-1.5">
-                    {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
-                      <span key={d} className="text-xs font-semibold text-nexus-text-muted py-1">
-                        <span className="sm:hidden">{d.charAt(0)}</span>
-                        <span className="hidden sm:inline">{d}</span>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-                    {getMonthDays(selectedDate).map((day, idx) => {
-                      const dayRes = day?.isCurrentMonth ? (agendaBranchReservations || []).filter(r => r?.date === day?.dateStr) : [];
-                      if (!day?.isCurrentMonth) return <div key={idx} className="h-14 sm:h-20" aria-hidden="true" />;
-                      const isSelected = day?.dateStr === selectedDate;
-
-                      return (
-                        <button
-                          type="button"
-                          key={idx}
-                          onClick={() => {
-                            setSelectedDate(day?.dateStr);
-                            setAgendaView('dia');
-                          }}
-                          aria-label={`${day?.dayNum}: ${dayRes.length} ${tl('appointments')}`}
-                          className={`h-14 sm:h-20 rounded-lg p-1.5 flex flex-col justify-between border text-left cursor-pointer transition-colors ${
-                            isSelected ? 'border-nexus-primary bg-nexus-primary-soft/50' : 'bg-nexus-background border-nexus-border hover:border-nexus-primary'
-                          }`}
-                        >
-                          <span className="text-xs sm:text-sm font-semibold text-nexus-text-secondary nx-num">{day?.dayNum}</span>
-                          {dayRes.length > 0 && (
-                            <span className="self-end min-w-6 h-5 sm:h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-nexus-primary text-white text-xs font-semibold nx-num">
-                              {dayRes.length}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <MonthCalendar
+                  dateStr={selectedDate}
+                  countFor={(dateStr) => (agendaBranchReservations || []).filter(r => r?.date === dateStr).length}
+                  highlighted={selectedDate}
+                  onPick={(dateStr) => {
+                    setSelectedDate(dateStr);
+                    setAgendaView('dia');
+                  }}
+                  ariaLabelFor={(day, count) => `${day.dayNum}: ${count} ${tl('appointments')}`}
+                />
               )}
 
              {agendaView === 'año' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((m, idx) => {
+                <YearCalendar
+                  countFor={(idx) => {
                     const yearVal = parseDate(selectedDate).getFullYear();
                     const monthId = (idx + 1).toString().padStart(2, '0');
-                    const monthCount = agendaYearCountsMode
+                    return agendaYearCountsMode
                       ? (yearMonthCounts?.[idx] ?? 0)
                       : (agendaBranchReservations || []).filter(r => r?.date?.startsWith(`${yearVal}-${monthId}`)).length;
-                    return (
-                      <button type="button" key={m} className="bg-nexus-surface border border-nexus-border rounded-xl p-4 text-center hover:border-nexus-primary/50 transition-colors cursor-pointer" onClick={() => {
-                        const targetDate = `${yearVal}-${monthId}-01`;
-                        setSelectedDate(targetDate);
-                        setAgendaView('mes');
-                      }}>
-                        <span className="block text-sm font-semibold text-nexus-text">{m}</span>
-                        <span className="block text-2xl font-bold text-nexus-primary nx-num mt-2">{monthCount}</span>
-                        <span className="block text-xs text-nexus-text-muted mt-0.5">Reservas</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                  }}
+                  unitLabel="Reservas"
+                  onPick={(idx) => {
+                    const yearVal = parseDate(selectedDate).getFullYear();
+                    const monthId = (idx + 1).toString().padStart(2, '0');
+                    setSelectedDate(`${yearVal}-${monthId}-01`);
+                    setAgendaView('mes');
+                  }}
+                />
               )}
             </div>
           )}

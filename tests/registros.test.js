@@ -5,7 +5,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isRegistro, newRequestId, defaultPaymentMethod, periodRange, shiftDay, needsPin, summarize, describeChange, dayLabel,
-  PERIODS, shiftPeriod, canGoNext, clampRef, periodLabel, dayTitle, monthName, groupByDay,
+  PERIODS, shiftPeriod, canGoNext, clampRef, periodLabel, dayTitle, monthName, groupByDay, countByDay,
 } from '../src/shared/registros/registroModel.js';
 
 describe('registroModel', () => {
@@ -96,6 +96,18 @@ describe('registroModel', () => {
     assert.equal(g[1].total, 90);
     assert.equal(g[0].total, 30);
     assert.deepEqual(groupByDay([]), []);
+  });
+
+  test('cantidad por día para el calendario del Mes (sin anulados)', () => {
+    const c = countByDay([
+      { date: '2026-10-27', status: 'completed' },
+      { date: '2026-10-27', status: 'cancelled' },
+      { date: '2026-10-27', status: 'completed' },
+      { date: '2026-10-29', status: 'completed' },
+      { date: '2026-10-30', status: 'cancelled' },
+    ]);
+    assert.deepEqual(c, { '2026-10-27': 2, '2026-10-29': 1 });
+    assert.deepEqual(countByDay([]), {});
   });
 
   test('PIN: caja cerrada, comisión pagada o fuera de caja', () => {

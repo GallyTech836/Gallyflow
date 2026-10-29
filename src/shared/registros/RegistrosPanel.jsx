@@ -4,9 +4,10 @@ import { Modal, Button, Field, Input, Select, Textarea, Badge, EmptyState, Loadi
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import ServicePicker from './ServicePicker';
 import { estimateTotal, toServiceInputs } from './servicePickerModel';
+import { MonthCalendar, YearCalendar } from '../calendar/AgendaCalendars';
 import { listRegistros, listCorrecciones, correctRegistro, voidRegistro, getRegistrosResumen } from './registrosApi';
 import {
-  PERIODS, periodRange, shiftPeriod, canGoNext, clampRef, periodLabel, dayTitle, monthName, groupByDay,
+  PERIODS, periodRange, shiftPeriod, canGoNext, clampRef, periodLabel, dayTitle, groupByDay, countByDay,
   summarize, needsPin, describeChange, dayLabel, todayKey, GENERAL_CLIENT,
 } from './registroModel';
 
@@ -75,15 +76,20 @@ export default function RegistrosPanel({
 
   const reload = () => setTick((t) => t + 1);
   const totals = useMemo(() => summarize(items || []), [items]);
-  const groups = useMemo(() => (period === 'semana' || period === 'mes' ? groupByDay(items || []) : null), [period, items]);
-  const months = useMemo(() => (yearData?.months || []).filter((m) => m.count > 0).slice().reverse(), [yearData]);
+  const groups = useMemo(() => (period === 'semana' ? groupByDay(items || []) : null), [period, items]);
+  const dayCounts = useMemo(() => (period === 'mes' ? countByDay(items || []) : null), [period, items]);
+  // Año: datos del resumen por índice de mes (0–11).
+  const monthByIndex = useMemo(() => Object.fromEntries((yearData?.months || []).map((m) => [Number(m.month.slice(5, 7)) - 1, m])), [yearData]);
+  const today = todayKey();
+  const year = range.from.slice(0, 4);
   const open = (items || []).find((r) => r.id === openId) || null;
   const summary = isYear
     ? (yearData ? { count: yearData.totals.count, total: yearData.totals.total, commission: yearData.totals.commission } : null)
     : (items ? totals : null);
 
   const changePeriod = (p) => { setPeriod(p); setRef((r) => clampRef(r)); };
-  const openMonth = (month) => { setPeriod('mes'); setRef(`${month}-01`); };
+  const openMonth = (idx) => { setPeriod('mes'); setRef(`${year}-${String(idx + 1).padStart(2, '0')}-01`); };
+  const openDay = (dateStr) => { setPeriod('dia'); setRef(dateStr); };
   const empty = <EmptyState icon={ClipboardList} title={`Sin ${terms.tl('services')} registrados en este periodo`} />;
   const row = (r) => (
     <RegistroRow key={r.id} r={r} isAdmin={isAdmin} showPrices={showPrices} proName={proName} onOpen={() => setOpenId(r.id)} />
@@ -124,21 +130,25 @@ export default function RegistrosPanel({
       {error && <p role="alert" className="rounded-lg bg-nexus-error-bg px-3 py-2 text-sm text-nexus-error-text">{error}</p>}
 
       {isYear ? (
-        yearData === null ? <LoadingState /> : months.length === 0 ? empty : (
-          <ul className="divide-y divide-nexus-border overflow-hidden rounded-xl border border-nexus-border bg-nexus-surface">
-            {months.map((m) => (
-              <li key={m.month}>
-                <button type="button" onClick={() => openMonth(m.month)} className="flex w-full items-center gap-3 px-3 py-3 text-left cursor-pointer hover:bg-nexus-surface-hover">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-nexus-text">{monthName(m.month)}</span>
-                    <span className="block text-xs text-nexus-text-secondary">{m.count} {m.count === 1 ? terms.tl('service') : terms.tl('services')}</span>
-                  </span>
-                  {showPrices && <span className="nx-num text-sm font-bold text-nexus-text">{money(m.total)}</span>}
-                  <ChevronRight className="h-4 w-4 shrink-0 text-nexus-text-muted" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
+        yearData === null ? <LoadingState /> : (
+          <YearCalendar
+            countFor={(idx) => monthByIndex[idx]?.count || 0}
+            unitLabel={terms.t('services')}
+            extraFor={showPrices ? (idx) => money(monthByIndex[idx]?.total || 0) : undefined}
+            onPick={openMonth}
+            isDisabled={(idx) => `${year}-${String(idx + 1).padStart(2, '0')}-01` > today}
+          />
+        )
+      ) : period === 'mes' ? (
+        items === null ? <LoadingState /> : (
+          <MonthCalendar
+            dateStr={range.from}
+            countFor={(dateStr) => dayCounts?.[dateStr] || 0}
+            highlighted={today}
+            onPick={openDay}
+            isDisabled={(dateStr) => dateStr > today}
+            ariaLabelFor={(day, count) => `${day.dayNum}: ${count} ${count === 1 ? terms.tl('service') : terms.tl('services')}`}
+          />
         )
       ) : items === null ? (
         <LoadingState />

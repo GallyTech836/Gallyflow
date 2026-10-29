@@ -129,6 +129,16 @@ export function periodLabel(period, ref, today = todayKey()) {
   return dayTitle(ref, today);
 }
 
+/** { 'AAAA-MM-DD': cantidad } de cada día (los anulados no cuentan). */
+export function countByDay(registros = []) {
+  const out = {};
+  for (const r of registros) {
+    if (!r?.date || r.status === 'cancelled') continue;
+    out[r.date] = (out[r.date] || 0) + 1;
+  }
+  return out;
+}
+
 /**
  * Registros agrupados por día, del más reciente al más antiguo. Cada grupo:
  * { date, items, ...summarize(items) }. Días sin registros no aparecen.
