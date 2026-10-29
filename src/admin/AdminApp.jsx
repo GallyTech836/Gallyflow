@@ -47,6 +47,8 @@ import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars'
 import AnalyticsSection from './analytics/AnalyticsSection';
 import InventoryPage from './inventory/InventoryPage';
 import PromotionsPage from './promotions/PromotionsPage';
+import { usePromotions } from '../shared/promotions/usePromotions';
+import { priceWithPromotions, promoInputsChanged } from '../shared/promotions/citaPromotions';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
@@ -241,6 +243,10 @@ const [activeTab, setActiveTab] = useState('agenda');
 // default del catálogo). `planFeatures` es el mapa RESUELTO, así que
 // hasFeature/getFeatureLimit siguen funcionando igual que antes.
 const { capabilities: planFeatures, can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
+// Promociones del negocio (si el plan las incluye): se aplican al guardar citas.
+const promosOn = hasFeature(planFeatures, 'promociones');
+const { promotions: allPromotions } = usePromotions(negocioId, promosOn);
+const activePromotions = promosOn ? allPromotions : [];
 // Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
 // capacidad mientras la pestaña está abierta, se vuelve a la pestaña de inicio.
 const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', promotions: 'promociones', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
@@ -1677,10 +1683,15 @@ const { heroConfig } = useHeroConfig(negocioId);
       return { ...s, price: promo, ...(s.priceSource ? { listPrice: promo, priceSource: 'promo' } : {}) };
     });
 
-    const totalPrice = pricedServices.reduce((sum, s) => sum + Number(s.price || 0), 0);
+    const targetProfessionalId = draft.professionalId || 'pending';
+    const branchForCita = targetProfessionalId !== 'pending'
+      ? (barbers.find(b => b.id === targetProfessionalId)?.branch || selectedBranch)
+      : selectedBranch;
+    // Promociones (descuentos y combos) del día y la sucursal, sobre el precio del profesional.
+    const conPromo = priceWithPromotions(pricedServices, activePromotions, { date: draft.date, branch: branchForCita, branches });
+    const totalPrice = conPromo.price;
     const totalDuration = pricedServices.reduce((sum, s) => sum + Number(s.duration || 30), 0);
 
-    const targetProfessionalId = draft.professionalId || 'pending';
     const endTimeStr = minToTime(timeToMin(draft.time) + totalDuration);
     const check = await checkConflicts(null, targetProfessionalId, draft.date, draft.time, endTimeStr, false, false);
     if (!check.isValid) { triggerToast(check.message, 'error'); return; }
@@ -1705,17 +1716,16 @@ const { heroConfig } = useHeroConfig(negocioId);
     const reservationObj = {
       clientId: clientObj.id, clientName: clientObj.name,
       professionalId: targetProfessionalId, barberId: targetProfessionalId,
-      services: pricedServices,
+      services: conPromo.services,
       serviceId: pricedServices[0]?.serviceId || '',
       serviceName: pricedServices.map(s => s.serviceName).join(' + '),
       price: totalPrice, time: draft.time, startTime: draft.time,
+      ...(conPromo.promo ? { promo: conPromo.promo } : {}),
       ...(targetProfessionalId === 'pending' ? { priceProvisional: true } : {}),
       endTime: endTimeStr, duration: Number(totalDuration),
       date: draft.date, reservationDate: draft.date, status: 'confirmed',
       paymentMethod: draft.paymentMethod, bookedBy: 'admin',
-      branch: targetProfessionalId !== 'pending'
-        ? (barbers.find(b => b.id === targetProfessionalId)?.branch || selectedBranch)
-        : selectedBranch,
+      branch: branchForCita,
       branchId: currentBranchObj?.id || 'br1',
       clientPhone: draft.phone || clientObj.phone || '',
       countryCode: detectPhoneCountry(draft.phone)?.code || '+591',
@@ -1847,6 +1857,15 @@ const { heroConfig } = useHeroConfig(negocioId);
   
     // Foto de la cita ANTES de guardar, para decir qué cambió en la notificación.
     const before = findCitaById(editingReservation.id);
+    // Promociones: se recalculan solo si cambió algo que las decide (servicios,
+    // fecha, profesional o sucursal). Cambiar solo el estado o el pago conserva
+    // el precio con el que se agendó.
+    if (updatedRecord.status !== 'cancelled' && promoInputsChanged(before, updatedRecord)) {
+      const conPromo = priceWithPromotions(updatedRecord.services, activePromotions, { date: updatedRecord.date, branch: updatedRecord.branch, branches });
+      updatedRecord.services = conPromo.services;
+      updatedRecord.price = conPromo.price;
+      updatedRecord.promo = conPromo.promo || null;
+    }
     Object.assign(updatedRecord, paymentStampFields(before, updatedRecord.status, updatedRecord.updatedAt));
 
     try {
@@ -5126,6 +5145,8 @@ const { heroConfig } = useHeroConfig(negocioId);
           professionals={barbers}
           clients={clients}
           paymentMethods={businessSettings.paymentMethods}
+          promotions={activePromotions}
+          branches={branches}
           onRegistered={() => setRegistrosTick(n => n + 1)}
           onClose={() => setRegistroModalOpen(false)}
           onToast={triggerToast}

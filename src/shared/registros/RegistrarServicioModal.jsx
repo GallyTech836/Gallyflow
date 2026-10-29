@@ -3,7 +3,8 @@ import { ChevronDown, Search } from 'lucide-react';
 import { Modal, Button, Field, Input, useConfirm } from '../ui';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import ServicePicker from './ServicePicker';
-import { estimateTotal, toServiceInputs } from './servicePickerModel';
+import { estimateWithPromotions, toServiceInputs, servicesOf } from './servicePickerModel';
+import { promotionAppliesOn, resolveBranchId } from '../promotions/promotionPricing';
 import { createRegistro } from './registrosApi';
 import {
   newRequestId, defaultPaymentMethod, todayKey, shiftDay, MAX_BACKDATE_DAYS, CASH_PLACEMENT_TEXT, dayLabel, GENERAL_CLIENT,
@@ -21,6 +22,8 @@ import {
  * - services, clients, paymentMethods
  * - fixedProfessional: el barbero (siempre a su nombre). Si no viene, es admin.
  * - professionals: profesionales activos para elegir (admin)
+ * - promotions, branches: promociones vigentes (descuentos y combos). El total
+ *   se muestra con la promo; el servidor la vuelve a calcular.
  * - onRegistered(registro), onClose, onToast(msg, tipo)
  */
 export default function RegistrarServicioModal({
@@ -29,6 +32,8 @@ export default function RegistrarServicioModal({
   fixedProfessional = null,
   clients = [],
   paymentMethods = [],
+  promotions = [],
+  branches = [],
   onRegistered,
   onClose,
   onToast,
@@ -56,8 +61,26 @@ export default function RegistrarServicioModal({
   const requestIdRef = useRef(newRequestId());
 
   const professional = fixedProfessional || activePros.find((p) => p.id === professionalId) || null;
-  const total = estimateTotal(services, professional, selected);
+  const serviceDate = isAdmin && otherDate ? date : today;
+  const estimate = estimateWithPromotions(services, professional, selected, {
+    promotions, date: serviceDate, branch: professional?.branch || '', branches,
+  });
+  const total = estimate.total;
   const count = Object.keys(selected).length;
+  // Combos de hoy que este profesional puede hacer completos: un toque marca sus servicios.
+  const combos = useMemo(() => {
+    if (!professional) return [];
+    const doable = new Set(servicesOf(services, professional).map((s) => String(s.id)));
+    const branchId = resolveBranchId(professional.branch || '', branches);
+    return (promotions || []).filter((p) => p.type === 'combo'
+      && promotionAppliesOn(p, { date: serviceDate, branchId })
+      && (p.serviceIds || []).length > 1
+      && p.serviceIds.every((id) => doable.has(String(id))));
+  }, [promotions, professional, services, serviceDate, branches]);
+  const pickCombo = (combo) => {
+    setSelected((cur) => ({ ...cur, ...Object.fromEntries(combo.serviceIds.map((id) => [String(id), cur[String(id)] ?? ''])) }));
+    setPriceErrors({});
+  };
   const client = clientId ? clients.find((c) => c.id === clientId) : null;
   const filteredClients = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
@@ -154,6 +177,19 @@ export default function RegistrarServicioModal({
           </Field>
         )}
 
+        {professional && combos.length > 0 && (
+          <Field label="Combos">
+            <div className="flex flex-wrap gap-2">
+              {combos.map((c) => (
+                <button key={c.id} type="button" onClick={() => pickCombo(c)}
+                  className={chip(c.serviceIds.every((id) => String(id) in selected))}>
+                  {c.name} · Bs {Math.round(Number(c.comboPrice) * 100) / 100}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+
         {professional ? (
           <Field label={terms.t('service')} required>
             <ServicePicker
@@ -168,6 +204,13 @@ export default function RegistrarServicioModal({
         ) : (
           <p className="rounded-lg border border-dashed border-nexus-border px-3 py-4 text-center text-sm text-nexus-text-secondary">
             Elige {terms.g('professional', 'el', 'la')} {terms.tl('professional')} para ver sus {terms.tl('services')}.
+          </p>
+        )}
+
+        {estimate.promo && (
+          <p className="rounded-lg bg-nexus-success-bg px-3 py-2 text-sm text-nexus-success-text">
+            Promo «{estimate.promo.name}»: <span className="nx-num">Bs {Math.round(estimate.promo.discount * 100) / 100}</span> menos
+            <span className="nx-num text-nexus-text-muted"> (normal Bs {Math.round(estimate.normal * 100) / 100})</span>
           </p>
         )}
 

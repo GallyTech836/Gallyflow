@@ -52,3 +52,21 @@ export async function setPromotionActive(negocioId, id, active) {
 export async function deletePromotion(negocioId, id) {
   return deleteDoc(doc(db, 'negocios', negocioId, 'promociones', id));
 }
+
+/**
+ * Sucursales del negocio ({ id, name }), solo para resolver en qué sucursal
+ * vale una promoción. Se lee solo si `enabled` (alguna promo es por sucursal).
+ */
+export function usePromotionBranches(negocioId, enabled = true) {
+  const [branches, setBranches] = useState([]);
+  useEffect(() => {
+    if (!negocioId || !enabled) return undefined;
+    const unsub = onSnapshot(
+      collection(db, 'negocios', negocioId, 'sucursales'),
+      (snap) => setBranches(snap.docs.map((d) => ({ id: d.id, name: d.data()?.name || '' }))),
+      (err) => console.error('[promociones] sucursales:', err),
+    );
+    return () => unsub();
+  }, [negocioId, enabled]);
+  return branches;
+}

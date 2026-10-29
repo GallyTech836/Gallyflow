@@ -29,6 +29,8 @@ import { checkWorkingHours } from '../shared/appointments/workingHours';
 import { useConfirm, Modal, Button, Field, Input, SegmentedControl, LoadingState } from '../shared/ui';
 import CommissionPayModal from '../admin/cash/CommissionPayModal';
 import { collectMyCommissions } from '../shared/cash/staffCommissionApi';
+import { usePromotions, usePromotionBranches } from '../shared/promotions/usePromotions';
+import { priceWithPromotions, promoInputsChanged } from '../shared/promotions/citaPromotions';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import PersonalBookingLink from '../shared/booking/PersonalBookingLink';
@@ -272,6 +274,11 @@ export default function App() {
   const { businessSettings } = useBusinessSettings(negocioId);
   const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
   const { can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
+  // Promociones (si el plan las incluye): se aplican al guardar citas.
+  const promosOn = !planLoading && canUseCapability('promociones');
+  const { promotions: allPromotions } = usePromotions(negocioId, promosOn);
+  const activePromotions = promosOn ? allPromotions : [];
+  const promoBranches = usePromotionBranches(negocioId, activePromotions.some((p) => (p.branchIds || []).length > 0));
   // Tipo de negocio -> terminología (businessProfileModel).
   const businessProfile = useBusinessProfile(negocioId);
   const { t, tl, g } = businessProfile;
@@ -756,6 +763,14 @@ const fetchByDate = async (subcollection, date) => {
     const timeChanged = 'time' in payload && payload.time !== before?.time;
     const durationChanged = 'duration' in payload && (Number(payload.duration) || 0) !== (Number(before?.duration) || 0);
     if ((timeChanged || durationChanged) && !(await confirmOutsideHours({ date: managingAppt.date, time: managingAppt.time, duration: Number(managingAppt.duration) || 30 }))) return;
+    // Promociones: si cambian los servicios o la fecha, se recalculan.
+    const merged = { ...before, ...payload };
+    if (before && merged.status !== 'cancelled' && Array.isArray(merged.services) && merged.services.length && promoInputsChanged(before, merged)) {
+      const conPromo = priceWithPromotions(merged.services, activePromotions, { date: merged.date, branch: merged.branch, branches: promoBranches });
+      payload.services = conPromo.services;
+      payload.price = conPromo.price;
+      payload.promo = conPromo.promo || null;
+    }
     const changes = describeAppointmentChanges(before, { ...before, ...payload }, { terms: businessProfile });
     try {
       await updateDoc(doc(db, 'negocios', negocioId, 'citas', managingAppt.id), { ...payload, ...('status' in payload ? paymentStampFields(before, payload.status) : {}), updatedAt: new Date().toISOString() });
@@ -874,6 +889,13 @@ const fetchByDate = async (subcollection, date) => {
       branch: activeBarber.branch,
       bookedBy: 'barber',
     };
+    // Promociones del día y la sucursal, sobre el precio del profesional.
+    const conPromo = priceWithPromotions(newAppt.services || [], activePromotions, { date: newAppt.date, branch: newAppt.branch, branches: promoBranches });
+    if (conPromo.services.length) {
+      newAppt.services = conPromo.services;
+      newAppt.price = conPromo.price;
+      if (conPromo.promo) newAppt.promo = conPromo.promo;
+    }
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'citas'), newAppt);
       triggerToast(`${t('appointment')} ${g('appointment', 'agendado', 'agendada')} correctamente`);
@@ -1975,6 +1997,8 @@ const fetchByDate = async (subcollection, date) => {
           fixedProfessional={activeBarber}
           clients={clientes}
           paymentMethods={businessSettings?.paymentMethods}
+          promotions={activePromotions}
+          branches={promoBranches}
           onRegistered={() => setRegistrosTick(n => n + 1)}
           onClose={() => setRegistroModalOpen(false)}
           onToast={triggerToast}
