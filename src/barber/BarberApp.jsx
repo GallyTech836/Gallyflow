@@ -1029,14 +1029,18 @@ const fetchByDate = async (subcollection, date) => {
     });
 
     const finalizedAppts = barbtAppts.filter(a => a.status === STATUS.COMPLETED);
-    const finalizedWithCommission = finalizedAppts.map(item => {
-      const result = calculateCommissionForCita(item, activeBarber, services);
+    // Del más antiguo al más reciente (fecha y hora).
+    const ordenCita = (a) => `${a.date || ''} ${a.startTime || a.time || ''}`;
+    const finalizedWithCommission = finalizedAppts
+      .map(item => {
+        const result = calculateCommissionForCita(item, activeBarber, services);
 
-      return {
-        ...item,
-        commission: result.totalAmount
-      };
-    });
+        return {
+          ...item,
+          commission: result.totalAmount
+        };
+      })
+      .sort((a, b) => ordenCita(a).localeCompare(ordenCita(b)));
     const totalServicios = finalizedAppts.length;
 
     let comisionTotal = 0;
@@ -1106,10 +1110,10 @@ const fetchByDate = async (subcollection, date) => {
       paymentDistribution[appt.paymentMethod || "Efectivo"] = (paymentDistribution[appt.paymentMethod || "Efectivo"] || 0) + appt.price;
     });
 
-    const barData = Object.keys(paymentDistribution).map(key => ({
-      name: key,
-      monto: paymentDistribution[key]
-    }));
+    // De mayor a menor, para usar la misma escala de grises que el donut.
+    const barData = Object.keys(paymentDistribution)
+      .map(key => ({ name: key, monto: paymentDistribution[key] }))
+      .sort((a, b) => b.monto - a.monto);
 
     const totalServicios = barbtAppts.length;
     const totalGanado = barbtAppts.reduce((sum, item) => sum + Number(item.price || 0), 0);
@@ -1741,11 +1745,8 @@ const fetchByDate = async (subcollection, date) => {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <h3 className="text-base font-bold text-nexus-text">Transacciones y comisiones</h3>
-                      <p className="text-xs text-nexus-text-muted">{`${t('services')} ${g('service', 'finalizados', 'finalizadas')} en este periodo.`}</p>
-                    </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="min-w-0 text-base font-bold text-nexus-text truncate">{t('services')}</h3>
                     {commissionSummary.allFinalized.some(item => !item.commissionPaid && !isRegistro(item)) && (
                       <Button size="sm" icon={Icons.Check} onClick={markAllCommissionsPaid} disabled={collectingAll}>
                         {collectingAll ? 'Cobrando...' : `Cobrar todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid && !isRegistro(item)).length})`}
@@ -1861,6 +1862,9 @@ const fetchByDate = async (subcollection, date) => {
                             <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E9EDF2', borderRadius: '12px', fontSize: '11px' }} />
                             <Bar dataKey="monto" fill={nexusChartColors.primary} radius={[8, 8, 0, 0]}>
+                              {performanceData.barData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                              ))}
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>
