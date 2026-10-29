@@ -2006,7 +2006,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     if (e) e.preventDefault();
     if (imageUploading) return;
     if (!newBranch?.name?.trim() || !newBranch?.address?.trim()) {
-      triggerToast('Por favor complete todos los campos obligatorios.', 'error');
+      triggerToast('Completa los campos obligatorios.', 'error');
       return;
     }
 
@@ -2224,7 +2224,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         }
     const pinExists = barbers.some(b => b.id !== editingBarberId && b.pin === newBarber.pin);
     if (pinExists) {
-      triggerToast(`El PIN biométrico ya está registrado por ${g('professional', 'otro', 'otra')} ${tl('professional')}.`, 'error');
+      triggerToast(`Ese PIN ya lo usa ${g('professional', 'otro', 'otra')} ${tl('professional')}.`, 'error');
       return false;
     }
     return true;
@@ -2437,7 +2437,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     if (e) e.preventDefault();
     const barber = barbers.find(b => b.pin === assistPin);
     if (!barber) {
-      triggerToast('PIN incorrecto. Intente de nuevo.', 'error');
+      triggerToast('PIN incorrecto. Intenta de nuevo.', 'error');
       return;
     }
 
@@ -3869,12 +3869,12 @@ const { heroConfig } = useHeroConfig(negocioId);
           {activeTab === 'assistance' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-nexus-surface p-4 border border-nexus-border rounded-xl">
-                <h3 className="text-base font-semibold text-nexus-text">Control biométrico de asistencias</h3>
+                <h3 className="text-base font-semibold text-nexus-text">Asistencia</h3>
                 <button
                   onClick={() => setActiveModal('assistance')}
                   className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary text-white font-extrabold rounded-lg text-sm shadow-md cursor-pointer font-bold"
                 >
-                  Marcar PIN Asistencia
+                  Marcar asistencia
                 </button>
               </div>
 
@@ -4059,8 +4059,8 @@ const { heroConfig } = useHeroConfig(negocioId);
       {activeModal === 'add-blockout' && (
         <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div role="dialog" aria-modal="true" className="max-h-[92dvh] overflow-y-auto bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 relative shadow-xl">
-            <h3 className="text-base font-bold text-nexus-error-text mb-1 nx-num">Bloquear Horario Administrativo</h3>
-            <p className="text-xs text-nexus-text-secondary mb-4">Evita que se agenden reservas en este rango de tiempo.</p>
+            <h3 className="text-base font-bold text-nexus-error-text mb-1 nx-num">Bloquear horario</h3>
+            <p className="text-xs text-nexus-text-secondary mb-4">Nadie podrá reservar en ese horario.</p>
 
             <form onSubmit={handleCreateBlockout} className="space-y-3.5">
               <div>
@@ -4071,7 +4071,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   onChange={(e) => setBlockoutForm(prev => ({ ...prev, barberId: e.target.value }))}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none px-3 h-10 text-base sm:text-sm"
                 >
-                  <option value="">Seleccione {t('professional')}...</option>
+                  <option value="">Elige {tl('professional')}...</option>
                   {(branchBarbers || []).filter(b => b?.active).map(b => (
                     <option key={b?.id} value={b?.id}>{b?.name}</option>
                   ))}
@@ -4079,7 +4079,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               </div>
 
               <div>
-                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Motivo / Razón del Bloqueo *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Motivo *</label>
                 <input 
                   type="text" 
                   required
@@ -4092,7 +4092,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Hora Inicio *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Hora de inicio *</label>
                   <input 
                     type="time" 
                     required
@@ -4103,7 +4103,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
 
                 <div>
-                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Hora Fin *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Hora de fin *</label>
                   <input 
                     type="time" 
                     required
@@ -4126,7 +4126,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   type="submit" 
                   className="inline-flex h-10 items-center justify-center gap-1.5 px-4  bg-nexus-error text-white text-sm font-bold rounded-lg hover:opacity-90 cursor-pointer"
                 >
-                  Bloquear Horario
+                  Bloquear horario
                 </button>
               </div>
             </form>
@@ -4138,7 +4138,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       {activeModal === 'slot-actions' && (
         <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div role="dialog" aria-modal="true" className="max-h-[92dvh] overflow-y-auto bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xs p-5 relative shadow-xl text-center">
-            <h4 className="text-sm font-bold text-nexus-text mb-1">Gestión de Horario</h4>
+            <h4 className="text-sm font-bold text-nexus-text mb-1">Horario</h4>
             <p className="text-xs text-nexus-text-secondary nx-num mb-4">Bloque: {clickedSlot?.time} ({selectedDate})</p>
 
             <div className="space-y-2">
@@ -4200,9 +4200,8 @@ const { heroConfig } = useHeroConfig(negocioId);
               <div>
                 <h3 className="text-base font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
                   <UserPlus className="w-5 h-5 text-nexus-primary" />
-                  {editingBarberId ? `Editar Perfil ${g('professional', 'del', 'de la')} ${t('professional')}` : `Registrar ${g('professional', 'Nuevo', 'Nueva')} ${t('professional')}`}
+                  {editingBarberId ? `Editar ${tl('professional')}` : `${g('professional', 'Nuevo', 'Nueva')} ${tl('professional')}`}
                 </h3>
-                <p className="text-xs text-nexus-text-secondary">Complete los pasos para configurar el perfil {g('professional', 'del', 'de la')} {tl('professional')}.</p>
               </div>
 
               <div className={`grid ${lastBarberStep === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 text-xs sm:text-sm w-full md:flex md:items-center md:gap-2.5 md:w-auto`}>
@@ -4289,8 +4288,8 @@ const { heroConfig } = useHeroConfig(negocioId);
                       </div>
                     </div>
                     <div className="text-xs text-nexus-text-secondary mt-2">
-                      <span className="text-nexus-primary font-bold block mb-1">Subir Archivo</span>
-                      Suelte su imagen aquí o haga clic para buscar.
+                      <span className="text-nexus-primary font-bold block mb-1">Subir foto</span>
+                      Arrastra una imagen o toca para elegirla.
                     </div>
                   </div>
 
@@ -4322,7 +4321,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre de Usuario Comercial</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Usuario</label>
                         <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg h-10 px-3 text-sm text-nexus-text-secondary font-semibold select-none">
                           <span>@</span>
                           <input 
@@ -4335,7 +4334,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Sucursal Activa *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Sucursal *</label>
                         <select 
                           value={newBarber.branch}
                           onChange={(e) => setNewBarber(prev => ({ ...prev, branch: e.target.value }))}
@@ -4350,7 +4349,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
                     <div className="grid grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">PIN de Asistencia Biométrica</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">PIN de asistencia</label>
                         <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg overflow-hidden pr-1.5">
                           <input 
                             type="text"
@@ -4374,7 +4373,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Estado de Incorporación</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Estado</label>
                         <div className="flex items-center gap-2 mt-2">
                           <button 
                             type="button"
@@ -4388,7 +4387,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                             )}
                           </button>
                           <span className="text-xs font-bold text-nexus-text nx-num">
-                            {newBarber.active ? 'Habilitado para trabajar' : 'Suspendido / No activo'}
+                            {newBarber.active ? g('professional', 'Activo', 'Activa') : g('professional', 'Inactivo', 'Inactiva')}
                           </span>
                         </div>
                       </div>
@@ -4421,7 +4420,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Confirmar Contraseña *</label>
+                        <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Confirmar contraseña *</label>
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <KeyRound className="w-3.5 h-3.5 text-nexus-text-muted" />
@@ -4459,7 +4458,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                         onClick={() => setNewBarber(prev => ({ ...prev, services: [] }))}
                         className="text-xs py-2 text-nexus-error-text font-bold hover:underline"
                       >
-                        Limpiar Selección
+                        Limpiar selección
                       </button>
                     </div>
 
@@ -4519,7 +4518,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                             </div>
 
                             <div className="pt-2 border-t border-nexus-border flex items-center justify-between">
-                              <span className="text-xs text-nexus-text-secondary font-bold nx-num">Personalizar Comisión</span>
+                              <span className="text-xs text-nexus-text-secondary font-bold nx-num">Personalizar comisión</span>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -4557,11 +4556,11 @@ const { heroConfig } = useHeroConfig(negocioId);
                                     className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text px-3 h-10 text-base sm:text-sm"
                                   >
                                     <option value="%">Porcentaje %</option>
-                                    <option value="Bs">Monto Fijo (Bs)</option>
+                                    <option value="Bs">Monto fijo (Bs)</option>
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="text-xs text-nexus-text-muted font-bold nx-num">Valor Comisión</label>
+                                  <label className="text-xs text-nexus-text-muted font-bold nx-num">Comisión</label>
                                   <input 
                                     type="number"
                                     value={assigned.value}
@@ -4608,7 +4607,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                           }}
                           className="text-xs py-2 text-nexus-primary font-bold hover:underline cursor-pointer"
                         >
-                          Seleccionar Todos
+                          Seleccionar todos
                         </button>
                       </div>
 
@@ -4703,8 +4702,8 @@ const { heroConfig } = useHeroConfig(negocioId);
                 <div className="bg-nexus-background border border-nexus-border rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h4 className="text-xs font-semibold text-nexus-text-secondary ">Configuración de Horarios Laborales</h4>
-                      <p className="text-xs text-nexus-text-muted">Ajuste la disponibilidad semanal que se mostrará en los turnos de la agenda.</p>
+                      <h4 className="text-xs font-semibold text-nexus-text-secondary ">Horario de trabajo</h4>
+                      <p className="text-xs text-nexus-text-muted">Días y horas en que atiende.</p>
                     </div>
                   </div>
 
@@ -4903,7 +4902,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                     onClick={handleSaveBarber}
                     className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md transition-all cursor-pointer font-bold"
                   >
-                    {editingBarberId ? 'Guardar Cambios' : `Crear ${t('professional')}`}
+                    {editingBarberId ? 'Guardar cambios' : `Crear ${tl('professional')}`}
                   </button>
                 )}
               </div>
@@ -4921,13 +4920,12 @@ const { heroConfig } = useHeroConfig(negocioId);
                     <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg p-5 sm:p-6 relative shadow-xl max-h-[92dvh] overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <Building2 className="w-5 h-5 text-nexus-primary" />
-              {editingBranchId ? 'Editar Sucursal' : 'Crear Nueva Sucursal'}
+              {editingBranchId ? 'Editar sucursal' : 'Nueva sucursal'}
             </h3>
-            <p className="text-xs text-nexus-text-secondary mb-4">Complete la información física y de contacto comercial.</p>
 
             <form onSubmit={handleCreateBranch} className="space-y-4">
               <div>
-                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre de la Sucursal *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Nombre *</label>
                 <input 
                   type="text" 
                   required
@@ -4949,7 +4947,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               />
 
               <div>
-                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Teléfono de Sucursal</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Teléfono</label>
                 <div className="flex items-center bg-nexus-background border border-nexus-border rounded-lg px-2.5 gap-2">
                   {detectedBranchCountry && (
                     <div className="flex items-center gap-1 shrink-0 text-xs">
@@ -4970,13 +4968,13 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
                 {detectedBranchCountry && (
                   <span className="text-xs text-nexus-primary font-bold mt-1 block">
-                    Ubicación del prefijo comercial detectado ({detectedBranchCountry?.country})
+                    País: {detectedBranchCountry?.country}
                   </span>
                 )}
               </div>
 
               <div>
-                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Horario de Atención</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Horario de atención</label>
                 <input 
                   type="text" 
                   placeholder="Ej. Lunes a Sábado, 09:00 - 20:00"
@@ -4996,11 +4994,11 @@ const { heroConfig } = useHeroConfig(negocioId);
                   onChange={(e) => setNewBranch(prev => ({ ...prev, mapsUrl: e.target.value }))}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
-                <p className="text-xs text-nexus-text-muted mt-1">En Google Maps: Compartir → Copiar enlace. Si lo dejas vacío se usa la dirección/ubicación del mapa.</p>
+                <p className="text-xs text-nexus-text-muted mt-1">En Google Maps: Compartir → Copiar enlace. Si lo dejas vacío, se usa la dirección.</p>
               </div>
 
               <div className="relative">
-                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Ubicación / Dirección Física *</label>
+                <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Dirección *</label>
                 <div className="relative flex items-center">
                   <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
                     <MapPin className="w-4 h-4 text-nexus-error" />
@@ -5008,7 +5006,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   <input 
                     type="text" 
                     required
-                    placeholder="Escriba dirección de búsqueda (ej. Central, Equipetrol)..."
+                    placeholder="Busca la dirección (ej. Equipetrol)"
                     value={locationSearch}
                     onChange={(e) => {
                       setLocationSearch(e.target.value);
@@ -5045,7 +5043,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                       </div>
                     ))}
                     {filteredSimulatedLocations.length === 0 && (
-                      <p className="p-3 text-xs text-nexus-text-muted text-center">No hay sugerencias con esa dirección. Intente otra calle.</p>
+                      <p className="p-3 text-xs text-nexus-text-muted text-center">Sin resultados. Prueba con otra calle.</p>
                     )}
                   </div>
                 )}
@@ -5053,8 +5051,8 @@ const { heroConfig } = useHeroConfig(negocioId);
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-xs text-nexus-text-muted font-bold">Mapa Interactivo de Coordenadas</label>
-                  <span className="text-xs text-nexus-primary nx-num">Zoom, arrastra el pin o haz clic para reubicar</span>
+                  <label className="text-xs text-nexus-text-muted font-bold">Ubicación en el mapa</label>
+                  <span className="text-xs text-nexus-primary nx-num">Mueve el pin para ajustar</span>
                 </div>
                 
                 <div className="relative h-48 w-full rounded-xl overflow-hidden border border-nexus-border bg-nexus-background z-10">
@@ -5083,7 +5081,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   type="submit" 
                   className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
-                  {imageUploading ? 'Subiendo foto…' : editingBranchId ? 'Guardar Cambios' : 'Crear Sucursal'}
+                  {imageUploading ? 'Subiendo foto…' : editingBranchId ? 'Guardar cambios' : 'Crear sucursal'}
                 </button>
               </div>
             </form>
@@ -5126,9 +5124,8 @@ const { heroConfig } = useHeroConfig(negocioId);
                     <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 sm:p-6 relative shadow-xl max-h-[92dvh] overflow-y-auto">
             <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
               <ServiceIcon className="w-5 h-5 text-nexus-primary" />
-              {editingServiceId ? `Editar ${t('service')}` : `Crear ${g('service', 'Nuevo', 'Nueva')} ${t('service')}`}
+              {editingServiceId ? `Editar ${tl('service')}` : `${g('service', 'Nuevo', 'Nueva')} ${tl('service')}`}
             </h3>
-            <p className="text-xs text-nexus-text-secondary mb-4">Ingrese los detalles y la disponibilidad semanal {g('service', 'del', 'de la')} {tl('service')}.</p>
             
             <form onSubmit={handleCreateService} className="space-y-4">
               <div>
@@ -5169,7 +5166,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
 
                 <div>
-                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Tiempo de Duración *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Duración *</label>
                   <select 
                     required
                     value={newService.duration}
@@ -5195,7 +5192,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   onChange={(e) => setNewService(prev => ({ ...prev, priceVariable: e.target.checked }))}
                 />
                 <span className="text-xs text-nexus-text-secondary leading-snug">
-                  <strong className="text-nexus-text">Precio variable.</strong> El precio ingresado es el mínimo y se mostrará como
+                  <strong className="text-nexus-text">Precio variable.</strong> Se muestra como
                   {' '}<span className="nx-num text-nexus-primary">Desde Bs {newService.price || 'XX'}</span>.
                 </span>
               </label>
@@ -5205,7 +5202,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               {!registrosMode && (
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-xs text-nexus-text-secondary font-bold">Disponibilidad por Días *</label>
+                  <label className="text-xs text-nexus-text-secondary font-bold">Días disponibles *</label>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -5269,7 +5266,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   type="submit" 
                   className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
                 >
-                  {imageUploading ? 'Subiendo foto…' : editingServiceId ? 'Guardar Cambios' : `Crear ${t('service')}`}
+                  {imageUploading ? 'Subiendo foto…' : editingServiceId ? 'Guardar cambios' : `Crear ${tl('service')}`}
                 </button>
               </div>
             </form>
@@ -5282,8 +5279,8 @@ const { heroConfig } = useHeroConfig(negocioId);
       {activeModal === 'assistance' && (
         <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full max-w-sm p-5 relative shadow-xl">
-            <h3 className="text-base font-bold text-nexus-text mb-1">Biométrico de Asistencia</h3>
-            <p className="text-xs text-nexus-text-secondary mb-4">Ingresa tu PIN personal para autorizar el marcaje de hoy.</p>
+            <h3 className="text-base font-bold text-nexus-text mb-1">Marcar asistencia</h3>
+            <p className="text-xs text-nexus-text-secondary mb-4">Ingresa tu PIN.</p>
             <form onSubmit={handleRegisterAttendance} className="space-y-3.5">
               <div className="grid grid-cols-2 gap-1.5 p-1 bg-nexus-background rounded-lg border border-nexus-border mb-3">
                 <button type="button" onClick={() => setAssistType('in')} className={`py-1 rounded text-xs font-bold transition-all cursor-pointer ${assistType === 'in' ? 'bg-nexus-primary-soft text-nexus-primary' : 'text-nexus-text-secondary'}`}>Entrada</button>

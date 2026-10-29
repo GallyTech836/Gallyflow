@@ -855,11 +855,11 @@ export default function App({ negocioSlug, proId } = {}) {
               </button>
               <h2 className="min-w-0 flex-1 text-2xl font-extrabold text-nexus-text leading-tight break-words">
                 {({
-                  1: 'Selecciona Sucursal',
-                  2: `Selecciona ${businessProfile.t('professional')}`,
-                  3: `Selecciona ${businessProfile.t('services')}`,
-                  4: 'Fecha & Hora',
-                  5: 'Confirmar Reserva',
+                  1: 'Elige la sucursal',
+                  2: `Elige ${businessProfile.tl('professional')}`,
+                  3: `Elige ${businessProfile.tl('services')}`,
+                  4: 'Fecha y hora',
+                  5: 'Confirmar reserva',
                 })[step]}
               </h2>
               <span className="shrink-0 pl-2 text-xs text-nexus-text-secondary font-bold nx-num">Paso {visibleSteps.indexOf(step) + 1}/{visibleSteps.length}</span>
@@ -960,7 +960,6 @@ const BranchStep = ({ branches, selected, setSelected, onNext }) => {
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <p className="text-xs text-nexus-text-secondary mb-5">Elige el local donde quieres realizar tu {terms.tl('appointment')}.</p>
 
       {branches.length === 0 ? (
         <p className="text-center py-8 text-xs text-nexus-text-muted">No hay sucursales disponibles por el momento.</p>
@@ -1033,7 +1032,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir múltiples {terms.tl('services')} para tu {terms.tl('appointment')}.</p>
+      <p className="text-xs text-nexus-text-secondary mb-5">Puedes elegir {terms.g('service', 'varios', 'varias')}.</p>
       
       <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
         {services.map((s) => {
@@ -1100,7 +1099,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
           <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
         </div>
         <div className="text-right">
-          <span className="text-nexus-text-muted text-xs block font-semibold">Total Estimado</span>
+          <span className="text-nexus-text-muted text-xs block font-semibold">Total estimado</span>
           <span className="text-xl font-bold text-nexus-text">{formatAmountRange(total, totalMax ?? total, hasVariable)}</span>
         </div>
       </div>
@@ -1189,7 +1188,7 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
         onClick={onNext}
         className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
       >
-        <span>Siguiente Paso</span>
+        <span>Continuar</span>
         <ChevronRight size={16} />
       </button>
     </div>
@@ -1244,7 +1243,6 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
   return (
     <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
       <div>
-        <p className="text-xs text-nexus-text-secondary mb-4">Elige la fecha de tu preferencia en el calendario.</p>
         
         <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
@@ -1315,7 +1313,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         {date ? (
           hours.length > 0 ? (
             <div className="space-y-2">
-              <span className="text-xs text-nexus-text-secondary font-bold block">Horas Disponibles</span>
+              <span className="text-xs text-nexus-text-secondary font-bold block">Horarios disponibles</span>
               <div className="grid grid-cols-4 gap-2">
                 {hours.map((h) => (
                   <button 
@@ -1336,7 +1334,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
             <p className="text-center py-4 text-xs text-nexus-text-muted">{terms.g('professional', 'Este', 'Esta')} {terms.tl('professional')} no tiene horario disponible ese día.</p>
           )
         ) : (
-          <p className="text-center py-4 text-xs text-nexus-text-muted">Selecciona un día del calendario para ver horarios.</p>
+          <p className="text-center py-4 text-xs text-nexus-text-muted">Elige un día para ver los horarios.</p>
         )}
       </div>
 
@@ -1347,7 +1345,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
           onClick={onNext}
           className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm sm:text-base rounded-2xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 shadow-md active:scale-[0.97] flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
         >
-          <span>Siguiente Paso</span>
+          <span>Continuar</span>
           <ChevronRight size={16} />
         </button>
       </div>
@@ -1418,11 +1416,10 @@ const ConfirmStep = ({
   return (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <p className="text-xs text-nexus-text-secondary mb-5">Ingresa tus datos personales de contacto para asegurar el agendamiento.</p>
       
       <form onSubmit={onConfirm} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-xs text-nexus-primary font-bold block">Nombre Completo *</label>
+          <label className="text-xs text-nexus-primary font-bold block">Nombre completo *</label>
           <input 
             type="text" 
             required
@@ -1434,7 +1431,7 @@ const ConfirmStep = ({
         </div>
 
         <div className="space-y-1.5">
-        <label className="text-xs text-nexus-primary font-bold block">Teléfono / Celular *</label>
+        <label className="text-xs text-nexus-primary font-bold block">Celular *</label>
           <input 
             type="tel" 
             required
@@ -1457,7 +1454,7 @@ const ConfirmStep = ({
             <span className="font-bold text-nexus-text">{selectedBarber?.name}</span>
           </div>
           <div className="flex justify-between pb-2 border-b border-nexus-border">
-            <span className="font-semibold text-nexus-text-secondary">Fecha y Hora:</span>
+            <span className="font-semibold text-nexus-text-secondary">Fecha y hora:</span>
             <span className="font-bold text-nexus-primary">{selectedDate} - {selectedHour} Hrs</span>
           </div>
           
@@ -1518,7 +1515,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
 
       <div className="space-y-2">
         <h2 className="text-3xl font-extrabold text-nexus-text tracking-tight">
-          ¡Reserva Confirmada!
+          ¡Reserva confirmada!
         </h2>
 
         <p className="text-nexus-text-secondary text-xs leading-relaxed max-w-xs mx-auto">
@@ -1544,7 +1541,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           )}
           {(fechaLegible || selectedHour) && (
             <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
-              <span className="font-semibold text-nexus-text-secondary shrink-0">Fecha y Hora:</span>
+              <span className="font-semibold text-nexus-text-secondary shrink-0">Fecha y hora:</span>
               <span className="font-bold text-nexus-primary text-right">
                 {fechaLegible}{selectedHour ? ` · ${selectedHour} Hrs` : ''}
               </span>
@@ -1585,7 +1582,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
           onClick={onReset}
           className="w-full py-5 sm:py-5.5 px-8 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-xs sm:text-sm rounded-2xl transition-all active:scale-[0.97]"
         >
-          Volver al Inicio
+          Volver al inicio
         </button>
       </div>
       </div>

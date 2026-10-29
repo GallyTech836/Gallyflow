@@ -143,7 +143,7 @@ function CashOutModal({ onClose, onDone }) {
         <Field label="Motivo" hint="Por ejemplo: compra de insumos, adelanto a un profesional." error={error}>
           <Input value={reason} maxLength={120} onChange={(e) => setReason(e.target.value)} />
         </Field>
-        <p className="text-xs text-nexus-text-muted">Las comisiones se pagan desde la pestaña Comisiones; si las pagas en efectivo, la salida aparece aquí sola.</p>
+        <p className="text-xs text-nexus-text-muted">Las comisiones pagadas en efectivo aparecen aquí solas.</p>
       </div>
     </Modal>
   );
@@ -229,7 +229,7 @@ function CorrectionForm({ session, onCancel, onSaved }) {
   return (
     <div className="space-y-3 rounded-xl border border-nexus-warning/40 bg-nexus-warning-bg/40 p-3">
       <p className="text-sm font-semibold text-nexus-text">Corregir este cierre</p>
-      <p className="text-xs text-nexus-text-secondary">El cierre original se conserva. La corrección queda registrada con tu usuario, la hora y el motivo.</p>
+      <p className="text-xs text-nexus-text-secondary">El cierre original no se borra; la corrección queda registrada.</p>
       <div className="grid grid-cols-3 gap-2">
         <Field label="Contado"><Input type="number" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} /></Field>
         <Field label="Sobre"><Input type="number" inputMode="decimal" value={envelope} onChange={(e) => setEnvelope(e.target.value)} /></Field>

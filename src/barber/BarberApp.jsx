@@ -1366,8 +1366,7 @@ const fetchByDate = async (subcollection, date) => {
                   
                   /* ================= VISTA ANUAL SIMPLE ================= */
                   <BarberYearCards
-                    title={`Distribución de Reservas Anuales (${new Date(selectedDate + "T00:00:00").getFullYear()})`}
-                    subtitle="Cantidad total de reservas completadas y agendadas distribuidas por mes."
+                    title={`Reservas por mes (${new Date(selectedDate + "T00:00:00").getFullYear()})`}
                     unitLabel="Reservas"
                     countFor={(monthIndex) => {
                       const targetYear = new Date(selectedDate + "T00:00:00").getFullYear();
@@ -1505,7 +1504,6 @@ const fetchByDate = async (subcollection, date) => {
                       <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-8 text-center">
                         <Icons.Calendar className="w-8 h-8 text-nexus-text-muted mx-auto mb-2" />
                         <p className="text-sm font-semibold text-nexus-text">No trabajas este día</p>
-                        <p className="text-sm text-nexus-text-secondary mt-1">Según tu horario configurado no hay turnos para {dayName.toLowerCase()}.</p>
                       </div>
                     ) : (
                     <div className="bg-nexus-surface border border-nexus-border rounded-2xl overflow-hidden shadow-sm">
@@ -1734,7 +1732,7 @@ const fetchByDate = async (subcollection, date) => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <h3 className="text-base font-bold text-nexus-text">Transacciones & Comisiones</h3>
+                      <h3 className="text-base font-bold text-nexus-text">Transacciones y comisiones</h3>
                       <p className="text-xs text-nexus-text-muted">{`${t('services')} ${g('service', 'finalizados', 'finalizadas')} en este periodo.`}</p>
                     </div>
                     {commissionSummary.allFinalized.some(item => !item.commissionPaid && !isRegistro(item)) && (
@@ -1817,7 +1815,7 @@ const fetchByDate = async (subcollection, date) => {
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-nexus-text-muted font-bold">Facturado Total</span>
+                      <span className="text-xs text-nexus-text-muted font-bold">Total facturado</span>
                       <span className="block text-3xl font-bold text-nexus-success-text mt-1">{performanceData.totalGanado}Bs</span>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-nexus-success-bg flex items-center justify-center text-nexus-success-text">
@@ -1845,8 +1843,7 @@ const fetchByDate = async (subcollection, date) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
-                      <h4 className="text-sm font-bold text-nexus-text">Ingresos por Método de Pago (Bs)</h4>
-                      <p className="text-xs text-nexus-text-muted">Monto total facturado por caja.</p>
+                      <h4 className="text-sm font-bold text-nexus-text">Ingresos por método de pago (Bs)</h4>
                     </div>
                     <div className="h-64">
                       {performanceData.totalServicios === 0 ? (
@@ -1872,8 +1869,7 @@ const fetchByDate = async (subcollection, date) => {
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-3xl p-5 space-y-4">
                     <div>
-                      <h4 className="text-sm font-bold text-nexus-text">{t('services')} más {g('service', 'Solicitados', 'Solicitadas')}</h4>
-                      <p className="text-xs text-nexus-text-muted">Distribución de {tl('services')} {g('service', 'realizados', 'realizadas')}.</p>
+                      <h4 className="text-sm font-bold text-nexus-text">{t('services')} más {g('service', 'pedidos', 'pedidas')}</h4>
                     </div>
                     <div className="h-64 flex items-center justify-center relative">
                       {performanceData.totalServicios === 0 ? (
@@ -1954,27 +1950,13 @@ const fetchByDate = async (subcollection, date) => {
 
                 <ActiveSessions />
 
-                <div className="space-y-3 pt-4">                  <button 
-                    onClick={() => triggerToast(`Tutorial de la App: ¡Prueba agendar ${g('appointment', 'un', 'una')} ${tl('appointment')} o completar ${g('service', 'un', 'una')} ${tl('service')}!`, "info")}
-                    className="w-full py-3 px-4 bg-nexus-primary-soft hover:opacity-80 border border-nexus-primary/30 text-nexus-primary font-bold text-sm rounded-xl transition-all"
-                  >
-                    Ver Tutorial
-                  </button>
-
-                  <button 
-                    onClick={() => triggerToast("Conexión de seguridad establecida con éxito", "success")}
-                    className="w-full py-3 px-4 bg-nexus-surface-hover hover:bg-nexus-border border border-nexus-border text-nexus-text-secondary font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <Icons.Shield className="w-4 h-4 text-nexus-primary" />
-                    Estado del Sistema
-                  </button>
-
+                <div className="space-y-3 pt-4">
                   <button
                     onClick={logout}
                     className="w-full py-3 px-4 bg-nexus-error-bg hover:opacity-80 border border-nexus-error/30 text-nexus-error-text font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
                    >
                     <LogOut className="w-4 h-4" />
-                    Cerrar Sesión
+                    Cerrar sesión
                   </button>
                 </div>
               </div>
@@ -2137,7 +2119,6 @@ const fetchByDate = async (subcollection, date) => {
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-bold text-nexus-text">{g('client', 'Nuevo', 'Nueva')} {t('client')}</h3>
-                <p className="text-xs text-nexus-text-muted">Registrar un nuevo perfil en el sistema</p>
               </div>
               <button 
                 onClick={() => setIsNewClientModalOpen(false)}
