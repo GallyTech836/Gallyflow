@@ -4253,7 +4253,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             <p className="text-sm text-nexus-text-secondary">Pásale estos datos. Por seguridad, la contraseña no se volverá a mostrar.</p>
             <div className="bg-nexus-background border border-nexus-border rounded-lg p-3">
               <p className="text-xs text-nexus-text-secondary">Usuario</p>
-              <p className="text-sm font-bold text-nexus-text">@{credentialNotice.username}</p>
+              <p className="text-sm font-bold text-nexus-text">{credentialNotice.username}</p>
               <p className="text-xs text-nexus-text-secondary mt-2">Contraseña</p>
               <p className="text-sm font-bold text-nexus-text nx-num tracking-wide">{credentialNotice.password}</p>
             </div>
@@ -4395,13 +4395,12 @@ const { heroConfig } = useHeroConfig(negocioId);
                       <div>
                         <label className="text-xs text-nexus-text-secondary font-bold block mb-1">Usuario</label>
                         <div className="flex items-center bg-nexus-surface border border-nexus-border rounded-lg h-10 px-3 text-sm text-nexus-text-secondary font-semibold select-none">
-                          <span>@</span>
                           <input 
                             type="text"
                             readOnly
                             value={newBarber.username}
                             placeholder="sofia.mendez"
-                            className="bg-transparent border-none outline-none text-nexus-primary ml-1 w-full font-semibold text-sm"
+                            className="bg-transparent border-none outline-none text-nexus-primary w-full font-semibold text-sm"
                           />
                         </div>
                       </div>

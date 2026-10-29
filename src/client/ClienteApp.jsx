@@ -1108,7 +1108,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
             {terms.t('services')}
           </button>
           <button type="button" role="tab" aria-selected={tab === 'combos'} onClick={() => setTab('combos')} className={tabChip(tab === 'combos')}>
-            Combos <span className="nx-num opacity-70">({combos.length})</span>
+            Combos
           </button>
         </div>
       )}
