@@ -1263,7 +1263,7 @@ const fetchByDate = async (subcollection, date) => {
   }
 
   if (isBlocked) {
-    return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
+    return <SuspendedScreen variant="staff" status={negocioStatus} onLogout={logout} />;
   }
 
   // Capacidad `appProfesionales`: el plan decide si el staff puede usar su panel.

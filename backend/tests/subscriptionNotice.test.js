@@ -280,6 +280,37 @@ describe('caso real torricogali (29/10/2026)', () => {
   });
 });
 
+describe('GET /support-contact (pantalla de bloqueado)', () => {
+  beforeEach(() => db._clear());
+  const texto = (url) => decodeURIComponent(url.split('?text=')[1]);
+
+  test('vencido: enlace con "renovar" aunque el negocio esté bloqueado', async () => {
+    db._set('plataforma/soporte', { whatsapp: '59170000000' });
+    setNegocio({ status: 'active', subscriptionEnd: addDays(HOY, -3) });
+    const r = await call('GET', '/support-contact');
+    assert.equal(r.status, 200);
+    assert.match(r.body.whatsappUrl, /^https:\/\/wa\.me\/59170000000\?text=/);
+    assert.equal(texto(r.body.whatsappUrl), 'Hola, soy de Barbería Sol. Quiero renovar mi suscripción de Nexus.');
+  });
+
+  test('suspendido: enlace con "reactivar"', async () => {
+    db._set('plataforma/soporte', { whatsapp: '59170000000' });
+    setNegocio({ status: 'suspended' });
+    const r = await call('GET', '/support-contact');
+    assert.equal(texto(r.body.whatsappUrl), 'Hola, soy de Barbería Sol. Quiero reactivar mi cuenta de Nexus.');
+  });
+
+  test('sin número configurado: whatsappUrl null', async () => {
+    setNegocio({ status: 'suspended' });
+    assert.deepEqual((await call('GET', '/support-contact')).body, { whatsappUrl: null });
+  });
+
+  test('profesional: 401', async () => {
+    setNegocio({ status: 'suspended' });
+    assert.equal((await call('GET', '/support-contact', {}, BARBER)).status, 401);
+  });
+});
+
 // ───────────────────────── Super Admin ─────────────────────────
 
 describe('Super Admin: soporte y avisos', () => {

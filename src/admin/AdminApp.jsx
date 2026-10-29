@@ -22,6 +22,7 @@ import { useNegocioStatus } from '../shared/negocioStatus/useNegocioStatus';
 import { useNegocioPlan, hasFeature, getFeatureLimit } from '../shared/negocioPlan/useNegocioPlan';
 import SuspendedScreen from '../shared/negocioStatus/SuspendedScreen';
 import SubscriptionNoticeModal from '../shared/subscriptionNotice/SubscriptionNoticeModal';
+import { useSupportContact } from '../shared/subscriptionNotice/useSupportContact';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
@@ -146,6 +147,7 @@ const { logout } = useAuth();
   const [confirmAction, confirmDialog] = useConfirm();
   const ServiceIcon = getServiceIcon(businessProfile.type);
   const { isBlocked, status: negocioStatus, statusKey } = useNegocioStatus(negocioId);
+  const supportUrl = useSupportContact(isBlocked);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 console.log('[ADMIN] negocioId:', negocioId);
 const [activeTab, setActiveTab] = useState('agenda');
@@ -2588,7 +2590,14 @@ const { heroConfig } = useHeroConfig(negocioId);
 
 
   if (isBlocked) {
-    return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
+    return (
+      <SuspendedScreen
+        variant="admin"
+        status={negocioStatus}
+        onLogout={logout}
+        actions={[{ label: 'Escribir por WhatsApp', href: supportUrl }]}
+      />
+    );
   }
 
   return (

@@ -812,12 +812,16 @@ export default function App({ negocioSlug, proId } = {}) {
     );
   }
 
-  if (isBlocked) {
-    return <SuspendedScreen status={negocioStatus} />;
-  }
-
-  if (negocioId && !capabilitiesLoading && !canUseCapability('reservaPublica')) {
-    return <SuspendedScreen status="suspended" />;
+  // Negocio bloqueado o sin reserva pública: mismo mensaje neutro, con un
+  // botón de WhatsApp por cada sucursal activa con teléfono.
+  if (isBlocked || (negocioId && !capabilitiesLoading && !canUseCapability('reservaPublica'))) {
+    const contactos = branches
+      .map((b) => ({ name: b.name, href: buildWhatsAppUrl(b.phone, 'Hola, quiero hacer una consulta.') }))
+      .filter((c) => c.href);
+    const actions = contactos.length === 1
+      ? [{ label: 'Escribir al negocio', href: contactos[0].href }]
+      : contactos.map((c) => ({ label: `Escribir a ${c.name || 'sucursal'}`, href: c.href }));
+    return <SuspendedScreen variant="cliente" status={negocioStatus} actions={actions} />;
   }
 
   return (

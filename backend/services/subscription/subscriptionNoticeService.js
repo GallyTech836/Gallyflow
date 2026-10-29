@@ -8,7 +8,7 @@
 import { db } from '../../config/firebase.js';
 import {
   computeNotice, currentTramo, periodDocId, buildWhatsappUrl, businessNameOf,
-  normalizeWhatsapp, isValidWhatsapp,
+  normalizeWhatsapp, isValidWhatsapp, supportMotivo,
 } from './subscriptionNoticeModel.js';
 
 export class NoticeError extends Error {
@@ -55,6 +55,16 @@ export async function getNotice(negocioId, negocio, now = new Date()) {
     fechaVencimiento: notice.fechaVencimiento,
     whatsappUrl: buildWhatsappUrl(numero, businessNameOf(negocio, negocioId)),
   };
+}
+
+/**
+ * GET /api/support-contact — enlace de WhatsApp a soporte de Nexus para la
+ * pantalla de negocio bloqueado. Funciona aunque el negocio esté vencido o
+ * suspendido. Sin número configurado => whatsappUrl null.
+ */
+export async function getSupportContact(negocioId, negocio, now = new Date()) {
+  const numero = await getSoporteWhatsapp();
+  return { whatsappUrl: buildWhatsappUrl(numero, businessNameOf(negocio, negocioId), supportMotivo(negocio, now)) };
 }
 
 /**

@@ -9,6 +9,7 @@ import { BusinessProfileContext, useBusinessProfile } from '../../../shared/busi
 import { useNotifications } from '../../../shared/notifications';
 import SuspendedScreen from '../../../shared/negocioStatus/SuspendedScreen';
 import SubscriptionNoticeModal from '../../../shared/subscriptionNotice/SubscriptionNoticeModal';
+import { useSupportContact } from '../../../shared/subscriptionNotice/useSupportContact';
 import { LoadingState } from '../../../shared/ui';
 import BusinessSection from '../../../admin/settings/BusinessSection';
 import AssistantSection from '../../../admin/settings/AssistantSection';
@@ -29,6 +30,7 @@ export default function RestauranteAdminApp({ user, negocioId }) {
   const businessProfile = useBusinessProfile(negocioId);
   const { hasModule } = businessProfile;
   const { isBlocked, status: negocioStatus, statusKey } = useNegocioStatus(negocioId);
+  const supportUrl = useSupportContact(isBlocked);
   const { can, loading: planLoading } = useNegocioPlan(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 
@@ -62,7 +64,16 @@ export default function RestauranteAdminApp({ user, negocioId }) {
 
   const go = (key) => { setActive(key); setMobileOpen(false); };
 
-  if (isBlocked) return <SuspendedScreen status={negocioStatus} onLogout={logout} />;
+  if (isBlocked) {
+    return (
+      <SuspendedScreen
+        variant="admin"
+        status={negocioStatus}
+        onLogout={logout}
+        actions={[{ label: 'Escribir por WhatsApp', href: supportUrl }]}
+      />
+    );
+  }
 
   const title = activeKey === 'settings'
     ? `Configuración · ${settings.find((s) => s.id === activeSettings)?.label || ''}`

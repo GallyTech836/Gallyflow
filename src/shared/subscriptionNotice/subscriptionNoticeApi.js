@@ -31,3 +31,6 @@ export const getSubscriptionNotice = () => request('GET', '/subscription-notice'
 
 export const ackSubscriptionNotice = ({ tramo, fechaVencimiento }) =>
   request('POST', '/subscription-notice/ack', { tramo, fechaVencimiento });
+
+/** { whatsappUrl } a soporte de Nexus (funciona con el negocio bloqueado) o null si falla. */
+export const getSupportContact = () => request('GET', '/support-contact');

@@ -1,4 +1,5 @@
-// subscriptionNotice.routes.js — Aviso de vencimiento para el ADMINISTRADOR.
+// subscriptionNotice.routes.js — Aviso de vencimiento y contacto con soporte
+// para el ADMINISTRADOR.
 //
 // Mismo middleware que las rutas de caja: el negocio sale del token, nunca
 // del body. Un profesional recibe 401.
@@ -8,7 +9,7 @@ import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { requireSession } from '../middlewares/session.middleware.js';
 import { requireNegocioAdmin } from '../middlewares/negocioAdmin.middleware.js';
 import { logger } from '../utils/logger.js';
-import { NoticeError, getNotice, ackNotice } from '../services/subscription/subscriptionNoticeService.js';
+import { NoticeError, getNotice, ackNotice, getSupportContact } from '../services/subscription/subscriptionNoticeService.js';
 
 const router = Router();
 const admin = [identifyRequester, requireSession, requireNegocioAdmin];
@@ -33,5 +34,8 @@ router.post('/subscription-notice/ack', ...admin, handle((req) => ackNotice(
   { tramo: req.body?.tramo, fechaVencimiento: req.body?.fechaVencimiento },
   req.actor,
 )));
+
+// Enlace a soporte para la pantalla de negocio bloqueado (vencido o suspendido).
+router.get('/support-contact', ...admin, handle((req) => getSupportContact(req.negocioId, req.negocio)));
 
 export default router;

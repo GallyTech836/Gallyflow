@@ -79,10 +79,21 @@ export function isValidWhatsapp(digits) {
   return digits === '' || /^\d{8,15}$/.test(digits);
 }
 
-export function buildWhatsappUrl(numero, nombreNegocio) {
+export const SUPPORT_MESSAGES = {
+  renovar: 'Quiero renovar mi suscripción de Nexus.',
+  reactivar: 'Quiero reactivar mi cuenta de Nexus.',
+};
+
+export function buildWhatsappUrl(numero, nombreNegocio, motivo = 'renovar') {
   if (!numero) return null;
-  const texto = `Hola, soy de ${nombreNegocio}. Quiero renovar mi suscripción de Nexus.`;
+  const texto = `Hola, soy de ${nombreNegocio}. ${SUPPORT_MESSAGES[motivo] || SUPPORT_MESSAGES.renovar}`;
   return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+}
+
+/** Motivo del contacto con soporte según el estado efectivo: suspendido => reactivar. */
+export function supportMotivo(negocio, now = new Date()) {
+  const s = computeEffectiveStatus(negocio?.status, negocio?.subscriptionEnd || null, negocio?.trialEnd || null, now);
+  return s === 'suspended' ? 'reactivar' : 'renovar';
 }
 
 export function businessNameOf(negocio, fallback = '') {
