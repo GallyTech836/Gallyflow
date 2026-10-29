@@ -276,3 +276,68 @@ describe('caja de punta a punta', () => {
     assert.equal(det.body.correcciones.length, 2);
   });
 });
+
+describe('el profesional registra el cobro de sus comisiones', () => {
+  const P3 = { verified: true, rol: 'barber', uid: 'p3', negocioId: 'negA' };
+  const DIA = '2026-01-10';
+  const cobrar = (body, actor = P3) => call('POST', '/staff/commission-payments', body, actor);
+
+  before(() => {
+    const svc = [{ serviceId: 'corte', commissionEnabled: true, type: '%', value: 50 }];
+    db._set(`${N}/profesionales/p3`, { name: 'Junior', branch: 'Central', services: svc });
+    db._set('usuarios/p3', { rol: 'barber', negocioId: 'negA' });
+    db._set(`${N}/profesionales/p4`, { name: 'Sin permiso', branch: 'Central', services: svc, permissions: { viewCommissions: false } });
+    db._set('usuarios/p4', { rol: 'barber', negocioId: 'negA' });
+  });
+
+  test('cobra las suyas del periodo (incluido un servicio registrado) y no las de otro', async () => {
+    const a = cita({ date: DIA, professionalId: 'p3', barberId: 'p3', price: 60 });
+    const reg = cita({ date: DIA, professionalId: 'p3', barberId: 'p3', price: 40, origin: 'registro', clientName: 'Cliente general' });
+    const ajena = cita({ date: DIA, professionalId: 'p1', barberId: 'p1', price: 100 });
+    const fuera = cita({ date: '2026-01-20', professionalId: 'p3', barberId: 'p3', price: 80 });
+
+    const r = await cobrar({ startDate: DIA, endDate: DIA, method: 'Transferencia' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.monto, 50); // 50% de 60 + 50% de 40
+    assert.deepEqual([...r.body.citaIds].sort(), [a, reg].sort());
+    assert.equal(db._get(`${N}/citas/${a}`).commissionPaid, true);
+    assert.equal(db._get(`${N}/citas/${reg}`).commissionPaid, true);
+    assert.notEqual(db._get(`${N}/citas/${ajena}`).commissionPaid, true);
+    assert.notEqual(db._get(`${N}/citas/${fuera}`).commissionPaid, true);
+
+    const pago = db._get(`${N}/commissionPayments/${r.body.paymentId}`);
+    assert.equal(pago.barberId, 'p3');
+    assert.equal(pago.createdBy.uid, 'p3');
+    assert.equal(pago.createdBy.rol, 'barber');
+
+    // No se cobra dos veces.
+    const otra = await cobrar({ startDate: DIA, endDate: DIA, method: 'Transferencia' });
+    assert.equal(otra.status, 409);
+  });
+
+  test('en efectivo sale de la caja de su sucursal', async () => {
+    cita({ date: '2026-01-11', professionalId: 'p3', barberId: 'p3', price: 30 });
+    const r = await cobrar({ startDate: '2026-01-11', endDate: '2026-01-11', method: 'Efectivo' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.isCash, true);
+    const mov = db._list(`${N}/cajaMovimientos`).find((m) => m.commissionPaymentId === r.body.paymentId);
+    assert.equal(mov.type, 'salida');
+    assert.equal(mov.amount, 15);
+    assert.equal(mov.scopeKey, 's1');
+  });
+
+  test('pide método y periodo válidos', async () => {
+    assert.equal((await cobrar({ startDate: '2026-01-12', endDate: '2026-01-12' })).status, 400);
+    assert.equal((await cobrar({ startDate: 'ayer', endDate: '2026-01-12', method: 'QR' })).status, 400);
+    assert.equal((await cobrar({ startDate: '2026-01-13', endDate: '2026-01-12', method: 'QR' })).status, 400);
+  });
+
+  test('sin el permiso "Ver comisiones", o con token de admin, no entra', async () => {
+    const sinPermiso = await cobrar({ startDate: DIA, endDate: DIA, method: 'QR' }, { verified: true, rol: 'barber', uid: 'p4', negocioId: 'negA' });
+    assert.equal(sinPermiso.status, 403);
+    const admin = await cobrar({ startDate: DIA, endDate: DIA, method: 'QR' }, ADMIN);
+    assert.equal(admin.status, 403);
+    const otroNegocio = await cobrar({ startDate: DIA, endDate: DIA, method: 'QR' }, { verified: true, rol: 'barber', uid: 'p3', negocioId: 'negB' });
+    assert.equal(otroNegocio.status, 403);
+  });
+});

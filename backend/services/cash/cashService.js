@@ -41,7 +41,7 @@ const cajasCol = (negocioId) => negRef(negocioId).collection('cajas');
 const movCol = (negocioId) => negRef(negocioId).collection('cajaMovimientos');
 
 const nowIso = () => new Date().toISOString();
-const actorInfo = (actor) => ({ uid: actor?.uid || null, email: actor?.email || null });
+const actorInfo = (actor) => ({ uid: actor?.uid || null, email: actor?.email || null, rol: actor?.rol === 'barber' ? 'barber' : 'admin' });
 
 function parseAmount(v, field, { allowZero = true } = {}) {
   const n = Number(v);

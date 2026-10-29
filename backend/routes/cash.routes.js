@@ -2,13 +2,15 @@
 //
 // Todas las rutas exigen el ADMINISTRADOR del negocio (Firebase Auth, rol
 // admin, negocios.adminUid == uid). Un profesional (token con rol 'barber')
-// recibe 401 en todas. El negocio sale del token, nunca del body.
+// recibe 401 en todas, salvo POST /staff/commission-payments, donde registra
+// el cobro de SUS comisiones. El negocio sale del token, nunca del body.
 // Corregir una caja cerrada pide además el PIN de Analítica, validado aquí.
 
 import { Router } from 'express';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { requireSession } from '../middlewares/session.middleware.js';
 import { requireNegocioAdmin } from '../middlewares/negocioAdmin.middleware.js';
+import { requireStaffMember } from '../middlewares/staffMember.middleware.js';
 import { financePinRateLimit } from '../middlewares/rateLimit.middleware.js';
 import { requireCapability } from '../services/capabilities/capabilityService.js';
 import { logger } from '../utils/logger.js';
@@ -70,5 +72,31 @@ router.post('/cash/commission-payments', ...admin, requireCapability('comisiones
   branchId: req.body?.branchId || null,
   actor: req.actor,
 })));
+
+// El profesional registra que le pagaron sus comisiones del periodo (incluye
+// los servicios registrados). Mismo cálculo y misma transacción que el pago
+// del admin: en efectivo sale de la caja de su sucursal. Solo las suyas
+// (barberId = su uid) y solo si tiene el permiso "Ver comisiones".
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+function requireCommissionsPermission(req, res, next) {
+  if (req.professional?.permissions?.viewCommissions === false) {
+    return res.status(403).json({ error: 'No tienes permiso para ver comisiones.', code: 'NO_PERMISSION' });
+  }
+  next();
+}
+router.post('/staff/commission-payments', identifyRequester, requireSession, requireStaffMember, requireCommissionsPermission, requireCapability('comisiones'), handle((req) => {
+  const { startDate, endDate } = req.body || {};
+  if (!ISO_DATE.test(String(startDate || '')) || !ISO_DATE.test(String(endDate || '')) || startDate > endDate) {
+    throw new CashError(400, 'Periodo no válido.', 'RANGE_INVALID');
+  }
+  return registerCommissionPayment(req.negocioId, {
+    barberId: req.actor.uid,
+    startDate,
+    endDate,
+    method: req.body?.method,
+    branchId: null,
+    actor: req.actor,
+  });
+}));
 
 export default router;

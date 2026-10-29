@@ -27,6 +27,8 @@ import { getEffectiveFieldPermissions } from '../shared/appointments/permissions
 import { normalizeStaffPermissions, DEFAULT_STAFF_PERMISSIONS, canEditPart } from '../shared/staffPermissions/staffPermissionsModel';
 import { checkWorkingHours } from '../shared/appointments/workingHours';
 import { useConfirm, Modal, Button, Field, Input, SegmentedControl, LoadingState } from '../shared/ui';
+import CommissionPayModal from '../admin/cash/CommissionPayModal';
+import { collectMyCommissions } from '../shared/cash/staffCommissionApi';
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import PersonalBookingLink from '../shared/booking/PersonalBookingLink';
@@ -883,37 +885,10 @@ const fetchByDate = async (subcollection, date) => {
     setIsCreateModalOpen(false);
   };
 
-  const markCommissionPaid = async (apptId) => {
-    try {
-      const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
-      await updateDoc(docRef, { commissionPaid: true });
-      triggerToast("Comisión marcada como PAGADA");
-    } catch (err) {
-      triggerToast('Error al marcar la comisión: ' + err.message, 'error');
-    }
-  };
-
-  // Marca como pagadas TODAS las comisiones pendientes del período que está
-  // seleccionado ahora mismo (Día/Semana/Mes/Año) — usa commissionSummary,
-  // que ya está filtrado por ese mismo período.
-  const [collectingAll, setCollectingAll] = useState(false);
-  const markAllCommissionsPaid = async () => {
-    // Los registros de servicio (Nexus Control) solo los paga el admin
-    // (commissionPayments / caja): aquí no se marcan.
-    const pendientes = (commissionSummary.allFinalized || []).filter(item => !item.commissionPaid && !isRegistro(item));
-    if (pendientes.length === 0 || collectingAll) return;
-    setCollectingAll(true);
-    try {
-      await Promise.all(pendientes.map(item =>
-        updateDoc(doc(db, 'negocios', negocioId, 'citas', item.id), { commissionPaid: true })
-      ));
-      triggerToast(`${pendientes.length} comisión(es) marcada(s) como PAGADA`);
-    } catch (err) {
-      triggerToast('Error al cobrar todo: ' + err.message, 'error');
-    } finally {
-      setCollectingAll(false);
-    }
-  };
+  // Cobro de comisiones: el profesional registra que le pagaron las del
+  // periodo seleccionado (incluye servicios registrados). Lo hace el backend,
+  // igual que el pago del admin: en efectivo sale de la caja de su sucursal.
+  const [collectOpen, setCollectOpen] = useState(false);
 
   const deleteAppointment = async (apptId) => {
     if (!staffPerms.deleteAppointments) { triggerToast('No tienes permiso para eliminar citas.', 'error'); return; }
@@ -1065,6 +1040,24 @@ const fetchByDate = async (subcollection, date) => {
       allFinalized: finalizedWithCommission
     };
   }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays]);
+
+  // Mismo periodo que filtra commissionSummary (Día / Semana / Mes / Año).
+  const commissionPeriod = useMemo(() => {
+    const [y, m] = selectedDate.split('-');
+    if (selectedRange === "Semana") return { startDate: currentWeekDays[0], endDate: currentWeekDays[6] };
+    if (selectedRange === "Mes") {
+      const last = new Date(Number(y), Number(m), 0).getDate();
+      return { startDate: `${y}-${m}-01`, endDate: `${y}-${m}-${String(last).padStart(2, '0')}` };
+    }
+    if (selectedRange === "Año") return { startDate: `${y}-01-01`, endDate: `${y}-12-31` };
+    return { startDate: selectedDate, endDate: selectedDate };
+  }, [selectedRange, selectedDate, currentWeekDays]);
+
+  const pendingToCollect = useMemo(
+    () => (commissionSummary.allFinalized || []).filter((item) => !item.commissionPaid && Number(item.commission) > 0),
+    [commissionSummary],
+  );
+  const pendingToCollectAmount = pendingToCollect.reduce((sum, item) => sum + Number(item.commission || 0), 0);
 
   // --- DATOS OPERATIVOS Y GRÁFICOS SEGÚN PERIODO ---
   const performanceData = useMemo(() => {
@@ -1747,9 +1740,9 @@ const fetchByDate = async (subcollection, date) => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="min-w-0 text-base font-bold text-nexus-text truncate">{t('services')}</h3>
-                    {commissionSummary.allFinalized.some(item => !item.commissionPaid && !isRegistro(item)) && (
-                      <Button size="sm" icon={Icons.Check} onClick={markAllCommissionsPaid} disabled={collectingAll}>
-                        {collectingAll ? 'Cobrando...' : `Cobrar todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid && !isRegistro(item)).length})`}
+                    {pendingToCollect.length > 0 && (
+                      <Button size="sm" icon={Icons.Check} onClick={() => setCollectOpen(true)}>
+                        {`Cobrar todo (${pendingToCollect.length})`}
                       </Button>
                     )}
                   </div>
@@ -1787,11 +1780,6 @@ const fetchByDate = async (subcollection, date) => {
                               </span>
                             </div>
 
-                            {!item.commissionPaid && !isRegistro(item) && (
-                              <Button size="sm" icon={Icons.Check} onClick={() => markCommissionPaid(item.id)}>
-                                Cobrar
-                              </Button>
-                            )}
                           </div>
                         </div>
                       ))
@@ -2080,6 +2068,21 @@ const fetchByDate = async (subcollection, date) => {
           </Field>
         </form>
       </Modal>
+
+      {/* ================= MODAL: COBRAR COMISIONES ================= */}
+      {collectOpen && (
+        <CommissionPayModal
+          who="staff"
+          professional={activeBarber}
+          amount={pendingToCollectAmount}
+          periodLabel={commissionPeriod.startDate === commissionPeriod.endDate
+            ? fechaCorta(commissionPeriod.startDate)
+            : `${fechaCorta(commissionPeriod.startDate)} – ${fechaCorta(commissionPeriod.endDate)}`}
+          paymentMethods={businessSettings?.paymentMethods || ['Efectivo', 'QR', 'Transferencia', 'Tarjeta']}
+          onPay={(method) => collectMyCommissions({ ...commissionPeriod, method })}
+          onClose={() => setCollectOpen(false)}
+        />
+      )}
 
       {/* ================= MODAL: CREAR NUEVA CITA (compartido con Admin) ================= */}
       {isCreateModalOpen && (
