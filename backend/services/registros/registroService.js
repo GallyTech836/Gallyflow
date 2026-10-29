@@ -486,11 +486,13 @@ function parseReason(raw) {
 }
 
 /**
- * Corrige un registro. body: { reason, pin?, services?, paymentMethod?, clientId? (null = Cliente general), professionalId? (solo admin) }
+ * Corrige un registro. body: { reason?, pin?, services?, paymentMethod?, clientId? (null = Cliente general), professionalId? (solo admin) }
+ * El motivo es opcional: corrige el dueño. El historial guarda igual quién,
+ * cuándo y qué cambió. (Anular sí pide motivo.)
  */
 export async function correctRegistro({ negocioId, actor, id, body = {} }) {
   assertAdmin(actor);
-  const reason = parseReason(body.reason);
+  const reason = texto(body.reason, 300);
   const inputs = body.services !== undefined ? parseServiceInputs(body.services) : null;
   const pinState = await preparePin(negocioId, body.pin);
 

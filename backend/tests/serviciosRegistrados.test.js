@@ -339,11 +339,14 @@ describe('corregir', () => {
     assert.equal(db._list(`${N}/citas/${mio}/correcciones`).length, 0);
   });
 
-  test('motivo obligatorio y sin cambios no se guarda', async () => {
+  test('motivo opcional al corregir; sin cambios no se guarda', async () => {
     const { id } = (await registrar()).body.registro;
-    assert.equal((await corregir(id, { paymentMethod: 'QR' })).body.code, 'REASON_REQUIRED');
     assert.equal((await corregir(id, { reason: 'motivo largo', paymentMethod: 'Efectivo' })).body.code, 'NO_CHANGES');
-    assert.equal(db._list(`${N}/citas/${id}/correcciones`).length, 0);
+    const sinMotivo = await corregir(id, { paymentMethod: 'QR' });
+    assert.equal(sinMotivo.status, 200);
+    assert.equal(sinMotivo.body.correction.reason, '');
+    // Queda en el historial igual (quién, cuándo y qué cambió).
+    assert.equal(db._list(`${N}/citas/${id}/correcciones`).length, 1);
   });
 
   test('admin corrige cualquiera y puede cambiar el profesional (precio y comisión del nuevo)', async () => {

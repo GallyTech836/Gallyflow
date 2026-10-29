@@ -347,7 +347,7 @@ function RegistroDetail({ registro: r, isAdmin, showPrices = true, showCommissio
                     {h.type === 'void' ? 'Anulado' : 'Corregido'} · <span className="nx-num font-normal text-nexus-text-secondary">{new Date(h.at).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                   </p>
                   <p className="text-xs text-nexus-text-secondary">
-                    {h.by?.rol === 'barber' ? proName(h.by.uid) : 'Administrador'} · Motivo: {h.reason}{h.pinVerified ? ' · con PIN' : ''}
+                    {h.by?.rol === 'barber' ? proName(h.by.uid) : 'Administrador'}{h.reason ? ` · Motivo: ${h.reason}` : ''}{h.pinVerified ? ' · con PIN' : ''}
                   </p>
                   {h.type !== 'void' && (
                     <ul className="mt-1 space-y-0.5 text-xs text-nexus-text">
@@ -414,7 +414,7 @@ function CorrectForm({ r, isAdmin, professionals, services, clients, paymentMeth
       footer={(
         <>
           <Button variant="secondary" onClick={onCancel} fullWidth className="sm:w-auto">Volver</Button>
-          <Button onClick={save} loading={saving} disabled={reason.trim().length < 5 || Object.keys(selected).length === 0} fullWidth className="sm:w-auto">
+          <Button onClick={save} loading={saving} disabled={Object.keys(selected).length === 0} fullWidth className="sm:w-auto">
             Guardar · Bs {Math.round(estimateTotal(services, professional, selected) * 100) / 100}
           </Button>
         </>
@@ -442,7 +442,7 @@ function CorrectForm({ r, isAdmin, professionals, services, clients, paymentMeth
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
         </Field>
-        <Field label="Motivo" required hint="Queda en el historial.">
+        <Field label="Motivo (opcional)">
           <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej.: era corte y barba" />
         </Field>
         {showPin && <PinField value={pin} onChange={setPin} />}
