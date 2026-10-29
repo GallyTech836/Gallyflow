@@ -46,7 +46,12 @@ import { isRegistro } from '../shared/registros/registroModel';
 import { ClipboardList } from 'lucide-react';
 
 // Colores del gráfico "Servicios más Solicitados" (gráfico de torta + su leyenda).
-const PIE_COLORS = ['#18181B', '#10B981', '#3B82F6', '#F59E0B', '#f472b6', '#fb7185'];
+// Escala de grises (paleta Negro puro): el más pedido va más oscuro.
+const PIE_COLORS = ['#18181B', '#52525B', '#A1A1AA', '#D4D4D8'];
+const fechaCorta = (iso) => {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-BO', { day: 'numeric', month: 'short' }).replace('.', '');
+};
 
 // --- ICONOS SVG PERSONALIZADOS (Diseño ultra-limpio) ---
 const Icons = {
@@ -1120,6 +1125,12 @@ const fetchByDate = async (subcollection, date) => {
       crecimientoPorcentaje
     };
   }, [appointments, activeBarber, selectedRange, selectedDate, currentWeekDays, prevEarnings]);
+
+  // Donut de servicios: de más a menos pedido, para que el gris más oscuro sea el principal.
+  const pieSorted = useMemo(
+    () => [...(performanceData.pieData || [])].sort((a, b) => b.value - a.value),
+    [performanceData.pieData],
+  );
   const renderUnifiedSelector = (showAlternator = false) => {
     return (
       <div className="flex flex-row items-center justify-between gap-3 flex-wrap">
@@ -1714,18 +1725,18 @@ const fetchByDate = async (subcollection, date) => {
                   </div>
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-xs text-nexus-primary font-bold">Comisión total</span>
-                    <span className="block text-2xl font-bold text-nexus-success-text mt-1">{commissionSummary.comisionTotal} Bs</span>
+                    <span className="block text-xs text-nexus-text-muted font-bold">Comisión total</span>
+                    <span className="block text-2xl font-bold text-nexus-text mt-1">{commissionSummary.comisionTotal} Bs</span>
                   </div>
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
-                    <span className="block text-xs text-nexus-primary font-bold">Pagada</span>
-                    <span className="block text-2xl font-bold text-nexus-info-text mt-1">{commissionSummary.comisionPagada} Bs</span>
+                    <span className="block text-xs text-nexus-text-muted font-bold">Pagada</span>
+                    <span className="block text-2xl font-bold text-nexus-text mt-1">{commissionSummary.comisionPagada} Bs</span>
                   </div>
 
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 relative overflow-hidden">
                     <span className="block text-xs text-nexus-text-muted font-bold">Pendiente</span>
-                    <span className="block text-2xl font-bold text-nexus-warning-text mt-1">{commissionSummary.comisionPendiente} Bs</span>
+                    <span className="block text-2xl font-bold text-nexus-text mt-1">{commissionSummary.comisionPendiente} Bs</span>
                   </div>
                 </div>
 
@@ -1736,14 +1747,9 @@ const fetchByDate = async (subcollection, date) => {
                       <p className="text-xs text-nexus-text-muted">{`${t('services')} ${g('service', 'finalizados', 'finalizadas')} en este periodo.`}</p>
                     </div>
                     {commissionSummary.allFinalized.some(item => !item.commissionPaid && !isRegistro(item)) && (
-                      <button
-                        onClick={markAllCommissionsPaid}
-                        disabled={collectingAll}
-                        className="h-10 px-4 bg-nexus-success hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        <Icons.Check className="w-3.5 h-3.5" />
-                        {collectingAll ? 'Cobrando...' : `Cobrar Todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid && !isRegistro(item)).length})`}
-                      </button>
+                      <Button size="sm" icon={Icons.Check} onClick={markAllCommissionsPaid} disabled={collectingAll}>
+                        {collectingAll ? 'Cobrando...' : `Cobrar todo (${commissionSummary.allFinalized.filter(item => !item.commissionPaid && !isRegistro(item)).length})`}
+                      </Button>
                     )}
                   </div>
 
@@ -1767,17 +1773,15 @@ const fetchByDate = async (subcollection, date) => {
                                 {item.service}
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-nexus-text-muted mt-1">
-                              <span>Fecha: {item.date}</span>
-                              <span>•</span>
-                              <span>Pago: {item.paymentMethod || "Efectivo"}</span>
+                            <div className="text-xs text-nexus-text-muted mt-1">
+                              {fechaCorta(item.date)} · {item.paymentMethod || "Efectivo"}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <span className="block text-sm font-bold text-nexus-success-text">Bs {item.commission} </span>
-                              <span className={`text-xs font-bold ${item.commissionPaid ? "text-nexus-info-text" : "text-nexus-warning-text"}`}>
+                              <span className="block text-sm font-bold text-nexus-text">Bs {item.commission}</span>
+                              <span className={`text-xs font-bold ${item.commissionPaid ? "text-nexus-text-muted" : "text-nexus-warning-text"}`}>
                                 {item.commissionPaid ? "Pagada" : "Pendiente"}
                               </span>
                             </div>
@@ -1816,9 +1820,9 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
                       <span className="text-xs text-nexus-text-muted font-bold">Total facturado</span>
-                      <span className="block text-3xl font-bold text-nexus-success-text mt-1">{performanceData.totalGanado}Bs</span>
+                      <span className="block text-3xl font-bold text-nexus-text mt-1">{performanceData.totalGanado} Bs</span>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-nexus-success-bg flex items-center justify-center text-nexus-success-text">
+                    <div className="w-12 h-12 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary">
                       <Icons.Dollar className="w-6 h-6" />
                     </div>
                   </div>
@@ -1826,15 +1830,15 @@ const fetchByDate = async (subcollection, date) => {
                   <div className="bg-nexus-surface border border-nexus-border rounded-2xl p-5 flex items-center justify-between">
                     <div>
                       <span className="text-xs text-nexus-text-muted font-bold">
-                        {performanceData.crecimientoPorcentaje === null ? 'Crecimiento' : 'Crecimiento Estimado'}
+                        Crecimiento
                       </span>
-                      <span className="block text-3xl font-bold text-nexus-info-text mt-1">
+                      <span className="block text-3xl font-bold text-nexus-text mt-1">
                         {performanceData.crecimientoPorcentaje === null
-                          ? 'Sin datos previos'
+                          ? '—'
                           : `${performanceData.crecimientoPorcentaje > 0 ? '+' : ''}${performanceData.crecimientoPorcentaje}%`}
                       </span>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-nexus-info-bg flex items-center justify-center text-nexus-info-text">
+                    <div className="w-12 h-12 rounded-xl bg-nexus-primary-soft flex items-center justify-center text-nexus-primary">
                       <Icons.TrendingUp className="w-6 h-6" />
                     </div>
                   </div>
@@ -1857,9 +1861,6 @@ const fetchByDate = async (subcollection, date) => {
                             <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E9EDF2', borderRadius: '12px', fontSize: '11px' }} />
                             <Bar dataKey="monto" fill={nexusChartColors.primary} radius={[8, 8, 0, 0]}>
-                              {performanceData.barData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? nexusChartColors.primary : index === 1 ? nexusChartColors.accent : '#10B981'} />
-                              ))}
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>
@@ -1881,7 +1882,7 @@ const fetchByDate = async (subcollection, date) => {
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                               <Pie
-                                data={performanceData.pieData}
+                                data={pieSorted}
                                 cx="50%"
                                 cy="50%"
                                 innerRadius={60}
@@ -1889,7 +1890,7 @@ const fetchByDate = async (subcollection, date) => {
                                 paddingAngle={5}
                                 dataKey="value"
                               >
-                                {performanceData.pieData.map((entry, index) => (
+                                {pieSorted.map((entry, index) => (
                                   <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                 ))}
                               </Pie>
@@ -1898,14 +1899,14 @@ const fetchByDate = async (subcollection, date) => {
                           </ResponsiveContainer>
                           <div className="absolute flex flex-col items-center">
                             <span className="text-2xl font-bold text-nexus-text">{performanceData.totalServicios}</span>
-                            <span className="text-xs text-nexus-primary font-bold">Totales</span>
+                            <span className="text-xs text-nexus-text-muted font-bold">en total</span>
                           </div>
                         </>
                       )}
                     </div>
                     {performanceData.totalServicios > 0 && (
                       <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center pt-1">
-                        {performanceData.pieData.map((entry, index) => (
+                        {pieSorted.map((entry, index) => (
                           <div key={entry.name} className="flex items-center gap-1.5 text-xs text-nexus-text-secondary">
                             <span
                               className="w-2.5 h-2.5 rounded-full shrink-0"
