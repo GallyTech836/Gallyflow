@@ -98,6 +98,25 @@ export function createFakeDb(initial = {}) {
       where: (f, op, v) => query(colPath, [...filters, [f, op, v]], max),
       limit: (n) => query(colPath, filters, n),
       orderBy: () => query(colPath, filters, max),
+      // Sumas de Firestore (count/sum). spec: { nombre: { kind: 'count' | 'sum', field } }.
+      // Con db._aggregateNeedsIndex = true responde como si faltara el índice.
+      aggregate: (spec) => ({
+        get: async () => {
+          if (db._aggregateNeedsIndex) throw Object.assign(new Error('9 FAILED_PRECONDITION: The query requires an index.'), { code: 9 });
+          db._aggregateCalls += 1;
+          const prefix = `${colPath}/`;
+          const rows = [...store.keys()]
+            .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/'))
+            .filter((p) => filters.every((f) => matches(store.get(p), f)))
+            .map((p) => store.get(p));
+          const out = {};
+          for (const [k, f] of Object.entries(spec)) {
+            out[k] = f.kind === 'count' ? rows.length
+              : rows.reduce((a, r) => { const v = f.field.split('.').reduce((o, x) => (o == null ? undefined : o[x]), r); return a + (typeof v === 'number' ? v : 0); }, 0);
+          }
+          return { data: () => out };
+        },
+      }),
       get: async () => {
         const prefix = `${colPath}/`;
         let docs = [...store.keys()]
@@ -145,7 +164,9 @@ export function createFakeDb(initial = {}) {
     // Ayudas para las pruebas
     _get: (path) => clone(store.get(path)),
     _set: (path, data) => store.set(path, clone(data)),
-    _clear: () => store.clear(),
+    _clear: () => { store.clear(); db._aggregateNeedsIndex = false; db._aggregateCalls = 0; },
+    _aggregateNeedsIndex: false,
+    _aggregateCalls: 0,
     _list: (colPath) => [...store.keys()].filter((p) => p.startsWith(`${colPath}/`) && !p.slice(colPath.length + 1).includes('/')).map((p) => ({ id: p.split('/').pop(), ...clone(store.get(p)) })),
   };
 

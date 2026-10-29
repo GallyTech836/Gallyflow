@@ -15,7 +15,7 @@ import { requireNegocioAdmin } from '../middlewares/negocioAdmin.middleware.js';
 import { requireCapability } from '../services/capabilities/capabilityService.js';
 import { logger } from '../utils/logger.js';
 import {
-  RegistroError, createRegistro, correctRegistro, voidRegistro, listRegistros, listCorrecciones,
+  RegistroError, createRegistro, correctRegistro, voidRegistro, listRegistros, listCorrecciones, summarizeYear, invalidateYearSummary,
 } from '../services/registros/registroService.js';
 
 const router = Router();
@@ -49,6 +49,7 @@ function handle(fn, okStatus = 200) {
   return async (req, res) => {
     try {
       const data = await fn(req);
+      if (req.method !== 'GET') invalidateYearSummary(req.negocioId);
       res.status(typeof okStatus === 'function' ? okStatus(data) : okStatus).json(data);
     } catch (err) {
       if (err instanceof RegistroError) return res.status(err.status).json({ error: err.message, code: err.code, ...err.extra });
@@ -59,6 +60,9 @@ function handle(fn, okStatus = 200) {
 }
 
 router.get('/servicios-registrados', ...guard, handle((req) => listRegistros({ negocioId: req.negocioId, actor: req.actor, query: req.query || {} })));
+
+// GET /servicios-registrados/resumen?year=2026&professionalId=  -> totales por mes.
+router.get('/servicios-registrados/resumen', ...guard, handle((req) => summarizeYear({ negocioId: req.negocioId, actor: req.actor, query: req.query || {} })));
 
 router.post('/servicios-registrados', ...guard,
   handle((req) => createRegistro({ negocioId: req.negocioId, actor: req.actor, body: req.body || {} }), (data) => (data.replay ? 200 : 201)));

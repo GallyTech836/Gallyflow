@@ -15,6 +15,7 @@
 // Los registros NO tienen horario: no ocupan agenda ni se validan solapamientos.
 
 import process from 'node:process';
+import * as firestoreAdmin from 'firebase-admin/firestore';
 import { db } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
 import { readServicesInTx } from '../pricing/catalogInTx.js';
@@ -602,6 +603,126 @@ export async function listRegistros({ negocioId, actor, query = {} }) {
     .filter((c) => c.origin === ORIGIN && (!proFilter || proFilter === 'all' || c.professionalId === proFilter))
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   return { from: start, to: end, items };
+}
+
+// ───────────────────────── Resumen anual ─────────────────────────
+//
+// Totales por mes de un año (cantidad, importe y comisión), sin descargar
+// los registros: sumas de Firestore (aggregate) sobre
+//   origin == 'registro' && status == 'completed' [&& professionalId == X]
+//   && date entre el 1 y el último día del mes.
+// Necesita los índices compuestos de citas (origin, status, date) y
+// (origin, status, professionalId, date). Mientras no existan (Firestore
+// responde FAILED_PRECONDITION), se usa el respaldo: leer el año y sumar
+// aquí (más lecturas), con caché de 5 minutos.
+
+const SUMMARY_CACHE_MS = 5 * 60 * 1000;
+const summaryCache = new Map(); // `${negocioId}|${year}|${pro}` -> { at, data }
+const FAILED_PRECONDITION = 9;
+
+const pad2 = (n) => String(n).padStart(2, '0');
+function monthRange(year, m) {
+  const last = new Date(Date.UTC(year, m, 0)).getUTCDate();
+  return { start: `${year}-${pad2(m)}-01`, end: `${year}-${pad2(m)}-${pad2(last)}` };
+}
+
+function monthsOf(year, today) {
+  const out = [];
+  for (let m = 1; m <= 12; m++) {
+    const r = monthRange(year, m);
+    if (r.start > today) break; // nunca meses futuros
+    out.push({ month: `${year}-${pad2(m)}`, ...r });
+  }
+  return out;
+}
+
+async function totalsByAggregate(negocioId, months, pro) {
+  const { AggregateField } = firestoreAdmin;
+  if (!AggregateField) throw Object.assign(new Error('Sin AggregateField'), { code: FAILED_PRECONDITION });
+  let base = negRef(negocioId).collection('citas').where('origin', '==', ORIGIN).where('status', '==', 'completed');
+  if (pro) base = base.where('professionalId', '==', pro);
+  return Promise.all(months.map(async ({ month, start, end }) => {
+    const q = base.where('date', '>=', start).where('date', '<=', end);
+    if (typeof q.aggregate !== 'function') throw Object.assign(new Error('Sin aggregate'), { code: FAILED_PRECONDITION });
+    const snap = await q.aggregate({
+      count: AggregateField.count(),
+      total: AggregateField.sum('price'),
+      commission: AggregateField.sum('commissionSnapshot.amount'),
+    }).get();
+    const d = snap.data();
+    return { month, count: Number(d.count) || 0, total: round2(Number(d.total) || 0), commission: round2(Number(d.commission) || 0) };
+  }));
+}
+
+async function totalsByScan(negocioId, months, pro) {
+  const out = months.map(({ month }) => ({ month, count: 0, total: 0, commission: 0 }));
+  if (!months.length) return out;
+  const byMonth = Object.fromEntries(out.map((m) => [m.month, m]));
+  const snap = await negRef(negocioId).collection('citas')
+    .where('date', '>=', months[0].start).where('date', '<=', months[months.length - 1].end).get();
+  for (const d of snap.docs) {
+    const c = d.data();
+    if (c.origin !== ORIGIN || c.status !== 'completed' || (pro && c.professionalId !== pro)) continue;
+    const m = byMonth[String(c.date).slice(0, 7)];
+    if (!m) continue;
+    m.count += 1;
+    m.total += Number(c.price) || 0;
+    m.commission += Number(c.commissionSnapshot?.amount) || 0;
+  }
+  for (const m of out) { m.total = round2(m.total); m.commission = round2(m.commission); }
+  return out;
+}
+
+/**
+ * Totales por mes del año (meses futuros no se incluyen). Barbero: solo los
+ * suyos. Devuelve { year, source: 'aggregate' | 'scan', months, totals }.
+ */
+export async function summarizeYear({ negocioId, actor, query = {} }) {
+  const today = todayKey();
+  const year = Number(query.year);
+  const thisYear = Number(today.slice(0, 4));
+  if (!Number.isInteger(year) || year < 2000 || year > thisYear) {
+    throw new RegistroError(400, 'El año no es válido.', 'YEAR_INVALID');
+  }
+  const proQ = actor?.rol === 'barber' ? actor.uid : texto(query.professionalId, 120);
+  const pro = proQ && proQ !== 'all' ? proQ : null;
+
+  const key = `${negocioId}|${year}|${pro || ''}`;
+  const hit = summaryCache.get(key);
+  if (hit && Date.now() - hit.at < SUMMARY_CACHE_MS) return hit.data;
+
+  const months = monthsOf(year, today);
+  let source = 'aggregate';
+  let rows;
+  try {
+    rows = await totalsByAggregate(negocioId, months, pro);
+  } catch (err) {
+    if (err?.code !== FAILED_PRECONDITION) throw err;
+    // Falta el índice: el mensaje de Firestore trae el link para crearlo.
+    logger.warn('[registros] Resumen anual sin índice, se usa el respaldo (leer el año):', err.message);
+    source = 'scan';
+    rows = await totalsByScan(negocioId, months, pro);
+  }
+  const totals = rows.reduce((a, m) => ({ count: a.count + m.count, total: a.total + m.total, commission: a.commission + m.commission }), { count: 0, total: 0, commission: 0 });
+  totals.total = round2(totals.total);
+  totals.commission = round2(totals.commission);
+  const data = { year, source, months: rows, totals };
+  // Con el índice las sumas son baratas: solo se guarda en caché el respaldo.
+  if (source === 'scan') {
+    if (summaryCache.size > 500) summaryCache.clear();
+    summaryCache.set(key, { at: Date.now(), data });
+  }
+  return data;
+}
+
+/** Al registrar, corregir o anular: el resumen del negocio se recalcula. */
+export function invalidateYearSummary(negocioId) {
+  for (const k of summaryCache.keys()) if (k.startsWith(`${negocioId}|`)) summaryCache.delete(k);
+}
+
+/** Para las pruebas. */
+export function clearYearSummaryCache() {
+  summaryCache.clear();
 }
 
 /** Historial de correcciones de un registro (más antiguo primero). */

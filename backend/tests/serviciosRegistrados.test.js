@@ -19,7 +19,9 @@ const pasa = (req, res, next) => next();
 const pushes = [];
 let pushFalla = false;
 mock.module('../config/firebase.js', { namedExports: { db } });
-mock.module('firebase-admin/firestore', { namedExports: { FieldValue } });
+// AggregateField de mentira: el fake de Firestore entiende { kind, field }.
+const AggregateField = { count: () => ({ kind: 'count' }), sum: (field) => ({ kind: 'sum', field }) };
+mock.module('firebase-admin/firestore', { namedExports: { FieldValue, AggregateField } });
 mock.module('express', { namedExports: { Router: () => router } });
 mock.module('../middlewares/auth.middleware.js', { namedExports: { identifyRequester: pasa } });
 mock.module('../middlewares/session.middleware.js', { namedExports: { requireSession: pasa } });
@@ -44,7 +46,7 @@ const { openCash, closeCash, getCurrentCash, registerCommissionPayment } = await
 const { getAvailableSlots } = await import('../services/appointments/availability.js');
 const { isProfessionalFreeAt } = await import('../services/appointments/pendingModel.js');
 const { listBusyAppointments } = await import('../services/appointments/publicBooking.js');
-const { todayKey, DUPLICATE_WINDOW_MS, noonMillis, shiftDay, CASH_PLACEMENT, MAX_BACKDATE_DAYS } = await import('../services/registros/registroService.js');
+const { todayKey, DUPLICATE_WINDOW_MS, noonMillis, shiftDay, CASH_PLACEMENT, MAX_BACKDATE_DAYS, clearYearSummaryCache } = await import('../services/registros/registroService.js');
 const { localDateKey } = await import('../services/cash/cashModel.js');
 
 const N = 'negocios/negA';
@@ -628,5 +630,95 @@ describe('otra fecha', () => {
     db._set(`${N}/cajaEstado/s0`, { openSessionId: null, lastClosedAt: new Date(noonMillis(hace(4))).toISOString() });
     const r = await registrar({ professionalId: 'p1', date: hace(2) }, ADMIN);
     assert.equal(r.body.registro.cashPlacement, CASH_PLACEMENT.NEXT);
+  });
+});
+
+// ─────────────────────────────── Resumen anual ───────────────────────────────
+
+describe('resumen anual (periodo Año)', () => {
+  const Y = () => Number(hoy().slice(0, 4));
+  const M = () => Number(hoy().slice(5, 7));
+  const reg = (id, date, pro, price, commission, extra = {}) => db._set(`${N}/citas/${id}`, {
+    origin: 'registro', status: 'completed', date, professionalId: pro, price, commissionSnapshot: { amount: commission }, ...extra,
+  });
+  const resumen = (actor = ADMIN, query = {}) => call('GET', '/servicios-registrados/resumen', {}, actor, { year: String(Y()), ...query });
+
+  beforeEach(() => {
+    seed();
+    clearYearSummaryCache();
+    reg('r1', `${Y()}-01-10`, 'p1', 50, 20);
+    reg('r2', `${Y()}-01-11`, 'p2', 70, 28);
+    reg('r3', `${Y()}-01-12`, 'p1', 30, 10, { status: 'cancelled' }); // anulado: no cuenta
+    reg('r4', hoy(), 'p1', 80, 32);
+    db._set(`${N}/citas/c1`, { date: `${Y()}-01-10`, professionalId: 'p1', price: 999, status: 'completed' }); // cita de agenda: no cuenta
+    reg('viejo', `${Y() - 1}-12-31`, 'p1', 500, 100); // otro año
+  });
+
+  const enero = (b) => b.months.find((m) => m.month === `${Y()}-01`);
+
+  test('con índice: sumas por mes sin descargar registros; solo meses hasta hoy', async () => {
+    const r = await resumen();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.source, 'aggregate');
+    assert.equal(r.body.months.length, M()); // nunca meses futuros
+    assert.ok(db._aggregateCalls >= M());
+    if (M() === 1) {
+      assert.deepEqual(enero(r.body), { month: `${Y()}-01`, count: 3, total: 200, commission: 80 });
+    } else {
+      assert.deepEqual(enero(r.body), { month: `${Y()}-01`, count: 2, total: 120, commission: 48 });
+      assert.equal(r.body.months.find((m) => m.month === hoy().slice(0, 7)).total, 80);
+    }
+    assert.deepEqual(r.body.totals, { count: 3, total: 200, commission: 80 });
+  });
+
+  test('sin índice: respaldo leyendo el año, mismo resultado', async () => {
+    const con = (await resumen()).body;
+    clearYearSummaryCache();
+    db._aggregateNeedsIndex = true;
+    const sin = (await resumen()).body;
+    assert.equal(sin.source, 'scan');
+    assert.deepEqual(sin.months, con.months);
+    assert.deepEqual(sin.totals, con.totals);
+  });
+
+  test('el respaldo se guarda en caché y se borra al registrar', async () => {
+    db._aggregateNeedsIndex = true;
+    assert.equal((await resumen()).body.totals.count, 3);
+    reg('r5', hoy(), 'p1', 10, 4); // escrito por fuera: la caché lo oculta
+    assert.equal((await resumen()).body.totals.count, 3);
+    assert.equal((await registrar({}, BARBER)).status, 201); // registrar borra la caché
+    assert.equal((await resumen()).body.totals.count, 5);
+  });
+
+  test('barbero: solo los suyos, aunque pida otro profesional', async () => {
+    const r = await resumen(BARBER, { professionalId: 'p2' });
+    assert.deepEqual(r.body.totals, { count: 2, total: 130, commission: 52 });
+    db._aggregateNeedsIndex = true;
+    clearYearSummaryCache();
+    assert.deepEqual((await resumen(BARBER, { professionalId: 'p2' })).body.totals, { count: 2, total: 130, commission: 52 });
+  });
+
+  test('admin: todos o filtrado por profesional', async () => {
+    assert.equal((await resumen(ADMIN, { professionalId: 'all' })).body.totals.count, 3);
+    assert.deepEqual((await resumen(ADMIN, { professionalId: 'p2' })).body.totals, { count: 1, total: 70, commission: 28 });
+  });
+
+  test('año anterior: los 12 meses', async () => {
+    const r = await call('GET', '/servicios-registrados/resumen', {}, ADMIN, { year: String(Y() - 1) });
+    assert.equal(r.body.months.length, 12);
+    assert.deepEqual(r.body.totals, { count: 1, total: 500, commission: 100 });
+  });
+
+  test('año inválido o futuro: 400', async () => {
+    for (const year of ['abc', '1999', String(Y() + 1)]) {
+      const r = await call('GET', '/servicios-registrados/resumen', {}, ADMIN, { year });
+      assert.equal(r.status, 400, year);
+      assert.equal(r.body.code, 'YEAR_INVALID');
+    }
+  });
+
+  test('otro plan sin registro de servicios: 403', async () => {
+    seed({ plan: 'profesional' });
+    assert.equal((await resumen()).status, 403);
   });
 });

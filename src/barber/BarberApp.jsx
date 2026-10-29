@@ -1803,6 +1803,8 @@ const fetchByDate = async (subcollection, date) => {
                   </Button>
                 </div>
                 <RegistrosPanel
+                  showPrices={!!staffPerms.viewFinancials}
+                  showCommissions={!!canSeeCommissions}
                   professionals={activeBarber ? [activeBarber] : []}
                   services={services}
                   clients={clientes}

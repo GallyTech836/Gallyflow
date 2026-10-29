@@ -1,25 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, Plus, History, Pencil, Ban, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Modal, Button, Field, Input, Select, Textarea, Badge, SegmentedControl, EmptyState, LoadingState } from '../ui';
+import { Modal, Button, Field, Input, Select, Textarea, Badge, EmptyState, LoadingState } from '../ui';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import ServicePicker from './ServicePicker';
 import { estimateTotal, toServiceInputs } from './servicePickerModel';
-import { listRegistros, listCorrecciones, correctRegistro, voidRegistro } from './registrosApi';
+import { listRegistros, listCorrecciones, correctRegistro, voidRegistro, getRegistrosResumen } from './registrosApi';
 import {
-  periodRange, summarize, needsPin, describeChange, dayLabel, todayKey, shiftDay, GENERAL_CLIENT,
+  PERIODS, periodRange, shiftPeriod, canGoNext, clampRef, periodLabel, dayTitle, monthName, groupByDay,
+  summarize, needsPin, describeChange, dayLabel, todayKey, GENERAL_CLIENT,
 } from './registroModel';
 
 const money = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
-const PERIODS = [{ value: 'dia', label: 'Día' }, { value: 'semana', label: '7 días' }, { value: 'mes', label: 'Mes' }];
 
 /**
- * Lista de "Servicios registrados" del periodo (plan Nexus Control), con
- * detalle, historial de correcciones, corregir y anular. Todo pasa por el
- * backend (/api/servicios-registrados).
+ * Lista de "Servicios registrados" (plan Nexus Control), con detalle,
+ * historial de correcciones, corregir y anular. Todo pasa por el backend
+ * (/api/servicios-registrados).
+ *
+ * Periodos de calendario: Día / Semana (lun–dom) / Mes / Año, con ◀ ▶ y
+ * calendario (nunca al futuro). Semana y Mes se agrupan por día; Año muestra
+ * los totales por mes (desde el backend) y al tocar un mes abre ese Mes.
+ * Solo se lee el rango visible.
  *
  * Props:
  * - isAdmin: admin ve todos, filtra por profesional, corrige y anula. El
  *   barbero solo ve los suyos y su detalle (no corrige ni anula).
+ * - showPrices / showCommissions: permisos del barbero (solo en pantalla).
  * - professionals, services, clients, paymentMethods
  * - refreshKey: cambia para volver a cargar (ej. después de registrar).
  * - onRegister: abre el modal de registrar (botón del encabezado).
@@ -27,40 +33,68 @@ const PERIODS = [{ value: 'dia', label: 'Día' }, { value: 'semana', label: '7 d
  * - onToast(msg, tipo)
  */
 export default function RegistrosPanel({
-  isAdmin = false, professionals = [], services = [], clients = [], paymentMethods = [],
+  isAdmin = false, showPrices = true, showCommissions = true,
+  professionals = [], services = [], clients = [], paymentMethods = [],
   refreshKey = 0, onRegister, registerDesktopOnly = false, onToast,
 }) {
   const terms = useBusinessTerms();
   const [period, setPeriod] = useState('dia');
-  const [day, setDay] = useState(() => todayKey()); // modo Día: el día que se mira (nunca futuro)
+  const [ref, setRef] = useState(() => todayKey()); // un día dentro del periodo que se mira
   const [proFilter, setProFilter] = useState('all');
-  const [items, setItems] = useState(null);
-  const [error, setError] = useState('');
+  // Resultado de la última consulta, con su clave: si la clave no es la del
+  // rango visible, se está cargando.
+  const [result, setResult] = useState({ key: null, items: [], yearData: null, error: '' });
   const [openId, setOpenId] = useState(null);
   const [tick, setTick] = useState(0);
 
-  const range = useMemo(() => (period === 'dia' ? { from: day, to: day } : periodRange(period, todayKey())), [period, day]);
+  const isYear = period === 'año';
+  const range = useMemo(() => periodRange(period, ref), [period, ref]);
   const proName = useCallback((id) => professionals.find((p) => p.id === id)?.name || '—', [professionals]);
+  const professionalId = isAdmin ? proFilter : undefined;
+  const reqKey = `${isYear ? 'año' : 'lista'}|${range.from}|${range.to}|${professionalId || ''}|${refreshKey}|${tick}`;
 
   useEffect(() => {
     let cancelled = false;
-    listRegistros({ ...range, professionalId: isAdmin ? proFilter : undefined }).then((r) => {
-      if (cancelled) return;
-      setError(r.ok ? '' : r.data.error || 'No se pudieron cargar los registros.');
-      setItems(r.ok ? r.data.items || [] : []);
-    });
+    const done = (patch) => { if (!cancelled) setResult({ key: reqKey, items: [], yearData: null, error: '', ...patch }); };
+    if (isYear) {
+      getRegistrosResumen({ year: Number(range.from.slice(0, 4)), professionalId }).then((r) => done(r.ok
+        ? { yearData: r.data }
+        : { yearData: { months: [], totals: { count: 0, total: 0, commission: 0 } }, error: r.data.error || 'No se pudo cargar el resumen del año.' }));
+    } else {
+      listRegistros({ ...range, professionalId }).then((r) => done(r.ok
+        ? { items: r.data.items || [] }
+        : { error: r.data.error || 'No se pudieron cargar los registros.' }));
+    }
     return () => { cancelled = true; };
-  }, [range, proFilter, isAdmin, refreshKey, tick]);
+  }, [reqKey, isYear, range, professionalId]);
+
+  const loading = result.key !== reqKey;
+  const items = loading ? null : result.items;
+  const yearData = loading ? null : result.yearData;
+  const error = loading ? '' : result.error;
 
   const reload = () => setTick((t) => t + 1);
   const totals = useMemo(() => summarize(items || []), [items]);
+  const groups = useMemo(() => (period === 'semana' || period === 'mes' ? groupByDay(items || []) : null), [period, items]);
+  const months = useMemo(() => (yearData?.months || []).filter((m) => m.count > 0).slice().reverse(), [yearData]);
   const open = (items || []).find((r) => r.id === openId) || null;
+  const summary = isYear
+    ? (yearData ? { count: yearData.totals.count, total: yearData.totals.total, commission: yearData.totals.commission } : null)
+    : (items ? totals : null);
+
+  const changePeriod = (p) => { setPeriod(p); setRef((r) => clampRef(r)); };
+  const openMonth = (month) => { setPeriod('mes'); setRef(`${month}-01`); };
+  const empty = <EmptyState icon={ClipboardList} title={`Sin ${terms.tl('services')} registrados en este periodo`} />;
+  const row = (r) => (
+    <RegistroRow key={r.id} r={r} isAdmin={isAdmin} showPrices={showPrices} proName={proName} onOpen={() => setOpenId(r.id)} />
+  );
 
   return (
     <div className="space-y-4">
+      <PeriodTabs value={period} onChange={changePeriod} />
+
       <div className="flex flex-wrap items-center gap-2">
-        <SegmentedControl ariaLabel="Periodo" options={PERIODS} value={period} onChange={setPeriod} />
-        {period === 'dia' && <DayPicker day={day} onChange={setDay} />}
+        <PeriodNav period={period} refDay={ref} onChange={setRef} />
         {isAdmin && (
           <Select value={proFilter} onChange={(e) => setProFilter(e.target.value)} aria-label={terms.t('professional')} className="w-auto min-w-40">
             <option value="all">Todos</option>
@@ -75,40 +109,60 @@ export default function RegistrosPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label={`${terms.t('services')} registrados`} value={totals.count} />
-        <Stat label="Importe" value={money(totals.total)} />
-        <Stat label="Comisión pendiente" value={money(totals.commissionPending)} />
-        <Stat label="Comisión pagada" value={money(totals.commissionPaid)} />
+      <div className={`grid gap-2 ${showPrices && showCommissions ? 'grid-cols-2 sm:grid-cols-3' : showPrices || showCommissions ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <Stat label={`${terms.t('services')} registrados`} value={summary ? summary.count : '—'} />
+        {showPrices && <Stat label="Total" value={summary ? money(summary.total) : '—'} />}
+        {showCommissions && (
+          <Stat
+            label="Comisiones"
+            value={summary ? money(summary.commission) : '—'}
+            hint={!isYear && summary && summary.commission > 0 ? `${money(summary.commissionPending)} pendiente` : null}
+          />
+        )}
       </div>
 
       {error && <p role="alert" className="rounded-lg bg-nexus-error-bg px-3 py-2 text-sm text-nexus-error-text">{error}</p>}
 
-      {items === null ? (
+      {isYear ? (
+        yearData === null ? <LoadingState /> : months.length === 0 ? empty : (
+          <ul className="divide-y divide-nexus-border overflow-hidden rounded-xl border border-nexus-border bg-nexus-surface">
+            {months.map((m) => (
+              <li key={m.month}>
+                <button type="button" onClick={() => openMonth(m.month)} className="flex w-full items-center gap-3 px-3 py-3 text-left cursor-pointer hover:bg-nexus-surface-hover">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-nexus-text">{monthName(m.month)}</span>
+                    <span className="block text-xs text-nexus-text-secondary">{m.count} {m.count === 1 ? terms.tl('service') : terms.tl('services')}</span>
+                  </span>
+                  {showPrices && <span className="nx-num text-sm font-bold text-nexus-text">{money(m.total)}</span>}
+                  <ChevronRight className="h-4 w-4 shrink-0 text-nexus-text-muted" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : items === null ? (
         <LoadingState />
       ) : items.length === 0 ? (
-        <EmptyState icon={ClipboardList} title={`Sin ${terms.tl('services')} registrados en este periodo`} />
+        empty
+      ) : groups ? (
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <section key={g.date} aria-label={dayTitle(g.date)}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-3 px-1">
+                <h3 className="text-sm font-semibold text-nexus-text">{dayTitle(g.date)}</h3>
+                <p className="nx-num text-xs text-nexus-text-secondary">
+                  {g.count} {g.count === 1 ? terms.tl('service') : terms.tl('services')}{showPrices ? ` · ${money(g.total)}` : ''}
+                </p>
+              </div>
+              <ul className="divide-y divide-nexus-border overflow-hidden rounded-xl border border-nexus-border bg-nexus-surface">
+                {g.items.map(row)}
+              </ul>
+            </section>
+          ))}
+        </div>
       ) : (
         <ul className="divide-y divide-nexus-border overflow-hidden rounded-xl border border-nexus-border bg-nexus-surface">
-          {items.map((r) => (
-            <li key={r.id}>
-              <button type="button" onClick={() => setOpenId(r.id)} className={`flex w-full items-center gap-3 px-3 py-3 text-left cursor-pointer hover:bg-nexus-surface-hover ${r.status === 'cancelled' ? 'opacity-60' : ''}`}>
-                <span className="nx-num w-12 shrink-0 text-xs text-nexus-text-secondary">
-                  {period === 'dia' && !r.backdated ? r.time : dayLabel(r.date)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-sm font-semibold text-nexus-text ${r.status === 'cancelled' ? 'line-through' : ''}`}>{r.serviceName}</span>
-                  <span className="block truncate text-xs text-nexus-text-secondary">
-                    {isAdmin ? `${proName(r.professionalId)} · ` : ''}{r.clientName || GENERAL_CLIENT} · {r.paymentMethod}
-                  </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="nx-num text-sm font-bold text-nexus-text">{money(r.price)}</span>
-                  <RowBadges r={r} />
-                </span>
-              </button>
-            </li>
-          ))}
+          {items.map(row)}
         </ul>
       )}
 
@@ -116,6 +170,8 @@ export default function RegistrosPanel({
         <RegistroDetail
           registro={open}
           isAdmin={isAdmin}
+          showPrices={showPrices}
+          showCommissions={showCommissions}
           professionals={professionals}
           services={services}
           clients={clients}
@@ -129,11 +185,34 @@ export default function RegistrosPanel({
   );
 }
 
-function Stat({ label, value }) {
+function RegistroRow({ r, isAdmin, showPrices, proName, onOpen }) {
+  return (
+    <li>
+      <button type="button" onClick={onOpen} className={`flex w-full items-center gap-3 px-3 py-3 text-left cursor-pointer hover:bg-nexus-surface-hover ${r.status === 'cancelled' ? 'opacity-60' : ''}`}>
+        <span className="nx-num w-12 shrink-0 text-xs text-nexus-text-secondary">
+          {r.backdated ? '—' : r.time}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block truncate text-sm font-semibold text-nexus-text ${r.status === 'cancelled' ? 'line-through' : ''}`}>{r.serviceName}</span>
+          <span className="block truncate text-xs text-nexus-text-secondary">
+            {isAdmin ? `${proName(r.professionalId)} · ` : ''}{r.clientName || GENERAL_CLIENT} · {r.paymentMethod}
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          {showPrices && <span className="nx-num text-sm font-bold text-nexus-text">{money(r.price)}</span>}
+          <RowBadges r={r} />
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function Stat({ label, value, hint }) {
   return (
     <div className="rounded-xl border border-nexus-border bg-nexus-surface px-3 py-2.5">
       <p className="text-xs text-nexus-text-secondary">{label}</p>
       <p className="nx-num mt-0.5 text-lg font-bold text-nexus-text">{value}</p>
+      {hint && <p className="nx-num text-xs text-nexus-text-secondary">{hint}</p>}
     </div>
   );
 }
@@ -151,7 +230,7 @@ function RowBadges({ r }) {
 
 // ───────────────────────── Detalle ─────────────────────────
 
-function RegistroDetail({ registro: r, isAdmin, professionals, services, clients, paymentMethods, proName, onClose, onChanged }) {
+function RegistroDetail({ registro: r, isAdmin, showPrices = true, showCommissions = true, professionals, services, clients, paymentMethods, proName, onClose, onChanged }) {
   const terms = useBusinessTerms();
   const [history, setHistory] = useState(null);
   const [mode, setMode] = useState(null); // 'correct' | 'void'
@@ -186,11 +265,11 @@ function RegistroDetail({ registro: r, isAdmin, professionals, services, clients
     >
       <div className="space-y-4">
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-          <dt className="text-nexus-text-secondary">Importe</dt><dd className="nx-num text-right font-semibold text-nexus-text">{money(r.price)}</dd>
+          {showPrices && <><dt className="text-nexus-text-secondary">Importe</dt><dd className="nx-num text-right font-semibold text-nexus-text">{money(r.price)}</dd></>}
           <dt className="text-nexus-text-secondary">Método de pago</dt><dd className="text-right text-nexus-text">{r.paymentMethod}</dd>
           <dt className="text-nexus-text-secondary">{terms.t('client')}</dt><dd className="truncate text-right text-nexus-text">{r.clientName || GENERAL_CLIENT}</dd>
-          <dt className="text-nexus-text-secondary">Comisión</dt>
-          <dd className="nx-num text-right text-nexus-text">{money(commission)} · {r.commissionPaid ? 'pagada' : 'pendiente'}</dd>
+          {showCommissions && <><dt className="text-nexus-text-secondary">Comisión</dt>
+          <dd className="nx-num text-right text-nexus-text">{money(commission)} · {r.commissionPaid ? 'pagada' : 'pendiente'}</dd></>}
           <dt className="text-nexus-text-secondary">Registrado por</dt>
           <dd className="text-right text-nexus-text">{r.registeredBy?.rol === 'barber' ? proName(r.registeredBy.uid) : 'Administrador'}</dd>
         </dl>
@@ -198,7 +277,7 @@ function RegistroDetail({ registro: r, isAdmin, professionals, services, clients
         {(r.services || []).length > 1 && (
           <ul className="space-y-1 rounded-lg bg-nexus-background p-2.5 text-sm">
             {r.services.map((s) => (
-              <li key={s.serviceId} className="flex justify-between"><span>{s.serviceName}</span><span className="nx-num">{money(s.price)}</span></li>
+              <li key={s.serviceId} className="flex justify-between"><span>{s.serviceName}</span>{showPrices && <span className="nx-num">{money(s.price)}</span>}</li>
             ))}
           </ul>
         )}
@@ -372,16 +451,37 @@ function VoidForm({ r, isAdmin, onCancel, onDone }) {
   );
 }
 
-const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+/** Día / Semana / Mes / Año, con el mismo estilo que el selector de la agenda. */
+function PeriodTabs({ value, onChange }) {
+  return (
+    <div role="group" aria-label="Periodo" className="flex w-full max-w-md items-center justify-between gap-1 rounded-2xl border border-nexus-border bg-nexus-background p-1">
+      {PERIODS.map((p) => (
+        <button
+          key={p.value}
+          type="button"
+          onClick={() => onChange(p.value)}
+          aria-pressed={value === p.value}
+          className={`h-10 flex-1 select-none rounded-xl px-3 text-center text-sm font-semibold transition-colors duration-200 cursor-pointer sm:px-4 ${
+            value === p.value ? 'bg-nexus-primary text-white shadow-sm' : 'text-nexus-text-secondary hover:text-nexus-text'
+          }`}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-/** ◀ fecha ▶ del modo Día. Tocar la fecha abre el calendario. Sin días futuros. */
-function DayPicker({ day, onChange }) {
+const PREV_LABEL = { dia: 'Día anterior', semana: 'Semana anterior', mes: 'Mes anterior', año: 'Año anterior' };
+const NEXT_LABEL = { dia: 'Día siguiente', semana: 'Semana siguiente', mes: 'Mes siguiente', año: 'Año siguiente' };
+
+/**
+ * ◀ periodo ▶. Tocar la fecha o el rango abre el calendario: se elige un día
+ * y se salta al periodo que lo contiene. Nunca se va al futuro.
+ */
+function PeriodNav({ period, refDay, onChange }) {
   const today = todayKey();
   const inputRef = useRef(null);
-  const atToday = day >= today;
-  const label = day === today ? `Hoy · ${dayLabel(day)}`
-    : day === shiftDay(today, -1) ? `Ayer · ${dayLabel(day)}`
-    : `${WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()]} ${dayLabel(day)}`;
   const pick = (v) => { if (v && v <= today) onChange(v); };
   const openCalendar = () => {
     const el = inputRef.current;
@@ -391,18 +491,18 @@ function DayPicker({ day, onChange }) {
   const arrow = 'h-9 w-9 inline-flex items-center justify-center rounded-lg text-nexus-primary transition-colors cursor-pointer hover:bg-nexus-surface-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
   return (
     <div className="flex h-11 items-center rounded-xl border border-nexus-border bg-nexus-surface px-1">
-      <button type="button" onClick={() => onChange(shiftDay(day, -1))} aria-label="Día anterior" className={arrow}>
+      <button type="button" onClick={() => onChange(shiftPeriod(period, refDay, -1))} aria-label={PREV_LABEL[period]} className={arrow}>
         <ChevronLeft className="h-5 w-5" />
       </button>
       <span className="relative">
-        <button type="button" onClick={openCalendar} aria-label="Elegir día"
+        <button type="button" onClick={openCalendar} aria-label="Elegir fecha"
           className="nx-num min-w-28 rounded-lg px-2 py-1.5 text-center text-sm font-semibold text-nexus-text cursor-pointer hover:bg-nexus-surface-hover">
-          {label}
+          {periodLabel(period, refDay, today)}
         </button>
-        <input ref={inputRef} type="date" value={day} max={today} onChange={(e) => pick(e.target.value)}
+        <input ref={inputRef} type="date" value={refDay} max={today} onChange={(e) => pick(e.target.value)}
           tabIndex={-1} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-0" />
       </span>
-      <button type="button" onClick={() => onChange(shiftDay(day, 1))} disabled={atToday} aria-label="Día siguiente" className={arrow}>
+      <button type="button" onClick={() => onChange(clampRef(shiftPeriod(period, refDay, 1), today))} disabled={!canGoNext(period, refDay, today)} aria-label={NEXT_LABEL[period]} className={arrow}>
         <ChevronRight className="h-5 w-5" />
       </button>
     </div>

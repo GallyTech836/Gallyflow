@@ -38,3 +38,10 @@ export function listRegistros({ from, to, professionalId } = {}) {
 }
 
 export const listCorrecciones = (id) => request(`/servicios-registrados/${encodeURIComponent(id)}/correcciones`);
+
+/** Totales por mes del año: { year, source, months: [{ month, count, total, commission }], totals }. */
+export function getRegistrosResumen({ year, professionalId } = {}) {
+  const params = new URLSearchParams({ year: String(year) });
+  if (professionalId && professionalId !== 'all') params.set('professionalId', professionalId);
+  return request(`/servicios-registrados/resumen?${params}`);
+}

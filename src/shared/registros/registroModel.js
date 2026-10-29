@@ -45,11 +45,105 @@ export function dayLabel(key) {
   return key ? `${key.slice(8, 10)}/${key.slice(5, 7)}` : '';
 }
 
-/** Rango del periodo de la lista: 'hoy' | 'semana' (últimos 7 días) | 'mes' (mes actual). */
-export function periodRange(period, today = todayKey()) {
-  if (period === 'semana') return { from: shiftDay(today, -6), to: today };
-  if (period === 'mes') return { from: `${today.slice(0, 7)}-01`, to: today };
-  return { from: today, to: today };
+// ───────────────────────── Periodos de la lista ─────────────────────────
+// 'dia' | 'semana' (lunes a domingo) | 'mes' | 'año', siempre de calendario.
+// `ref` es cualquier día ('AAAA-MM-DD') dentro del periodo que se mira.
+
+export const PERIODS = [
+  { value: 'dia', label: 'Día' },
+  { value: 'semana', label: 'Semana' },
+  { value: 'mes', label: 'Mes' },
+  { value: 'año', label: 'Año' },
+];
+
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const WEEKDAYS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const pad2 = (n) => String(n).padStart(2, '0');
+const parts = (key) => ({ y: Number(key.slice(0, 4)), m: Number(key.slice(5, 7)), d: Number(key.slice(8, 10)) });
+const weekday = (key) => new Date(`${key}T12:00:00Z`).getUTCDay();
+const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+/** { from, to } del periodo que contiene `ref`. */
+export function periodRange(period, ref = todayKey()) {
+  const { y, m } = parts(ref);
+  if (period === 'semana') {
+    const from = shiftDay(ref, -((weekday(ref) + 6) % 7)); // lunes
+    return { from, to: shiftDay(from, 6) };
+  }
+  if (period === 'mes') return { from: `${y}-${pad2(m)}-01`, to: `${y}-${pad2(m)}-${pad2(lastDay(y, m))}` };
+  if (period === 'año') return { from: `${y}-01-01`, to: `${y}-12-31` };
+  return { from: ref, to: ref };
+}
+
+/** Día de referencia del periodo anterior (dir -1) o siguiente (dir 1). */
+export function shiftPeriod(period, ref, dir) {
+  const { y, m } = parts(ref);
+  if (period === 'semana') return shiftDay(periodRange('semana', ref).from, 7 * dir);
+  if (period === 'mes') {
+    const t = new Date(Date.UTC(y, m - 1 + dir, 1));
+    return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-01`;
+  }
+  if (period === 'año') return `${y + dir}-01-01`;
+  return shiftDay(ref, dir);
+}
+
+/** ¿Hay periodo siguiente? (nunca se va al futuro). */
+export function canGoNext(period, ref, today = todayKey()) {
+  return periodRange(period, shiftPeriod(period, ref, 1)).from <= today;
+}
+
+/** Al pasar a otro periodo: se queda en el día que se miraba (nunca futuro). */
+export function clampRef(ref, today = todayKey()) {
+  return ref > today ? today : ref;
+}
+
+/** "Martes 27 oct" (con año si no es el de `today`). */
+export function dayTitle(key, today = todayKey()) {
+  const { y, m, d } = parts(key);
+  return `${cap(WEEKDAYS_LONG[weekday(key)])} ${d} ${MONTHS_SHORT[m - 1]}${String(y) !== today.slice(0, 4) ? ` ${y}` : ''}`;
+}
+
+/** "Octubre" de 'AAAA-MM'. */
+export function monthName(month) {
+  return cap(MONTHS[Number(month.slice(5, 7)) - 1] || '');
+}
+
+/** Texto del periodo: "Hoy · 29 oct", "26 oct – 1 nov 2026", "Octubre 2026", "2026". */
+export function periodLabel(period, ref, today = todayKey()) {
+  const { y, m } = parts(ref);
+  if (period === 'año') return String(y);
+  if (period === 'mes') return `${monthName(ref.slice(0, 7))} ${y}`;
+  if (period === 'semana') {
+    const { from, to } = periodRange('semana', ref);
+    const a = parts(from);
+    const b = parts(to);
+    const left = a.y !== b.y ? `${a.d} ${MONTHS_SHORT[a.m - 1]} ${a.y}`
+      : a.m !== b.m ? `${a.d} ${MONTHS_SHORT[a.m - 1]}` : `${a.d}`;
+    return `${left} – ${b.d} ${MONTHS_SHORT[b.m - 1]} ${b.y}`;
+  }
+  const short = `${parts(ref).d} ${MONTHS_SHORT[m - 1]}`;
+  if (ref === today) return `Hoy · ${short}`;
+  if (ref === shiftDay(today, -1)) return `Ayer · ${short}`;
+  return dayTitle(ref, today);
+}
+
+/**
+ * Registros agrupados por día, del más reciente al más antiguo. Cada grupo:
+ * { date, items, ...summarize(items) }. Días sin registros no aparecen.
+ * Dentro del día se respeta el orden recibido (más nuevo primero).
+ */
+export function groupByDay(registros = []) {
+  const map = new Map();
+  for (const r of registros) {
+    if (!r?.date) continue;
+    if (!map.has(r.date)) map.set(r.date, []);
+    map.get(r.date).push(r);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, items]) => ({ date, items, ...summarize(items) }));
 }
 
 // Dónde quedó un registro con otra fecha respecto de la caja (lo decide el backend).
