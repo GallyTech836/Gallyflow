@@ -520,11 +520,12 @@ export default function App({ negocioSlug, proId } = {}) {
     const promoText = useCallback((summary, { exact = false } = {}) => {
       if (!summary) return '';
       const p = allPromotions.find((x) => String(x.id) === String(summary.id));
-      const names = (p?.serviceIds || []).map((id) => services.find((sv) => String(sv.id) === String(id))?.name).filter(Boolean);
+      const names = (p?.serviceIds || []).map((id) => services.find((sv) => String(sv.id) === String(id))?.name?.trim()).filter(Boolean);
+      const lista = names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : (names[0] || '');
       let regla = '';
       if (p?.type === 'combo') regla = `${names.join(' + ')} a Bs ${p.comboPrice}`;
-      else if (p) regla = `${p.discountKind === 'amount' ? `Bs ${p.discountValue}` : `${p.discountValue}%`} menos en ${names.join(', ')}`;
-      if (exact) return `«${summary.name}»: Bs ${summary.discount} menos`;
+      else if (p) regla = `${lista} con ${p.discountKind === 'amount' ? `Bs ${p.discountValue}` : `${p.discountValue}%`} de descuento`;
+      if (exact) return `«${summary.name}»: Bs ${summary.discount} de descuento`;
       return regla ? `«${summary.name}»: ${regla}` : `«${summary.name}»`;
     }, [allPromotions, services]);
 
