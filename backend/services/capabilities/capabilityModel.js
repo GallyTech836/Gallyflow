@@ -93,6 +93,8 @@ export const CAPABILITIES = [
     description: 'Agenda del staff, citas y bloqueos de horario.', enforcedIn: ['ui'] },
   { key: 'servicios', module: 'services', label: 'Catálogo de servicios', status: 'implemented', kind: 'toggle', core: true, default: true,
     description: 'Servicios, precios y duración.', enforcedIn: ['ui'] },
+  { key: 'promociones', module: 'services', label: 'Promociones', status: 'implemented', kind: 'toggle', default: true,
+    description: 'Descuentos y combos con vigencia, por sucursal.', enforcedIn: ['ui'] },
   { key: 'reservaPublica', module: 'agenda', label: 'Reserva pública', status: 'implemented', kind: 'toggle', default: true,
     description: 'Link /reservar para que los clientes agenden solos.', enforcedIn: ['ui', 'backend', 'rules'] },
   { key: 'linkPersonalProfesional', module: 'agenda', label: 'Link personal del profesional', status: 'implemented', kind: 'toggle', default: true,

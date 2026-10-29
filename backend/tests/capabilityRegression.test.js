@@ -26,7 +26,10 @@ const OLD_PRESETS = Object.fromEntries(before.LAUNCH_PLAN_PRESETS.map((p) => [p.
 const NEW_PRESETS = Object.fromEntries(now.LAUNCH_PLAN_PRESETS.map((p) => [p.id, p]));
 const EXISTING_PLANS = ['esencial', 'profesional', 'premium'];
 // Capacidades agregadas después del modelo congelado.
-const NEW_KEYS = ['registroServicios', 'vistaAgenda'];
+const NEW_KEYS = ['registroServicios', 'vistaAgenda', 'promociones'];
+// Promociones (nueva, activa por defecto en todos los planes) se promociona
+// como incluida: se quita al comparar lo que se vendía antes.
+const sinPromociones = (keys) => keys.filter((k) => k !== 'promociones');
 
 // Plan guardado como lo guarda Super Admin HOY (con el modelo anterior):
 // no tiene la clave registroServicios.
@@ -47,7 +50,7 @@ function assertSameResolution(args, label) {
   for (const key of OLD_KEYS) assert.deepEqual(b[key], a[key], `${label} -> ${key}`);
   assert.equal(b.registroServicios.enabled, false, `${label} -> registroServicios debe quedar apagada`);
   assert.deepEqual(
-    now.sellableCapabilities(b).map((c) => c.key),
+    sinPromociones(now.sellableCapabilities(b).map((c) => c.key)),
     before.sellableCapabilities(a).map((c) => c.key),
     `${label} -> lo que se promociona como incluido`,
   );
@@ -118,8 +121,8 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
     for (const id of EXISTING_PLANS) {
       const p = NEW_PRESETS[id];
       const nuevo = now.buildPlanFeatures(p.features, { vertical: p.vertical });
-      // Lo único nuevo al guardar: registroServicios apagada y vistaAgenda activa.
-      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true }, id);
+      // Lo único nuevo al guardar: registroServicios apagada, vistaAgenda y promociones activas.
+      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true, promociones: true }, id);
       assertSameResolution({ planFeatures: nuevo }, `re-guardado ${id}`);
     }
   });
@@ -158,7 +161,7 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
       );
       // Guardar un plan viejo (sin vertical) da lo mismo + las claves nuevas con su default.
       if (planFeatures) {
-        const nuevas = { registroServicios: false, vistaAgenda: true };
+        const nuevas = { registroServicios: false, vistaAgenda: true, promociones: true };
         assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...expectedBuild(planFeatures), ...nuevas }, `buildPlanFeatures caso ${i}`);
         assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...expectedBuild(planFeatures, { vertical: 'citas' }), ...nuevas }, `buildPlanFeatures citas caso ${i}`);
       }
@@ -226,8 +229,22 @@ describe('vistaAgenda: ajuste de pantalla, no se vende', () => {
       const a = before.resolveCapabilities({ planFeatures: storedFeatures(id) });
       const p = NEW_PRESETS[id];
       const b = now.resolveCapabilities({ planFeatures: now.buildPlanFeatures(p.features, { vertical: p.vertical }) });
-      assert.deepEqual(now.sellableCapabilities(b).map((c) => c.key), before.sellableCapabilities(a).map((c) => c.key), id);
+      assert.deepEqual(sinPromociones(now.sellableCapabilities(b).map((c) => c.key)), before.sellableCapabilities(a).map((c) => c.key), id);
     }
+  });
+});
+
+describe('promociones: activa en todos los planes, se puede apagar por plan', () => {
+  test('planes guardados sin la clave y negocios sin plan la tienen activa', () => {
+    for (const id of EXISTING_PLANS) {
+      assert.equal(now.resolveCapabilities({ planFeatures: storedFeatures(id) }).promociones.enabled, true, id);
+    }
+    assert.equal(now.resolveCapabilities({}).promociones.enabled, true);
+  });
+  test('un plan la puede apagar y una excepción la puede volver a encender', () => {
+    const planFeatures = { ...storedFeatures('esencial'), promociones: false };
+    assert.equal(now.resolveCapabilities({ planFeatures }).promociones.enabled, false);
+    assert.equal(now.resolveCapabilities({ planFeatures, overrides: { promociones: true } }).promociones.enabled, true);
   });
 });
 

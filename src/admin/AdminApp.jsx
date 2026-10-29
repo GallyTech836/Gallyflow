@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList, BadgePercent } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -46,6 +46,7 @@ import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
 import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars';
 import AnalyticsSection from './analytics/AnalyticsSection';
 import InventoryPage from './inventory/InventoryPage';
+import PromotionsPage from './promotions/PromotionsPage';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
@@ -242,9 +243,10 @@ const [activeTab, setActiveTab] = useState('agenda');
 const { capabilities: planFeatures, can: canUseCapability, loading: planLoading } = useNegocioPlan(negocioId);
 // Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
 // capacidad mientras la pestaña está abierta, se vuelve a la pestaña de inicio.
-const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
-// Pestañas que no son un módulo propio: "Servicios registrados" es parte de Agenda.
-const TAB_MODULE = { registros: 'agenda' };
+const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', promotions: 'promociones', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
+// Pestañas que no son un módulo propio: "Servicios registrados" es parte de Agenda
+// y Promociones es parte de Servicios.
+const TAB_MODULE = { registros: 'agenda', promotions: 'services' };
 // Pestaña de inicio: la Agenda; si está oculta (vistaAgenda, Nexus Control),
 // "Servicios registrados", luego Dashboard y, como último recurso, Servicios.
 const showAgenda = canUseCapability('vistaAgenda');
@@ -2716,6 +2718,16 @@ const { heroConfig } = useHeroConfig(negocioId);
             />
           )}
 
+          {hasFeature(planFeatures, 'promociones') && hasModule('services') && (
+            <SidebarItem
+              icon={BadgePercent}
+              label="Promociones"
+              collapsed={navCollapsed}
+              active={activeTab === 'promotions'}
+              onClick={() => { setActiveTab('promotions'); setIsMobileSidebarOpen(false); }}
+            />
+          )}
+
           {hasFeature(planFeatures, 'clientes') && hasModule('clients') && (
             <SidebarItem
               icon={UserCheck}
@@ -2860,6 +2872,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {activeTab === 'clients' && `Base de Datos de ${t('clients')}`}
                   {activeTab === 'branches' && 'Gestión de Sucursales'}
                   {activeTab === 'inventory' && 'Inventario'}
+                  {activeTab === 'promotions' && 'Promociones'}
                   {activeTab === 'commissions' && 'Liquidación de Comisiones'}
                   {activeTab === 'assistance' && 'Control de Asistencias'}
                   {activeTab === 'reports' && 'Métricas & Informes'}
@@ -3756,6 +3769,15 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'promotions' && (
+            <PromotionsPage
+              negocioId={negocioId}
+              services={services}
+              branches={branches}
+              onToast={triggerToast}
+            />
           )}
 
           {activeTab === 'inventory' && (
