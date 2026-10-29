@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabilityModel';
+import { computeEffectiveStatus, isBlockedStatus, expiryDateKey } from '../capabilities/capabilityModel';
 
 /**
  * Escucha en tiempo real el campo `status` del negocio. Si el Super
@@ -19,6 +19,10 @@ import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabil
 export function useNegocioStatus(negocioId) {
   const [status, setStatus] = useState('active');
   const [loading, setLoading] = useState(true);
+  // Clave de los campos crudos que definen el vencimiento (status, subscriptionEnd,
+  // trialEnd). Cambia solo cuando cambia alguno; la usa el aviso de vencimiento
+  // para volver a consultar sin abrir otro listener.
+  const [statusKey, setStatusKey] = useState(null);
 
   useEffect(() => {
     if (!negocioId) {
@@ -30,9 +34,11 @@ export function useNegocioStatus(negocioId) {
     const unsub = onSnapshot(ref, (snap) => {
       if (!snap.exists()) {
         setStatus('active');
+        setStatusKey('none');
       } else {
         const data = snap.data();
         setStatus(computeEffectiveStatus(data.status || 'active', data.subscriptionEnd || null, data.trialEnd || null));
+        setStatusKey([data.status || 'active', expiryDateKey(data.subscriptionEnd) || '', expiryDateKey(data.trialEnd) || ''].join('|'));
       }
       setLoading(false);
     });
@@ -41,5 +47,5 @@ export function useNegocioStatus(negocioId) {
 
   const isBlocked = isBlockedStatus(status);
 
-  return { status, isBlocked, loading };
+  return { status, isBlocked, loading, statusKey };
 }

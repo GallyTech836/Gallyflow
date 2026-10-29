@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CalendarClock, MessageCircle } from 'lucide-react';
 import { Modal, Button } from '../ui';
 import { getSubscriptionNotice, ackSubscriptionNotice } from './subscriptionNoticeApi';
@@ -9,22 +9,60 @@ function cuando(dias) {
   return `en ${dias} días`;
 }
 
+const VISIBLE_MIN_GAP_MS = 30 * 60 * 1000;
+
 /**
  * Aviso de vencimiento de la suscripción o la prueba gratuita (solo admin).
- * Se consulta una vez por carga. Solo se cierra con "Aceptar": sin X, sin
- * Escape y sin clic afuera. Si el backend falla, no muestra nada.
+ * Consulta el backend:
+ *  - al cargar y cada vez que cambia `refreshKey` (status / subscriptionEnd /
+ *    trialEnd del negocio, del onSnapshot de useNegocioStatus);
+ *  - al volver a la pestaña, como máximo una vez cada 30 minutos.
+ * Sin setInterval. Si el aviso ya está abierto (o se está aceptando), no se
+ * consulta ni se reemplaza. Solo se cierra con "Aceptar": sin X, sin Escape y
+ * sin clic afuera. Si el backend falla, no muestra nada.
  */
-export default function SubscriptionNoticeModal() {
+export default function SubscriptionNoticeModal({ refreshKey }) {
   const [notice, setNotice] = useState(null);
-  const asked = useRef(false);
+  const openRef = useRef(false);     // aviso en pantalla o aceptándose
+  const inFlightRef = useRef(false); // consulta en curso
+  const lastCheckRef = useRef(0);    // última consulta (ms)
+  const pendingRef = useRef(false);  // cambió algo durante una consulta: repetir
+
+  const check = useCallback(async () => {
+    if (openRef.current) return;
+    if (inFlightRef.current) { pendingRef.current = true; return; }
+    inFlightRef.current = true;
+    try {
+      do {
+        pendingRef.current = false;
+        lastCheckRef.current = Date.now();
+        const data = await getSubscriptionNotice();
+        if (data?.show && !openRef.current) {
+          openRef.current = true;
+          setNotice(data);
+        }
+      } while (pendingRef.current && !openRef.current);
+    } finally {
+      inFlightRef.current = false;
+      pendingRef.current = false;
+    }
+  }, []);
+
+  // Al cargar (cuando llega el primer snapshot) y cada vez que cambian los campos.
+  useEffect(() => {
+    if (refreshKey == null) return;
+    check();
+  }, [refreshKey, check]);
 
   useEffect(() => {
-    if (asked.current) return;
-    asked.current = true;
-    getSubscriptionNotice().then((data) => {
-      if (data?.show) setNotice(data);
-    });
-  }, []);
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastCheckRef.current < VISIBLE_MIN_GAP_MS) return;
+      check();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [check]);
 
   if (!notice) return null;
 
@@ -35,6 +73,7 @@ export default function SubscriptionNoticeModal() {
   const aceptar = async () => {
     await ackSubscriptionNotice(notice);
     setNotice(null);
+    openRef.current = false;
   };
 
   const abrirWhatsapp = () => {

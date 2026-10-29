@@ -28,7 +28,7 @@ export default function RestauranteAdminApp({ user, negocioId }) {
   const { logout } = useAuth();
   const businessProfile = useBusinessProfile(negocioId);
   const { hasModule } = businessProfile;
-  const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
+  const { isBlocked, status: negocioStatus, statusKey } = useNegocioStatus(negocioId);
   const { can, loading: planLoading } = useNegocioPlan(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 
@@ -71,7 +71,7 @@ export default function RestauranteAdminApp({ user, negocioId }) {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
-      {negocioId && <SubscriptionNoticeModal />}
+      {negocioId && <SubscriptionNoticeModal refreshKey={statusKey} />}
       <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row overflow-hidden relative">
         {mobileOpen && (
           <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-xs z-40 md:hidden" onClick={() => setMobileOpen(false)} />

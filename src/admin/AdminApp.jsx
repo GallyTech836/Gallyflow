@@ -145,7 +145,7 @@ const { logout } = useAuth();
   // Confirmación antes de acciones destructivas (Fase 4). No cambia la lógica de borrado.
   const [confirmAction, confirmDialog] = useConfirm();
   const ServiceIcon = getServiceIcon(businessProfile.type);
-  const { isBlocked, status: negocioStatus } = useNegocioStatus(negocioId);
+  const { isBlocked, status: negocioStatus, statusKey } = useNegocioStatus(negocioId);
   useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
 console.log('[ADMIN] negocioId:', negocioId);
 const [activeTab, setActiveTab] = useState('agenda');
@@ -2594,7 +2594,7 @@ const { heroConfig } = useHeroConfig(negocioId);
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
-    {negocioId && <SubscriptionNoticeModal />}
+    {negocioId && <SubscriptionNoticeModal refreshKey={statusKey} />}
     <div className="h-screen bg-nexus-background text-nexus-text font-sans antialiased flex flex-col md:flex-row selection:bg-nexus-primary selection:text-white overflow-hidden relative">
       
       {isMobileSidebarOpen && (
