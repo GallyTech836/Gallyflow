@@ -15,8 +15,8 @@ const VARIANTS = {
     message: 'El acceso al panel está pausado. Consulta con el administrador del negocio.',
   }),
   admin: (status) => (status === 'expired'
-    ? { tone: 'error', Icon: Clock3, title: 'Tu suscripción venció', message: 'Renueva para volver a usar Nexus. Tus datos están guardados.' }
-    : { tone: 'error', Icon: Ban, title: 'Cuenta suspendida', message: 'Comunícate con nosotros para reactivarla. Tus datos están guardados.' }),
+    ? { tone: 'neutral', Icon: Clock3, title: 'Tu suscripción venció', message: 'Renueva para volver a usar Nexus. Tus datos están guardados.', actionLabel: 'Renovar suscripción' }
+    : { tone: 'neutral', Icon: Ban, title: 'Cuenta suspendida', message: 'Comunícate con nosotros para reactivarla. Tus datos están guardados.', actionLabel: 'Contactar a soporte' }),
 };
 
 // Sin variante: comportamiento original (ej. "Acceso no incluido en el plan").
@@ -41,7 +41,8 @@ const TONES = {
  * Pantalla de negocio bloqueado / acceso no disponible.
  * - `variant`: 'cliente' | 'staff' | 'admin' (textos e ícono de cada app).
  * - `title` / `message`: opcionales, tienen prioridad sobre la variante.
- * - `actions`: botones de enlace [{ label, href }] (ej. WhatsApp). Se omiten los que no tienen href.
+ * - `actions`: botones de enlace [{ label, href }] (ej. WhatsApp). Se omiten los que no tienen href;
+ *   sin label usan el texto de la variante (admin: según vencida / suspendida).
  */
 export default function SuspendedScreen({ status, variant, onLogout, title, message, actions = [] }) {
   const base = VARIANTS[variant]?.(status) || legacy(status);
@@ -68,7 +69,7 @@ export default function SuspendedScreen({ status, variant, onLogout, title, mess
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-nexus-primary px-4 text-sm font-medium text-white shadow-sm hover:bg-nexus-primary-hover"
               >
                 <MessageCircle size={18} aria-hidden="true" />
-                {a.label}
+                {a.label || base.actionLabel}
               </a>
             ))}
           </div>

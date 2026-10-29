@@ -2595,7 +2595,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         variant="admin"
         status={negocioStatus}
         onLogout={logout}
-        actions={[{ label: 'Escribir por WhatsApp', href: supportUrl }]}
+        actions={[{ href: supportUrl }]}
       />
     );
   }
