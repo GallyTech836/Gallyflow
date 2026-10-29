@@ -46,6 +46,7 @@ import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
 import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars';
 import AnalyticsSection from './analytics/AnalyticsSection';
 import InventoryPage from './inventory/InventoryPage';
+import SectionTabs from './SectionTabs';
 import PromotionsPage from './promotions/PromotionsPage';
 import { usePromotions } from '../shared/promotions/usePromotions';
 import { priceWithPromotions, promoInputsChanged } from '../shared/promotions/citaPromotions';
@@ -2694,16 +2695,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto" aria-label="Menú principal">
           <SidebarSection label="Principal" collapsed={navCollapsed} first />
 
-          {hasFeature(planFeatures, 'dashboard') && hasModule('dashboard') && (
-            <SidebarItem
-              icon={LayoutDashboard}
-              label="Dashboard"
-              collapsed={navCollapsed}
-              active={activeTab === 'dashboard'}
-              onClick={() => { setActiveTab('dashboard'); setIsMobileSidebarOpen(false); }}
-            />
-          )}
-
+          {/* Lo de todos los días primero: Agenda (o Servicios registrados), Dashboard, Clientes. */}
           {showAgenda && (
             <SidebarItem
               icon={CalendarIcon}
@@ -2726,35 +2718,13 @@ const { heroConfig } = useHeroConfig(negocioId);
             />
           )}
 
-          <SidebarSection label="Gestión" collapsed={navCollapsed} />
-
-          {hasModule('barbers') && (
+          {hasFeature(planFeatures, 'dashboard') && hasModule('dashboard') && (
             <SidebarItem
-              icon={Users}
-              label={t('professionals')}
+              icon={LayoutDashboard}
+              label="Dashboard"
               collapsed={navCollapsed}
-              active={activeTab === 'barbers'}
-              onClick={() => { setActiveTab('barbers'); setIsMobileSidebarOpen(false); }}
-            />
-          )}
-
-          {hasModule('services') && (
-            <SidebarItem
-              icon={ServiceIcon}
-              label={t('services')}
-              collapsed={navCollapsed}
-              active={activeTab === 'services'}
-              onClick={() => { setActiveTab('services'); setIsMobileSidebarOpen(false); }}
-            />
-          )}
-
-          {hasFeature(planFeatures, 'promociones') && hasModule('services') && (
-            <SidebarItem
-              icon={Tag}
-              label="Promociones"
-              collapsed={navCollapsed}
-              active={activeTab === 'promotions'}
-              onClick={() => { setActiveTab('promotions'); setIsMobileSidebarOpen(false); }}
+              active={activeTab === 'dashboard'}
+              onClick={() => { setActiveTab('dashboard'); setIsMobileSidebarOpen(false); }}
             />
           )}
 
@@ -2768,13 +2738,26 @@ const { heroConfig } = useHeroConfig(negocioId);
             />
           )}
 
-          {hasModule('branches') && (
+          <SidebarSection label="Gestión" collapsed={navCollapsed} />
+
+          {/* Profesionales incluye Asistencia como pestaña; Servicios incluye Promociones. */}
+          {hasModule('barbers') && (
             <SidebarItem
-              icon={Building2}
-              label="Sucursales"
+              icon={Users}
+              label={t('professionals')}
               collapsed={navCollapsed}
-              active={activeTab === 'branches'}
-              onClick={() => { setActiveTab('branches'); setIsMobileSidebarOpen(false); }}
+              active={activeTab === 'barbers' || activeTab === 'assistance'}
+              onClick={() => { setActiveTab('barbers'); setIsMobileSidebarOpen(false); }}
+            />
+          )}
+
+          {hasModule('services') && (
+            <SidebarItem
+              icon={ServiceIcon}
+              label={t('services')}
+              collapsed={navCollapsed}
+              active={activeTab === 'services' || activeTab === 'promotions'}
+              onClick={() => { setActiveTab('services'); setIsMobileSidebarOpen(false); }}
             />
           )}
 
@@ -2788,7 +2771,9 @@ const { heroConfig } = useHeroConfig(negocioId);
             />
           )}
 
-          <SidebarSection label="Finanzas" collapsed={navCollapsed} />
+          {((hasFeature(planFeatures, 'comisiones') && hasModule('commissions')) || (hasFeature(planFeatures, 'analiticas') && hasModule('reports'))) && (
+            <SidebarSection label="Finanzas" collapsed={navCollapsed} />
+          )}
 
           {hasFeature(planFeatures, 'comisiones') && hasModule('commissions') && (
             <SidebarItem
@@ -2797,16 +2782,6 @@ const { heroConfig } = useHeroConfig(negocioId);
               collapsed={navCollapsed}
               active={activeTab === 'commissions'}
               onClick={() => { setActiveTab('commissions'); setIsMobileSidebarOpen(false); }}
-            />
-          )}
-
-          {hasFeature(planFeatures, 'asistencia') && hasModule('assistance') && (
-            <SidebarItem
-              icon={Clock}
-              label="Asistencia"
-              collapsed={navCollapsed}
-              active={activeTab === 'assistance'}
-              onClick={() => { setActiveTab('assistance'); setIsMobileSidebarOpen(false); }}
             />
           )}
 
@@ -2826,7 +2801,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             icon={Settings}
             label="Configuración"
             collapsed={navCollapsed}
-            active={activeTab === 'settings'}
+            active={activeTab === 'settings' || activeTab === 'branches'}
             expanded={!navCollapsed ? isSettingsMenuOpen : undefined}
             trailing={<ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isSettingsMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />}
             onClick={() => {
@@ -2842,18 +2817,22 @@ const { heroConfig } = useHeroConfig(negocioId);
 
           {!navCollapsed && isSettingsMenuOpen && (
             <div className="ml-4 pl-2 border-l border-nexus-navy-border space-y-0.5 py-1">
-              {SETTINGS_SECTIONS.filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp')).map(({ id, label: baseLabel, icon: Icon }) => {
+              {SETTINGS_SECTIONS
+                .filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp'))
+                // Sucursales vive en Configuración (se crean una vez y casi no se tocan).
+                .flatMap((sec) => (sec.id === 'business' && hasModule('branches') ? [sec, { id: 'branches', label: 'Sucursales', icon: Building2 }] : [sec]))
+                .map(({ id, label: baseLabel, icon: Icon }) => {
                 // Modo registros: sin link público, la sección queda como "Marca" (nombre y logo).
                 const label = registrosMode && id === 'hero' ? 'Marca' : baseLabel;
-                const isCurrent = activeTab === 'settings' && settingsSection === id;
+                const isCurrent = id === 'branches' ? activeTab === 'branches' : activeTab === 'settings' && settingsSection === id;
                 return (
                   <button
                     key={id}
                     type="button"
                     aria-current={isCurrent ? 'page' : undefined}
                     onClick={() => {
-                      setActiveTab('settings');
-                      setSettingsSection(id);
+                      if (id === 'branches') setActiveTab('branches');
+                      else { setActiveTab('settings'); setSettingsSection(id); }
                       setIsMobileSidebarOpen(false);
                     }}
                     className={`w-full flex h-9 items-center gap-2.5 px-2.5 rounded-lg text-sm transition-colors duration-150 cursor-pointer ${
@@ -2900,7 +2879,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {activeTab === 'barbers' && `Gestión de ${t('professionals')}`}
                   {activeTab === 'services' && `Catálogo de ${t('services')}`}
                   {activeTab === 'clients' && `Base de Datos de ${t('clients')}`}
-                  {activeTab === 'branches' && 'Gestión de Sucursales'}
+                  {activeTab === 'branches' && 'Sucursales'}
                   {activeTab === 'inventory' && 'Inventario'}
                   {activeTab === 'promotions' && 'Promociones'}
                   {activeTab === 'commissions' && 'Liquidación de Comisiones'}
@@ -3554,6 +3533,24 @@ const { heroConfig } = useHeroConfig(negocioId);
               3. PESTAÑA: LISTADO DE STAFF PROFESIONAL
               (Fase 4: tabla en escritorio y tarjetas en celular, mismos datos y acciones)
               ========================================== */}
+          {(activeTab === 'barbers' || activeTab === 'assistance') && hasFeature(planFeatures, 'asistencia') && hasModule('assistance') && (
+            <SectionTabs
+              ariaLabel={t('professionals')}
+              active={activeTab}
+              onChange={setActiveTab}
+              tabs={[{ id: 'barbers', label: t('professionals') }, { id: 'assistance', label: 'Asistencia' }]}
+            />
+          )}
+
+          {(activeTab === 'services' || activeTab === 'promotions') && hasFeature(planFeatures, 'promociones') && (
+            <SectionTabs
+              ariaLabel={t('services')}
+              active={activeTab}
+              onChange={setActiveTab}
+              tabs={[{ id: 'services', label: t('services') }, { id: 'promotions', label: 'Promociones' }]}
+            />
+          )}
+
           {activeTab === 'barbers' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
