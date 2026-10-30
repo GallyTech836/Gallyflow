@@ -4,9 +4,11 @@
 // común de un "provider" (send(destinatario, mensaje)).
 
 import { db } from '../config/firebase.js';
+import { FieldValue } from 'firebase-admin/firestore';
 import { PUBLIC_APP_URL } from '../config/app.js';
 import { logger } from '../utils/logger.js';
 import { buildMessage } from './notificationTemplates.js';
+import { getDeviceIds } from './deviceRegistrationService.js';
 import { getBusinessTerms } from './businessProfiles/businessTerms.js';
 import * as oneSignalProvider from './providers/oneSignalProvider.js';
 import * as whatsappProvider from './providers/whatsappProvider.js';
@@ -34,7 +36,8 @@ export async function getRecipients(negocioId, roles, options = {}) {
 
   let recipients = snap.docs
     .map((doc) => ({ uid: doc.id, ...doc.data() }))
-    .filter((u) => u.oneSignalId && u.uid !== options.excludeUid);
+    .map((u) => ({ ...u, deviceIds: getDeviceIds(u) }))
+    .filter((u) => u.deviceIds.length > 0 && u.uid !== options.excludeUid);
 
   // Si viene un profesional específico, solo ese barbero (+ todos los
   // admins, que siempre deben enterarse) reciben la notificación. Si no
@@ -82,6 +85,24 @@ export async function sendDirectNotification({ oneSignalId, tipo, data }) {
   }
 }
 
+function isDeadDeviceError(err) {
+  const msg = String(err?.message || err || '');
+  return /not subscribed|invalid_player_ids|invalid_subscription|invalid_aliases/i.test(msg);
+}
+
+async function pruneDevices(user, deadIds) {
+  const remaining = user.deviceIds.filter((id) => !deadIds.includes(id));
+  try {
+    await db.collection('usuarios').doc(user.uid).update({
+      oneSignalIds: remaining,
+      oneSignalId: remaining.length ? remaining[remaining.length - 1] : FieldValue.delete(),
+    });
+    logger.info(`[notificationService] ${deadIds.length} dispositivo(s) dado(s) de baja quitado(s) (uid=${user.uid})`);
+  } catch (err) {
+    logger.warn(`[notificationService] No se pudieron limpiar dispositivos (uid=${user.uid}):`, err.message);
+  }
+}
+
 export async function sendNotification({ tipo, negocioId, data, actorUid, targetProfessionalId, targetProfessionalIds, onlyTargetProfessional }) {
   const recipients = await getRecipients(negocioId, ['admin', 'barber'], {
     excludeUid: actorUid,
@@ -98,23 +119,39 @@ export async function sendNotification({ tipo, negocioId, data, actorUid, target
   const terms = await getBusinessTerms(negocioId);
   const mensaje = buildMessage(tipo, data, terms);
 
-  const results = await Promise.allSettled(
-    recipients.map((r) => PROVIDERS.push.send(r.oneSignalId, mensaje, APP_URLS[r.rol]))
+  // Un envío por dispositivo; el destinatario cuenta como "enviado" si le
+  // llegó al menos a uno de sus dispositivos.
+  const results = await Promise.all(
+    recipients.map(async (r) => {
+      const perDevice = await Promise.allSettled(
+        r.deviceIds.map((id) => PROVIDERS.push.send(id, mensaje, APP_URLS[r.rol]))
+      );
+      const ok = perDevice.filter((d) => d.status === 'fulfilled').length;
+      const errors = perDevice
+        .filter((d) => d.status === 'rejected')
+        .map((d) => d.reason?.message || String(d.reason));
+      // Dispositivos que OneSignal da por muertos (dados de baja o ID inválido):
+      // se quitan de la lista. Si el usuario vuelve a abrir la app y acepta
+      // notificaciones, se registra de nuevo solo.
+      const dead = r.deviceIds.filter((id, i) =>
+        perDevice[i].status === 'rejected' && isDeadDeviceError(perDevice[i].reason));
+      if (dead.length) await pruneDevices(r, dead);
+      return { user: r, ok, devices: perDevice.length, errors };
+    })
   );
 
-  const sent = results.filter((r) => r.status === 'fulfilled').length;
+  const sent = results.filter((r) => r.ok > 0).length;
   const failed = results.length - sent;
 
   if (failed > 0) {
     logger.warn(`[notificationService] ${failed} envíos fallaron de ${results.length} (negocio=${negocioId})`);
-    // Detalle por destinatario: quién falló y qué respondió OneSignal.
-    results.forEach((r, i) => {
-      if (r.status !== 'rejected') return;
-      const u = recipients[i];
-      const quien = u.nombre || u.name || u.username || u.uid;
-      logger.warn(`[notificationService]   ↳ ${u.rol} "${quien}" (uid=${u.uid}): ${r.reason?.message || r.reason}`);
-    });
   }
+  // Detalle de quién no recibió (o recibió solo en parte) y qué respondió OneSignal.
+  results.forEach(({ user: u, ok, devices, errors }) => {
+    if (errors.length === 0) return;
+    const quien = u.nombre || u.name || u.username || u.uid;
+    logger.warn(`[notificationService]   ↳ ${u.rol} "${quien}" (uid=${u.uid}): ${ok}/${devices} dispositivos. ${errors[0]}`);
+  });
   logger.info(`[notificationService] ${tipo}: enviado a ${sent}/${results.length} destinatarios (negocio=${negocioId})`);
 
   return { sent, failed, total: results.length };
