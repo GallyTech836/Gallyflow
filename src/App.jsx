@@ -5,7 +5,7 @@ import { useManifestByRoute } from './shared/pwa/useManifestByRoute';
 import { useAdminSession } from './auth/useAdminSession';
 import SessionLimitScreen from './shared/session/SessionLimitScreen';
 import ConnectionErrorScreen from './shared/session/ConnectionErrorScreen';
-import { isAppRoute, parsePublicBookingPath } from './shared/booking/publicRoutes';
+import { isAppRoute, parsePublicBookingPath, restoreLastBookingInUrl } from './shared/booking/publicRoutes';
 
 const AdminEntry = lazy(() => import('./admin/AdminEntry'));
 const BarberApp = lazy(() => import('./barber/BarberApp'));
@@ -39,6 +39,8 @@ function App() {
 
   // Formato viejo: /reservar?negocio=slug(&pro=ID)
   if (isAppRoute(path, 'reservar')) {
+    // App instalada: abre /reservar sin negocio -> retomar el último abierto.
+    restoreLastBookingInUrl();
     return (
       <Suspense fallback={LoadingScreen}>
         <ClientApp />

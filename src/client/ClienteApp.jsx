@@ -30,6 +30,7 @@ import { usePromotions } from '../shared/promotions/usePromotions';
 import { applyPromotions, resolveBranchId } from '../shared/promotions/promotionPricing';
 import { visiblePromotions, discountBadgeFor, combosAvailable, whenText, featuredFirst, todayLaPaz } from '../shared/promotions/promotionModel';
 import { summarizeCitaServices } from '../shared/servicePricing/professionalPricing';
+import { rememberLastBooking } from '../shared/booking/publicRoutes';
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -123,6 +124,7 @@ export default function App({ negocioSlug, proId } = {}) {
           setNegocioNotFound(true);
         } else {
           setNegocioId(slug);
+          rememberLastBooking(slug, proId || params.get('pro'));
         }
       } catch (err) {
         console.error('Error al resolver el negocio:', err);

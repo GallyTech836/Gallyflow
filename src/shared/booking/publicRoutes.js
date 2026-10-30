@@ -54,3 +54,40 @@ export function buildPublicBookingUrl(negocioId) {
   }
   return `${window.location.origin}/${encodeURIComponent(negocioId)}`;
 }
+
+// === ÚLTIMO LINK DE RESERVA ABIERTO ===
+// La app instalada (PWA / acceso directo) abre el start_url del manifest
+// (/reservar), sin negocio. Guardamos el último negocio (y profesional) que
+// se abrió en este dispositivo para poder retomarlo en ese caso.
+const LAST_BOOKING_KEY = 'nexus:lastBooking';
+
+export function rememberLastBooking(slug, proId) {
+  if (!slug) return;
+  try {
+    localStorage.setItem(LAST_BOOKING_KEY, JSON.stringify({ slug, proId: proId || null }));
+  } catch { /* storage no disponible: no pasa nada */ }
+}
+
+export function getLastBooking() {
+  try {
+    const data = JSON.parse(localStorage.getItem(LAST_BOOKING_KEY) || 'null');
+    return data?.slug ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Si se abrió /reservar sin ?negocio= (app instalada), completa la URL con el
+ * último negocio abierto en este dispositivo. Devuelve true si la cambió.
+ */
+export function restoreLastBookingInUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('negocio')) return false;
+  const last = getLastBooking();
+  if (!last) return false;
+  params.set('negocio', last.slug);
+  if (last.proId && !params.get('pro')) params.set('pro', last.proId);
+  window.history.replaceState(null, '', `${window.location.pathname}?${params}${window.location.hash}`);
+  return true;
+}
