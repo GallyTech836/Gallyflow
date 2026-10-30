@@ -1,4 +1,17 @@
 {
+    "redirects": [
+      {
+        "source": "/:path*",
+        "has": [
+          {
+            "type": "host",
+            "value": "gallyflow.vercel.app"
+          }
+        ],
+        "destination": "https://nexusbo.vercel.app/:path*",
+        "permanent": true
+      }
+    ],
     "rewrites": [
       {
         "source": "/(.*)",
