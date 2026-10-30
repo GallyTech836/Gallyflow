@@ -26,7 +26,15 @@ export function useNotifications({ uid, rol, negocioId }) {
         await OneSignal.init({ appId: ONESIGNAL_APP_ID });
         await OneSignal.Notifications.requestPermission();
 
-        const oneSignalId = OneSignal.User.PushSubscription.id;
+        // Si el permiso está dado pero la suscripción quedó desactivada
+        // (opt-out), se reactiva.
+        if (OneSignal.Notifications.permission && !OneSignal.User.PushSubscription.optedIn) {
+          await OneSignal.User.PushSubscription.optIn();
+        }
+
+        // Al aceptar el permiso por primera vez, OneSignal crea la suscripción
+        // unos segundos después: esperamos el ID en vez de rendirnos.
+        const oneSignalId = await waitForSubscriptionId();
         if (!oneSignalId) {
           console.warn('[useNotifications] No se obtuvo subscriptionId (¿permiso denegado?).');
           return;
@@ -43,4 +51,22 @@ export function useNotifications({ uid, rol, negocioId }) {
 
     setup();
   }, [uid, rol, negocioId]);
+}
+
+function waitForSubscriptionId(timeoutMs = 15000) {
+  const current = OneSignal.User.PushSubscription.id;
+  if (current) return Promise.resolve(current);
+  return new Promise((resolve) => {
+    const onChange = (event) => {
+      const id = event?.current?.id;
+      if (id) finish(id);
+    };
+    const timer = setTimeout(() => finish(OneSignal.User.PushSubscription.id || null), timeoutMs);
+    function finish(id) {
+      clearTimeout(timer);
+      OneSignal.User.PushSubscription.removeEventListener('change', onChange);
+      resolve(id);
+    }
+    OneSignal.User.PushSubscription.addEventListener('change', onChange);
+  });
 }
