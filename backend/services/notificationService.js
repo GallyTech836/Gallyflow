@@ -107,6 +107,13 @@ export async function sendNotification({ tipo, negocioId, data, actorUid, target
 
   if (failed > 0) {
     logger.warn(`[notificationService] ${failed} envíos fallaron de ${results.length} (negocio=${negocioId})`);
+    // Detalle por destinatario: quién falló y qué respondió OneSignal.
+    results.forEach((r, i) => {
+      if (r.status !== 'rejected') return;
+      const u = recipients[i];
+      const quien = u.nombre || u.name || u.username || u.uid;
+      logger.warn(`[notificationService]   ↳ ${u.rol} "${quien}" (uid=${u.uid}): ${r.reason?.message || r.reason}`);
+    });
   }
   logger.info(`[notificationService] ${tipo}: enviado a ${sent}/${results.length} destinatarios (negocio=${negocioId})`);
 
