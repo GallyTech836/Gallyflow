@@ -4,6 +4,7 @@
 // común de un "provider" (send(destinatario, mensaje)).
 
 import { db } from '../config/firebase.js';
+import { PUBLIC_APP_URL } from '../config/app.js';
 import { logger } from '../utils/logger.js';
 import { buildMessage } from './notificationTemplates.js';
 import { getBusinessTerms } from './businessProfiles/businessTerms.js';
@@ -20,8 +21,8 @@ const PROVIDERS = {
 // URLs de destino según el rol de quien recibe la notificación. Deben
 // coincidir exactamente con las rutas que reconoce App.jsx en el frontend.
 const APP_URLS = {
-  admin: 'https://gallyflow.vercel.app/',
-  barber: 'https://gallyflow.vercel.app/barber',
+  admin: `${PUBLIC_APP_URL}/`,
+  barber: `${PUBLIC_APP_URL}/barber`,
 };
 
 export async function getRecipients(negocioId, roles, options = {}) {

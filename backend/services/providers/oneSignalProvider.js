@@ -3,6 +3,7 @@
 // Único archivo que sabe cómo hablar con la REST API de OneSignal.
 
 import { oneSignalConfig } from '../../config/onesignal.js';
+import { PUBLIC_APP_URL } from '../../config/app.js';
 
 /**
  * @param {string} oneSignalId - Subscription ID del dispositivo destino.
@@ -15,9 +16,9 @@ export async function send(oneSignalId, mensaje, url) {
     headings: { en: mensaje.titulo },
     contents: { en: mensaje.cuerpo },
     // Logo de Nexus: ícono de la notificación y silueta blanca en la barra de Android.
-    chrome_web_icon: 'https://gallyflow.vercel.app/icon-256.png',
-    firefox_icon: 'https://gallyflow.vercel.app/icon-256.png',
-    chrome_web_badge: 'https://gallyflow.vercel.app/badge-96-v2.png',
+    chrome_web_icon: `${PUBLIC_APP_URL}/icon-256.png`,
+    firefox_icon: `${PUBLIC_APP_URL}/icon-256.png`,
+    chrome_web_badge: `${PUBLIC_APP_URL}/badge-96-v2.png`,
   };
 
   if (url) {
