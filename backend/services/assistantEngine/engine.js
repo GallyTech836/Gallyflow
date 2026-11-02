@@ -876,7 +876,8 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     const { t, tl, g } = context.terms;
     const notaPendiente = esPendiente && !conQuien ? `\nEn breve el negocio te asignará ${g('professional', 'un', 'una')} ${tl('professional')}.` : '';
     conversation = await resetConversation(negocioId, phone);
-    return responder(`✅ ${t('appointment')} ${g('appointment', 'confirmado', 'confirmada')} para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ${voz.gracias()}${notaPendiente}${voz.despedida() ? `\n\n${voz.despedida()}` : ''}`, conversation);
+    // metricEvent: lo usa el webhook para las métricas de Super Admin (no cambia la respuesta).
+    return conEvento('reserva', `✅ ${t('appointment')} ${g('appointment', 'confirmado', 'confirmada')} para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ${voz.gracias()}${notaPendiente}${voz.despedida() ? `\n\n${voz.despedida()}` : ''}`, conversation);
   }
 
   function aServicioCita(s) {
@@ -1336,7 +1337,7 @@ ${cierre}`,
     }
 
     conversation = await resetConversation(negocioId, phone);
-    return responder(`✅ ¡Listo! Tu ${tl('appointment')} quedó ${g('appointment', 'reprogramado', 'reprogramada')} para ${fechaLegible(despues.date)} (${despues.date}) a las ${despues.time} con ${professionalName}.`, conversation);
+    return conEvento('reprogramacion', `✅ ¡Listo! Tu ${tl('appointment')} quedó ${g('appointment', 'reprogramado', 'reprogramada')} para ${fechaLegible(despues.date)} (${despues.date}) a las ${despues.time} con ${professionalName}.`, conversation);
   }
 
   // Primero el nombre de Clientes (el admin lo puede corregir), después el
@@ -1401,7 +1402,7 @@ ${cierre}`,
       currentFlow: 'human',
       humanUntil: new Date(Date.now() + HUMAN_HANDOFF_MS).toISOString(),
     });
-    return responder(`${voz.humano()}\n\n(Si quieres volver al asistente, escribe "menu".)`, conversation);
+    return conEvento('humano', `${voz.humano()}\n\n(Si quieres volver al asistente, escribe "menu".)`, conversation);
   }
 
   // ── Mensajes ──
@@ -1737,6 +1738,12 @@ function marcarIds(interactive, flow) {
     return { ...interactive, action: { ...action, sections: action.sections.map((sec) => ({ ...sec, rows: sec.rows.map((r) => ({ ...r, id: marca(r.id) })) })) } };
   }
   return interactive;
+}
+
+// Igual que responder, con `metricEvent` para las métricas de Super Admin
+// ('reserva' | 'reprogramacion' | 'humano'). El webhook lo lee; WhatsApp no lo ve.
+function conEvento(metricEvent, mensaje, conversation) {
+  return { ...responder(mensaje, conversation), metricEvent };
 }
 
 function responder(mensaje, conversation, previos = []) {

@@ -36,6 +36,8 @@ function merge(prev = {}, data = {}, deep) {
     if (v === undefined) throw new Error(`Firestore no acepta undefined (campo "${k}")`);
     if (v && v[SENTINEL] === 'delete') { delete out[k]; continue; }
     if (deep && isPlainObject(v) && isPlainObject(out[k])) { out[k] = merge(out[k], v, true); continue; }
+    // Mapa nuevo: como Firestore real, resuelve increment/arrayUnion anidados.
+    if (isPlainObject(v)) { out[k] = merge({}, v, deep); continue; }
     out[k] = applyValue(out[k], v);
   }
   return out;

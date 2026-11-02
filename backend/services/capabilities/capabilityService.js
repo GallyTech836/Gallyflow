@@ -69,6 +69,8 @@ async function readAccess(negocioId) {
     // Para textos (terminología) — no afectan capacidades.
     businessType: negocio.businessType || null,
     terminologyOverrides: negocio.terminologyOverrides || null,
+    // Seguimiento de métricas del Asistente de WhatsApp ({ startDate, enabled }).
+    assistantMetrics: negocio.assistantMetrics || null,
     capabilities: resolveCapabilities({
       planFeatures: plan?.features || null,
       overrides: negocio.capabilityOverrides || null,

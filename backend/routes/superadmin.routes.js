@@ -13,6 +13,10 @@ import { isValidBusinessType, DEFAULT_BUSINESS_TYPE } from '../services/business
 import {
   NoticeError, getSoporteWhatsapp, setSoporteWhatsapp, listNoticePeriods,
 } from '../services/subscription/subscriptionNoticeService.js';
+import {
+  MetricsError, buildMonthReport, buildHistory, setTrackingConfig,
+} from '../services/assistantMetrics/assistantMetricsReport.js';
+import { dayKey } from '../services/assistantMetrics/assistantMetrics.js';
 
 const router = Router();
 
@@ -262,6 +266,42 @@ router.get('/negocios/:negocioId/access', identifyRequester, requireSuperAdmin, 
   } catch (err) {
     logger.error('[superadmin] Error leyendo acceso:', err.message);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ───────────── Asistente WhatsApp / Consumo (métricas) ─────────────
+
+function metricsError(res, err, ctx) {
+  if (err instanceof MetricsError) return res.status(err.status).json({ error: err.message });
+  logger.error(`[superadmin] ${ctx}:`, err.message);
+  return res.status(500).json({ error: 'Error interno.' });
+}
+
+// GET /api/superadmin/negocios/:negocioId/asistente-metricas?mes=AAAA-MM
+router.get('/negocios/:negocioId/asistente-metricas', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    const mes = req.query?.mes || dayKey().slice(0, 7);
+    return res.status(200).json(await buildMonthReport(req.params.negocioId, mes));
+  } catch (err) {
+    return metricsError(res, err, 'Error leyendo métricas del asistente');
+  }
+});
+
+// GET /api/superadmin/negocios/:negocioId/asistente-metricas/historial
+router.get('/negocios/:negocioId/asistente-metricas/historial', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.status(200).json(await buildHistory(req.params.negocioId));
+  } catch (err) {
+    return metricsError(res, err, 'Error leyendo historial del asistente');
+  }
+});
+
+// PUT /api/superadmin/negocios/:negocioId/asistente-metricas/config  body { startDate?, enabled? }
+router.put('/negocios/:negocioId/asistente-metricas/config', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.status(200).json(await setTrackingConfig(req.params.negocioId, req.body || {}, req.actor?.email));
+  } catch (err) {
+    return metricsError(res, err, 'Error guardando seguimiento del asistente');
   }
 });
 

@@ -8,6 +8,9 @@ import {
   checkCapability, incrementUsage, incrementRejected, resolveUsageBranch, checkBranchLimit, incrementBranchUsage, incrementClientUsage,
 } from '../services/capabilities/capabilityService.js';
 import { updateConversation } from '../services/appointments/conversationState.js';
+import {
+  recordInbound, recordOutboundDaily, recordConversationEvent, safe,
+} from '../services/assistantMetrics/assistantMetrics.js';
 
 const router = Router();
 
@@ -89,6 +92,9 @@ async function procesarMensaje(value, mensaje) {
     if (permiso.reason === 'limite_alcanzado') incrementRejected(cuenta.negocioId, permiso.usageKey);
     return;
   }
+  // Métricas de Super Admin: entrante sin duplicados (un webhook repetido
+  // trae el mismo id). Corre en paralelo para no retrasar la respuesta.
+  const entrante = safe(recordInbound({ negocioId: cuenta.negocioId, phone: from, messageId: mensaje.id }), 'entrante');
   // Límite POR SUCURSAL: respuestas que el bot envía desde el número de esta
   // sucursal en el mes. Si ya llegó, el bot no responde en ese número (las
   // demás sucursales siguen normales).
@@ -106,6 +112,7 @@ async function procesarMensaje(value, mensaje) {
     incrementUsage(cuenta.negocioId, 'whatsappMensajes', 1),
     incrementBranchUsage(cuenta.negocioId, sucursal, limiteSucursal),
     incrementClientUsage(cuenta.negocioId, from),
+    safe(recordOutboundDaily({ negocioId: cuenta.negocioId }), 'saliente diario'),
   ]);
 
   whatsappProvider.markAsRead(mensaje.id, envio); // sin await: no retrasa la respuesta
@@ -124,7 +131,7 @@ async function procesarMensaje(value, mensaje) {
     return;
   }
 
-  const { replyText, interactive, preMessages = [] } = await runAssistant({
+  const resultado = await runAssistant({
     negocioId: cuenta.negocioId,
     phone: from,
     message: texto,
@@ -134,7 +141,24 @@ async function procesarMensaje(value, mensaje) {
     // mandan en el primer mensaje del cliente.
     referral: mensaje.referral || null,
   });
+  try {
+    await enviarRespuesta(from, resultado, envio, contarEnvio);
+  } finally {
+    // Métricas: en qué paso quedó la conversación y si hubo reserva,
+    // reprogramación o pase a una persona. Un webhook repetido no cuenta.
+    const reg = await entrante;
+    if (reg?.counted) {
+      await safe(recordConversationEvent({
+        negocioId: cuenta.negocioId,
+        phone: from,
+        flow: resultado?.conversation?.currentFlow || null,
+        event: resultado?.metricEvent || null,
+      }), 'evento de conversación');
+    }
+  }
+}
 
+async function enviarRespuesta(from, { replyText, interactive, preMessages = [] } = {}, envio, contarEnvio) {
   // Mensajes previos (tarjetas con foto), en orden. Si uno falla, se sigue.
   for (const pre of preMessages) {
     try {
@@ -234,6 +258,8 @@ async function pausarBotPorRespuestaHumana(m) {
     currentFlow: 'human',
     humanUntil: new Date(Date.now() + PAUSA_HUMANO_MS).toISOString(),
   });
+  // Métricas: si el cliente tiene una conversación abierta, la atendió una persona.
+  await safe(recordConversationEvent({ negocioId: cuenta.negocioId, phone: cliente, event: 'humano' }), 'respuesta humana');
 }
 
 router.post('/whatsapp/ycloud/webhook', async (req, res) => {
