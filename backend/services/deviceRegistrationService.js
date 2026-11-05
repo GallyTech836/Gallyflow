@@ -87,9 +87,11 @@ export async function unregisterDevice({ uid, oneSignalId, actor }) {
 
   const ref = db.collection('usuarios').doc(uid);
   const snap = await ref.get();
-  if (!snap.exists) return { unregistered: false };
-  const user = snap.data();
-  if (!getDeviceIds(user).includes(oneSignalId)) return { unregistered: false };
+  const user = snap.exists ? snap.data() : null;
+  if (!user || !getDeviceIds(user).includes(oneSignalId)) {
+    logger.info('[deviceRegistrationService] Cierre de sesión: el dispositivo no estaba registrado (' + (user?.rol || '?') + ', negocio=' + (user?.negocioId || '?') + ')');
+    return { unregistered: false };
+  }
 
   await ref.update(removeDeviceId(user, oneSignalId));
   logger.info('[deviceRegistrationService] Dispositivo quitado (' + (user.rol || '?') + ', negocio=' + (user.negocioId || '?') + ')');
