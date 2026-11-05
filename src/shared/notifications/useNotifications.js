@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from 'react';
 import OneSignal from 'react-onesignal';
-import { registerDevice } from './notificationApi';
+import { registerDevice, unregisterDevice } from './notificationApi';
 
 const ONESIGNAL_APP_ID = 'b9672f3e-256b-4fb9-970d-c016944a94e2';
 
@@ -69,4 +69,21 @@ function waitForSubscriptionId(timeoutMs = 15000) {
     }
     OneSignal.User.PushSubscription.addEventListener('change', onChange);
   });
+}
+
+// Al cerrar sesión: este navegador deja de recibir los avisos de ese usuario.
+// Se llama ANTES de signOut (necesita el token). Nunca bloquea el cierre de
+// sesión: si falla o tarda más de 3 s, se sigue igual.
+export async function unregisterThisDevice(uid) {
+  if (!uid) return;
+  try {
+    const oneSignalId = OneSignal.User?.PushSubscription?.id;
+    if (!oneSignalId) return;
+    await Promise.race([
+      unregisterDevice({ uid, oneSignalId }),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
+  } catch (err) {
+    console.warn('[unregisterThisDevice] No se pudo quitar el dispositivo:', err);
+  }
 }

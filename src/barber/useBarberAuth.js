@@ -4,6 +4,7 @@ import { auth } from '../firebase/config';
 import { BASE_URL } from '../shared/notifications/notificationApi';
 import { getSessionId, setSessionId } from '../shared/session/sessionStore';
 import { endSession } from '../shared/session/sessionApi';
+import { unregisterThisDevice } from '../shared/notifications/useNotifications';
 
 // Datos del profesional para mostrar la app (no es la prueba de la sesión:
 // la sesión real la valida el backend con el token de Firebase + sesión).
@@ -133,9 +134,11 @@ export function useBarberAuth() {
 
   // message: texto opcional para mostrar en el login (ej. sesión cerrada).
   async function logoutBarber(message) {
+    const uid = auth.currentUser?.uid;
     setStoredUser(null);
     persistSession(null);
     setError(typeof message === 'string' ? message : '');
+    await unregisterThisDevice(uid);
     await endSession();
     signOut(auth).catch(() => {});
   }

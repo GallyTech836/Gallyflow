@@ -34,6 +34,13 @@ export function mergeDeviceIds(user, newId) {
   return ids.slice(-MAX_DEVICES);
 }
 
+// Quita un dispositivo de la lista. Si era el `oneSignalId` principal, pasa
+// a serlo el más nuevo que quede (o null si no queda ninguno).
+export function removeDeviceId(user, removedId) {
+  const ids = getDeviceIds(user).filter((id) => id !== removedId);
+  return { oneSignalIds: ids, oneSignalId: ids.length ? ids[ids.length - 1] : null };
+}
+
 function httpError(status, message) {
   const err = new Error(message);
   err.status = status;
@@ -67,4 +74,24 @@ export async function registerDevice({ uid, rol, negocioId, oneSignalId, actor }
 
   logger.info('[deviceRegistrationService] Dispositivo registrado (' + rol + ', negocio=' + negocioId + ')');
   return { registered: true };
+}
+
+// Al cerrar sesión: el navegador deja de ser dispositivo de ese usuario.
+// Solo el propio usuario (token verificado con su uid) puede quitarse un
+// dispositivo. Si el dispositivo no estaba en su lista, no hace nada.
+export async function unregisterDevice({ uid, oneSignalId, actor }) {
+  if (typeof uid !== 'string' || !uid || typeof oneSignalId !== 'string' || !oneSignalId || oneSignalId.length > 100) {
+    throw httpError(400, 'Datos inválidos.');
+  }
+  if (!actor?.verified || actor.uid !== uid) throw httpError(401, 'No autenticado.');
+
+  const ref = db.collection('usuarios').doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) return { unregistered: false };
+  const user = snap.data();
+  if (!getDeviceIds(user).includes(oneSignalId)) return { unregistered: false };
+
+  await ref.update(removeDeviceId(user, oneSignalId));
+  logger.info('[deviceRegistrationService] Dispositivo quitado (' + (user.rol || '?') + ', negocio=' + (user.negocioId || '?') + ')');
+  return { unregistered: true };
 }

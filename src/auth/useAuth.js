@@ -4,6 +4,7 @@ import { auth } from '../firebase/config';
 import { endSession } from '../shared/session/sessionApi';
 import { markFreshLogin, consumeFreshLogin } from '../shared/session/sessionStore';
 import { watchAuthRestore } from './authRestore';
+import { unregisterThisDevice } from '../shared/notifications/useNotifications';
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -43,6 +44,7 @@ export function useAuth() {
   }
 
   async function logout() {
+    await unregisterThisDevice(auth.currentUser?.uid);
     await endSession();
     await signOut(auth);
     setUser(null);

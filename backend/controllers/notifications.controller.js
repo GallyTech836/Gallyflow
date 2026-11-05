@@ -1,4 +1,4 @@
-import { registerDevice } from '../services/deviceRegistrationService.js';
+import { registerDevice, unregisterDevice } from '../services/deviceRegistrationService.js';
 import { sendNotification, sendDirectNotification } from '../services/notificationService.js';
 import { logger } from '../utils/logger.js';
 
@@ -12,6 +12,20 @@ export async function handleRegisterDevice(req, res) {
     return res.status(200).json({ ok: true, result });
   } catch (err) {
     logger.warn('[notifications.controller] registerDevice rechazado:', err.message);
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Error interno.' });
+  }
+}
+
+export async function handleUnregisterDevice(req, res) {
+  const { uid, oneSignalId } = req.body || {};
+  if (!uid || !oneSignalId) {
+    return res.status(400).json({ error: 'Faltan campos requeridos: uid, oneSignalId.' });
+  }
+  try {
+    const result = await unregisterDevice({ uid, oneSignalId, actor: req.actor });
+    return res.status(200).json({ ok: true, result });
+  } catch (err) {
+    logger.warn('[notifications.controller] unregisterDevice rechazado:', err.message);
     return res.status(err.status || 500).json({ error: err.status ? err.message : 'Error interno.' });
   }
 }

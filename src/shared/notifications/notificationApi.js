@@ -24,6 +24,15 @@ export async function registerDevice({ uid, rol, negocioId, oneSignalId }) {
   return res.json();
 }
 
+export async function unregisterDevice({ uid, oneSignalId }) {
+  const res = await fetch(`${BASE_URL}/devices/unregister`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ uid, oneSignalId }),
+  });
+  return res.json();
+}
+
 export async function notify(tipo, negocioId, data, actorUid, targetProfessionalId, targetProfessionalIds) {
   const res = await fetch(`${BASE_URL}/notifications/send`, {
     method: 'POST',
