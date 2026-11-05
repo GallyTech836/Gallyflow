@@ -36,9 +36,10 @@ import { formatIntakeValue } from '../shared/bookingForms/bookingFormModel';
 import BookingFormStep from './BookingFormStep';
 
 // Paso del formulario del tipo de negocio (peluquería canina: datos de la
-// mascota). Va entre Servicios (3) y Fecha y hora (4); solo existe si el
-// negocio tiene formulario, los demás rubros no ven ningún cambio.
-const FORM_STEP = 3.5;
+// mascota). Es el primer paso de la reserva, antes de sucursal y
+// profesional; solo existe si el negocio tiene formulario, los demás rubros
+// no ven ningún cambio.
+const FORM_STEP = 0.5;
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -577,7 +578,6 @@ export default function App({ negocioSlug, proId } = {}) {
   // (y por lo tanto los horarios libres) depende de los servicios elegidos.
   const handleServicesNext = () => {
     if (selectedServices.length === 0) return;
-    if (hasBookingForm) { setStep(FORM_STEP); return; }
     setSelectedHour(null);
     if (selectedDate && isDayDisabled(selectedDate)) setSelectedDate(null);
     setStep(4);
@@ -698,6 +698,13 @@ export default function App({ negocioSlug, proId } = {}) {
   // Empieza la reserva: link personal → servicios; una sola sucursal →
   // profesional; varias → elegir sucursal.
   const startBooking = () => {
+    if (hasBookingForm) { setStep(FORM_STEP); return; }
+    continueBooking();
+  };
+
+  // Después del formulario (o sin formulario): sucursal / profesional / servicios.
+  const continueBooking = () => {
+    if (isPersonalLink && skipServices) { goToDateTime(); return; }
     if (isPersonalLink) { setStep(3); return; }
     if (skipBranch) {
       if ((branches[0]?.id || null) !== (selectedBranch?.id || null)) setSelectedBranch(branches[0] || null);
@@ -729,7 +736,7 @@ export default function App({ negocioSlug, proId } = {}) {
     clearSelection();
     setSelectedServices([service]);
     setPreselectedServiceId(service.id);
-    if (isPersonalLink) { setStep(hasBookingForm ? FORM_STEP : 4); return; }
+    if (isPersonalLink && !hasBookingForm) { setStep(4); return; }
     startBooking();
   };
 
@@ -748,16 +755,15 @@ export default function App({ negocioSlug, proId } = {}) {
   const skipServices = !!preselectedServiceId && selectedServices.some(sv => sv.id === preselectedServiceId);
 
   // Pasos visibles (para la barra de progreso y el botón Volver).
-  const visibleSteps = [1, 2, 3, FORM_STEP, 4, 5].filter(st =>
-    st > stepOffset && !(skipServices && st === 3) && (st !== FORM_STEP || hasBookingForm)
+  const visibleSteps = [FORM_STEP, 1, 2, 3, 4, 5].filter(st =>
+    st === FORM_STEP ? hasBookingForm : (st > stepOffset && !(skipServices && st === 3))
   );
   const prevStep = (st) => {
     const i = visibleSteps.indexOf(st);
     return i > 0 ? visibleSteps[i - 1] : 0;
   };
 
-  const goToDateTime = (fromForm = false) => {
-    if (hasBookingForm && !fromForm) { setStep(FORM_STEP); return; }
+  const goToDateTime = () => {
     setSelectedHour(null);
     if (selectedDate && isDayDisabled(selectedDate)) setSelectedDate(null);
     setStep(4);
@@ -814,14 +820,14 @@ export default function App({ negocioSlug, proId } = {}) {
         pricesOf={proPrices}
         highlightService={!!preselectedServiceId}
         onNext={() => (skipServices ? goToDateTime() : setStep(3))} 
-        onBack={() => setStep(skipBranch ? 0 : 1)} 
+        onBack={() => setStep(prevStep(2))} 
       />;
       case 3: return <ServicesStep 
       services={servicesForProfessional}
         selected={selectedServices} 
         toggle={toggleService} 
         onNext={handleServicesNext} 
-        onBack={() => setStep(isPersonalLink ? 0 : 2)} 
+        onBack={() => setStep(prevStep(3))} 
         total={calculateTotal}
         totalMax={calculateTotalMax}
         hasVariable={hasVariablePrice}
@@ -835,7 +841,7 @@ export default function App({ negocioSlug, proId } = {}) {
         form={bookingForm}
         values={intakeValues}
         setValues={setIntakeValues}
-        onNext={() => goToDateTime(true)}
+        onNext={continueBooking}
       />;
       case 4: return <DateTimeStep 
         hours={availableHours}
