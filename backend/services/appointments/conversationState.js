@@ -26,6 +26,13 @@ const DEFAULT_STATE = {
   welcomeMisses: 0,
   // Profesional que el cliente nombró ("¿Se encuentra Martín?"): se agenda con él
   preferredStaffId: null,
+  // Profesional nombrado sin horarios hoy: datos del aviso, profesional a
+  // excluir ("Otro profesional hoy"), elegir día en vez de ir al primero
+  // libre ("Otro día") y si el cliente ya sabe que hoy no hay lugar.
+  proUnavailable: null,
+  excludeStaffId: null,
+  pickDate: false,
+  todayNoticeShown: false,
   // Formulario del negocio (peluquería canina): respuestas, campo en curso,
   // a dónde sigue al terminar ('staff' | 'times') y mascota anterior ofrecida.
   intakeValues: null,

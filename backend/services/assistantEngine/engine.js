@@ -39,6 +39,7 @@ const DIAS_A_BUSCAR = 14;
 const FLUJOS_CON_LISTA = new Set(['choosing_service', 'choosing_extra_service', 'choosing_staff', 'choosing_date', 'choosing_time']);
 const CONVERSATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min sin responder => se reinicia
 const HUMAN_HANDOFF_MS = 2 * 60 * 60 * 1000; // 2 h en que el bot no responde tras pedir hablar con alguien
+const SIN_PREFERENCIA = { preferredStaffId: null, proUnavailable: null, excludeStaffId: null, pickDate: false, todayNoticeShown: false };
 const CAMBIO_MIN_HORAS_DEFAULT = 2; // anticipación mínima para cancelar/reprogramar (assistantConfig.changeMinHours)
 
 function horasMinimasCambio(ctx) {
@@ -667,7 +668,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       const nombrado = profesionalNombrado(context.profesionales, texto);
       if (/^1$|agendar|reservar|\b(una|otra)\s+(cita|reserva|turno)\b/i.test(texto)) {
         if (nombrado) return agendarCon(nombrado);
-        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null, preferredStaffId: null });
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null, ...SIN_PREFERENCIA });
         return responder(mensajeServicios(context), conversation);
       }
       // Preguntas escritas: "¿cuánto cuesta?", "¿dónde están?", "horario"...
@@ -679,6 +680,29 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     }
 
     // ── Agendar ──
+
+    // El profesional nombrado ya no tiene horarios hoy (agendarCon).
+    case 'pro_unavailable_today': {
+      const info = conversation.proUnavailable || {};
+      // Respuesta escrita con el número de la opción ("2").
+      const ids = ['conpro', ...(info.otrosHoy ? ['otrohoy'] : []), 'otrodia'];
+      if (/^\d$/.test(texto) && ids[Number(texto) - 1]) texto = ids[Number(texto) - 1];
+      if (/^otrohoy$|otr[oa] (profesional|barbero|persona)|alguien m[aá]s/i.test(texto) && info.otrosHoy) {
+        conversation = await updateConversation(negocioId, phone, {
+          currentFlow: 'choosing_service', preferredStaffId: null, excludeStaffId: info.staffId || null, pickDate: false, todayNoticeShown: false,
+        });
+        return responder(mensajeServicios(context), conversation);
+      }
+      if (/^otrodia$|otro d[ií]a|otra fecha/i.test(texto)) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', pickDate: true });
+        return responder(mensajeServicios(context), conversation);
+      }
+      if (/^conpro$|agendar|s[ií]\b|dale|ok|bueno|ma[ñn]ana/i.test(texto)) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', pickDate: false });
+        return responder(mensajeServicios(context), conversation);
+      }
+      return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeProNoDisponible(info)), conversation);
+    }
 
     case 'choosing_service': {
       const servicios = serviciosDelPaso();
@@ -956,7 +980,10 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   async function irAProfesionales() {
     // Peluquería canina: primero los datos de la mascota, después el profesional.
     if (necesitaIntake()) return iniciarIntake('staff');
-    const pros = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
+    const todos = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
+    // "Otro profesional hoy": sin el que ya no tenía lugar (si queda alguien).
+    const sinExcluido = todos.filter((p) => p.id !== conversation.excludeStaffId);
+    const pros = sinExcluido.length ? sinExcluido : todos;
 
     // El cliente nombró a un profesional al empezar: si hace estos servicios, va directo con él.
     const preferido = pros.find((p) => p.id === conversation.preferredStaffId);
@@ -991,16 +1018,36 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     if (necesitaIntake()) return iniciarIntake('times', aviso);
     const pros = prosElegidos(context, conversation);
     const duracion = totalDuracion(conversation);
+    const hoy = isoLocal(ahoraNegocio());
+
+    // "Otro día" (profesional sin lugar hoy): lista de días, sin hoy.
+    if (conversation.pickDate) {
+      const dias = diasParaConversacion(context, conversation).filter((d) => d.id !== hoy);
+      if (dias.length) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias, pickDate: false });
+        const msg = mensajeFechas(dias);
+        return responder(aviso ? prefijo(aviso, msg) : msg, conversation);
+      }
+    }
+
     for (const dia of diasParaConversacion(context, conversation)) {
       const slots = await slotsParaFecha(context, pros, dia.id, duracion);
       if (slots.length === 0) continue;
+      // Los horarios ya no son de hoy: decirlo, salvo que el cliente ya lo sepa.
+      const avisoHoy = dia.id !== hoy && !conversation.todayNoticeShown
+        ? (conversation.selectedStaff?.id && conversation.selectedStaff.id !== PENDING_ID
+          ? `Hoy ya no hay horarios libres con ${conversation.selectedStaff.name}.`
+          : 'Hoy ya no tenemos horarios libres.')
+        : '';
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'choosing_time',
         selectedDate: dia.id,
         availableSlotsCache: slots,
+        pickDate: false,
       });
       const msg = mensajeHoras(slots, dia.id);
-      return responder(aviso ? prefijo(aviso, msg) : msg, conversation);
+      const avisos = [aviso, avisoHoy].filter(Boolean).join(' ');
+      return responder(avisos ? prefijo(avisos, msg) : msg, conversation);
     }
     // Sin lugar en los próximos días: volver a elegir profesional.
     const opciones = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
@@ -1228,13 +1275,51 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       });
       return ofrecerHorarios(aviso);
     }
+    // Sin horarios hoy: avisarlo antes de pedir el servicio.
+    const sinLugar = await avisoSinLugarHoy(pro, suyos);
+    if (sinLugar) {
+      conversation = await updateConversation(negocioId, phone, {
+        ...SIN_PREFERENCIA,
+        currentFlow: 'pro_unavailable_today',
+        selectedServices: null,
+        preferredStaffId: pro.id,
+        proUnavailable: sinLugar,
+        todayNoticeShown: true,
+        welcomeMisses: 0,
+      });
+      return responder(mensajeProNoDisponible(sinLugar), conversation);
+    }
     conversation = await updateConversation(negocioId, phone, {
+      ...SIN_PREFERENCIA,
       currentFlow: 'choosing_service',
       selectedServices: null,
       preferredStaffId: pro.id,
       welcomeMisses: 0,
     });
     return responder(prefijo(aviso, mensajeServicios(context)), conversation);
+  }
+
+  // ¿`pro` ya no tiene lugar hoy? Sin saber el servicio, se calcula con el
+  // más corto que hace. Devuelve los datos del aviso o null si hoy sí tiene.
+  // Si tampoco tiene lugar en los próximos días, null (sigue el flujo normal).
+  async function avisoSinLugarHoy(pro, suyos) {
+    const hoy = isoLocal(ahoraNegocio());
+    const minDur = (lista) => Math.min(...lista.map(duracionServicio));
+    if ((await slotsParaFecha(context, [pro], hoy, minDur(suyos))).length) return null;
+
+    let proximo = null;
+    for (const dia of proximosDias(context, [pro], [])) {
+      if (dia.id === hoy) continue;
+      const slots = await slotsParaFecha(context, [pro], dia.id, minDur(suyos));
+      if (slots.length) { proximo = { fecha: dia.id, hora: slots[0] }; break; }
+    }
+    if (!proximo) return null;
+
+    const otros = context.profesionales.filter((p) => p.id !== pro.id);
+    const servOtros = serviciosOfrecidos(context).filter((s) => otros.some((p) => professionalCanDo(p, [s.id])));
+    const otrosHoy = otros.length > 0 && servOtros.length > 0
+      && (await slotsParaFecha(context, otros, hoy, minDur(servOtros))).length > 0;
+    return { staffId: pro.id, staffName: pro.name, fecha: proximo.fecha, hora: proximo.hora, otrosHoy };
   }
 
   // Mensaje que el bot no entiende en el inicio. El saludo completo sale una
@@ -1635,6 +1720,8 @@ ${cierre}`,
         return mensajeFechas(conversation.dateOptionsCache || []);
       case 'choosing_time':
         return mensajeHoras(conversation.availableSlotsCache || [], conversation.selectedDate);
+      case 'pro_unavailable_today':
+        return mensajeProNoDisponible(conversation.proUnavailable || {});
       default:
         return mensajeBienvenida(context);
     }
@@ -1747,6 +1834,24 @@ ${cierre}`,
       ],
       page: paginaActual(),
     });
+  }
+  function mensajeProNoDisponible(info) {
+    const { tl, g } = context.terms;
+    const nombre = info.staffName || `${g('professional', 'Ese', 'Esa')} ${tl('professional')}`;
+    const primerNombre = String(nombre).split(' ')[0];
+    const cuando = info.fecha ? fechaLegible(info.fecha) : '';
+    const proximo = cuando
+      ? ` Su próximo espacio es ${cuando === 'mañana' ? 'mañana' : `el ${cuando}`}${info.hora ? ` desde las ${info.hora}` : ''}.`
+      : '';
+    const cuerpo = `${nombre} ya no tiene horarios libres hoy.${proximo}`;
+    const otroHoy = `${g('professional', 'Otro', 'Otra')} ${tl('professional')} hoy`;
+    const botones = [
+      { id: 'conpro', title: cabe(`Agendar con ${primerNombre}`, 20, 'Agendar igual') },
+      ...(info.otrosHoy ? [{ id: 'otrohoy', title: cabe(otroHoy, 20, 'Otra persona hoy') }] : []),
+      { id: 'otrodia', title: '📅 Otro día' },
+    ];
+    const texto = `${cuerpo}\n\n${botones.map((b, i) => `${i + 1}. ${b.title}`).join('\n')}`;
+    return menuBotones({ texto, cuerpo, botones });
   }
   function mensajeFechas(dias) {
     return menuLista({
