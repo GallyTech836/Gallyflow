@@ -8,6 +8,7 @@ import { buildCitaService, buildPendingCitaService, getMinimumPrice, distributeF
 import { professionalCanDo } from './pendingModel';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import { Modal, Button, Field, Input, Select, Textarea, useConfirm } from '../ui';
+import AppointmentIntakeDetails from './AppointmentIntakeDetails';
 
 /**
  * Modal único de gestión de cita — mismo HTML/clases que el modal
@@ -294,6 +295,9 @@ export default function AppointmentManageModal({
             </div>
           )}
         </Field>
+
+        {/* Datos del formulario (peluquería canina: mascota). Nada si la cita no tiene. */}
+        <AppointmentIntakeDetails appointment={appointment} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field

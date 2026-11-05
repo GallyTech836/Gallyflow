@@ -31,6 +31,14 @@ import { applyPromotions, resolveBranchId } from '../shared/promotions/promotion
 import { visiblePromotions, discountBadgeFor, combosAvailable, whenText, featuredFirst, todayLaPaz } from '../shared/promotions/promotionModel';
 import { summarizeCitaServices } from '../shared/servicePricing/professionalPricing';
 import { rememberLastBooking } from '../shared/booking/publicRoutes';
+import { useBookingForm } from '../shared/bookingForms/useBookingForm';
+import { formatIntakeValue } from '../shared/bookingForms/bookingFormModel';
+import BookingFormStep from './BookingFormStep';
+
+// Paso del formulario del tipo de negocio (peluquería canina: datos de la
+// mascota). Va entre Servicios (3) y Fecha y hora (4); solo existe si el
+// negocio tiene formulario, los demás rubros no ven ningún cambio.
+const FORM_STEP = 3.5;
 
 // === CONSTANTES QUE NO VIENEN DE FIRESTORE ===
 // Los métodos de pago no tienen colección propia en el sistema (tampoco la
@@ -59,6 +67,8 @@ export default function App({ negocioSlug, proId } = {}) {
   const [selectedHour, setSelectedHour] = useState(null);
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
+  // Respuestas del formulario del negocio ({} si no tiene).
+  const [intakeValues, setIntakeValues] = useState({});
   const [loading, setLoading] = useState(false);
   const [isTuesday, setIsTuesday] = useState(false);
   const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
@@ -80,6 +90,7 @@ export default function App({ negocioSlug, proId } = {}) {
     setSelectedHour(null);
     setClientName('');
     setClientPhone('');
+    setIntakeValues({});
     setLoading(false);
     setIsTuesday(false);
     setCurrentCalendarMonth(new Date());
@@ -105,6 +116,9 @@ export default function App({ negocioSlug, proId } = {}) {
   const { businessSettings } = useBusinessSettings(negocioId);
   // Tipo de negocio -> terminología (los pasos la leen con useBusinessTerms).
   const businessProfile = useBusinessProfile(negocioId);
+  // Formulario del tipo de negocio (null = no tiene, flujo de siempre).
+  const bookingForm = useBookingForm(negocioId);
+  const hasBookingForm = !!bookingForm && bookingForm.fields.some((f) => f.enabled);
 
   useEffect(() => {
     const resolveNegocio = async () => {
@@ -563,6 +577,7 @@ export default function App({ negocioSlug, proId } = {}) {
   // (y por lo tanto los horarios libres) depende de los servicios elegidos.
   const handleServicesNext = () => {
     if (selectedServices.length === 0) return;
+    if (hasBookingForm) { setStep(FORM_STEP); return; }
     setSelectedHour(null);
     if (selectedDate && isDayDisabled(selectedDate)) setSelectedDate(null);
     setStep(4);
@@ -638,9 +653,14 @@ export default function App({ negocioSlug, proId } = {}) {
         clientPhone: clientPhone.trim(),
         branch: selectedBarber?.branch || selectedBranch?.name || '',
         ...(professionalId === 'pending' ? { candidateIds: branchPros.map(p => p.id) } : {}),
+        ...(hasBookingForm ? { intake: intakeValues } : {}),
       });
       if (!result.ok) {
         triggerToast(result.error, 'error');
+        if (result.code === 'INTAKE_MISSING' || result.code === 'INTAKE_INVALID') {
+          setStep(FORM_STEP);
+          return;
+        }
         if (result.code === 'UNAVAILABLE' || result.code === 'TOO_SOON') {
           setSelectedHour(null);
           refreshBusy();
@@ -709,7 +729,7 @@ export default function App({ negocioSlug, proId } = {}) {
     clearSelection();
     setSelectedServices([service]);
     setPreselectedServiceId(service.id);
-    if (isPersonalLink) { setStep(4); return; }
+    if (isPersonalLink) { setStep(hasBookingForm ? FORM_STEP : 4); return; }
     startBooking();
   };
 
@@ -728,15 +748,16 @@ export default function App({ negocioSlug, proId } = {}) {
   const skipServices = !!preselectedServiceId && selectedServices.some(sv => sv.id === preselectedServiceId);
 
   // Pasos visibles (para la barra de progreso y el botón Volver).
-  const visibleSteps = [1, 2, 3, 4, 5].filter(st =>
-    st > stepOffset && !(skipServices && st === 3)
+  const visibleSteps = [1, 2, 3, FORM_STEP, 4, 5].filter(st =>
+    st > stepOffset && !(skipServices && st === 3) && (st !== FORM_STEP || hasBookingForm)
   );
   const prevStep = (st) => {
     const i = visibleSteps.indexOf(st);
     return i > 0 ? visibleSteps[i - 1] : 0;
   };
 
-  const goToDateTime = () => {
+  const goToDateTime = (fromForm = false) => {
+    if (hasBookingForm && !fromForm) { setStep(FORM_STEP); return; }
     setSelectedHour(null);
     if (selectedDate && isDayDisabled(selectedDate)) setSelectedDate(null);
     setStep(4);
@@ -756,6 +777,12 @@ export default function App({ negocioSlug, proId } = {}) {
         : formatServicePriceFor(sv, { professional: b }),
     }));
   };
+
+  // "Toby · Caniche · Pequeño" para el resumen de la reserva.
+  const intakeSummary = hasBookingForm
+    ? bookingForm.fields.filter((f) => f.enabled && f.type !== 'image' && f.type !== 'date')
+      .map((f) => formatIntakeValue(f.key, intakeValues[f.key])).filter(Boolean).join(' · ')
+    : '';
 
   const renderStep = () => {
     switch(step) {
@@ -804,6 +831,12 @@ export default function App({ negocioSlug, proId } = {}) {
         selectMany={selectServices}
         showImages={(heroConfig || DEFAULT_HERO_CONFIG).showServiceImages !== false}
       />;
+ case FORM_STEP: return <BookingFormStep
+        form={bookingForm}
+        values={intakeValues}
+        setValues={setIntakeValues}
+        onNext={() => goToDateTime(true)}
+      />;
       case 4: return <DateTimeStep 
         hours={availableHours}
         date={selectedDate} setDate={setSelectedDate} 
@@ -832,6 +865,8 @@ export default function App({ negocioSlug, proId } = {}) {
         promo={bookingPricing.promo}
         promoText={promoText(bookingPricing.promo, { exact: !bookingPricing.hasVariable && bookingPricing.priceMin === bookingPricing.priceMax })}
         normalTotal={bookingPricing.normalMin}
+        intakeSummary={hasBookingForm ? intakeSummary : null}
+        intakeTitle={bookingForm?.adminTitle}
         onConfirm={handleBooking} 
         loading={loading}
         onBack={() => setStep(4)} 
@@ -919,6 +954,7 @@ export default function App({ negocioSlug, proId } = {}) {
                   1: 'Elige la sucursal',
                   2: `Elige ${businessProfile.tl('professional')}`,
                   3: `Elige ${businessProfile.tl('services')}`,
+                  [FORM_STEP]: bookingForm?.title || 'Datos',
                   4: 'Fecha y hora',
                   5: 'Confirmar reserva',
                 })[step]}
@@ -1541,6 +1577,8 @@ const ConfirmStep = ({
   promo = null,
   promoText = '',
   normalTotal = null,
+  intakeSummary = null,
+  intakeTitle = '',
   onConfirm, 
   loading 
 }) => {
@@ -1585,6 +1623,12 @@ const ConfirmStep = ({
             <span className="font-semibold text-nexus-text-secondary">{terms.t('professional')}:</span>
             <span className="font-bold text-nexus-text">{selectedBarber?.name}</span>
           </div>
+          {intakeSummary && (
+            <div className="flex justify-between gap-3 pb-2 border-b border-nexus-border">
+              <span className="font-semibold text-nexus-text-secondary shrink-0">{intakeTitle || 'Datos'}:</span>
+              <span className="font-bold text-right text-nexus-text">{intakeSummary}</span>
+            </div>
+          )}
           <div className="flex justify-between pb-2 border-b border-nexus-border">
             <span className="font-semibold text-nexus-text-secondary">Fecha y hora:</span>
             <span className="font-bold text-nexus-primary">{selectedDate} - {selectedHour} Hrs</span>

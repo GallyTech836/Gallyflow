@@ -22,6 +22,10 @@ export async function runAssistant(args) {
     logger.warn('[assistantRouter] No se pudo leer el tipo de negocio, uso citas:', err.message);
   }
 
-  if (vertical === 'restaurante') return restauranteEngine(args);
+  if (vertical === 'restaurante') {
+    // Las fotos solo las usa el formulario de reservas (vertical 'citas').
+    if (args.media) return { replyText: 'Por ahora solo entiendo mensajes de texto 🙂 Toca una opción o escribe su número.', interactive: null, preMessages: [], conversation: null };
+    return restauranteEngine(args);
+  }
   return assistantEngine(args);
 }

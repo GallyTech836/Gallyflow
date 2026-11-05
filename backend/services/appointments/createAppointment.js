@@ -33,6 +33,7 @@ export async function createAppointment({
   clientId,
   bookedBy = 'client',
   promoActive = false, // promo heredada de la reserva pública (ver publicBooking.js)
+  intake = null, // formulario del tipo de negocio, ya validado (ver bookingFormModel.js)
 }) {
   if (!negocioId || !professionalId || !date || !time || !serviceDuration || !services?.length) {
     throw new Error('Faltan campos requeridos para crear la cita.');
@@ -96,6 +97,7 @@ export async function createAppointment({
       bookedBy,
       notes: '',
       branch: branch || '',
+      ...(intake ? { intake } : {}),
       createdAt: nowIso,
       updatedAt: nowIso,
     };
@@ -126,6 +128,7 @@ export async function createPendingAppointment({
   candidateIds,
   bookedBy = 'client',
   promoActive = false,
+  intake = null,
 }) {
   if (!negocioId || !date || !time || !serviceDuration || !services?.length) {
     throw new Error('Faltan campos requeridos para crear la cita.');
@@ -188,6 +191,7 @@ export async function createPendingAppointment({
       bookedBy,
       notes: '',
       branch: branch || '',
+      ...(intake ? { intake } : {}),
       createdAt: nowIso,
       updatedAt: nowIso,
     };

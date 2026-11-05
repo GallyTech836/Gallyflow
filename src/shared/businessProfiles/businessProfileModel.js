@@ -102,6 +102,12 @@ export const BUSINESS_PROFILES = {
     modules: ALL_MODULES,
     capabilityDefaults: {},
   },
+  peluqueria_canina: {
+    label: 'Peluquería canina',
+    ...terms('Peluquero', 'Peluqueros', 'Cliente', 'Clientes', 'Servicio', 'Servicios', 'Cita', 'Citas'),
+    modules: ALL_MODULES,
+    capabilityDefaults: {},
+  },
   gimnasio: {
     label: 'Gimnasio',
     ...terms('Entrenador', 'Entrenadores', 'Miembro', 'Miembros', 'Clase', 'Clases', 'Reserva', 'Reservas', { service: 'f' }),

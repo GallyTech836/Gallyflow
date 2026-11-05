@@ -120,9 +120,15 @@ async function procesarMensaje(value, mensaje) {
   // Texto escrito, o toque en un botón / fila de lista (su id es el mismo
   // número que se escribiría a mano: "1", "2", ... o "mas").
   let texto = null;
+  let media = null;
   if (mensaje.type === 'text') texto = mensaje.text?.body || '';
   else if (mensaje.type === 'interactive') {
     texto = mensaje.interactive?.button_reply?.id ?? mensaje.interactive?.list_reply?.id ?? null;
+  } else if (mensaje.type === 'image' && mensaje.image) {
+    // Foto (formulario de peluquería canina). El motor decide si la esperaba;
+    // si no, responde que solo recibe fotos cuando las pide.
+    texto = '';
+    media = { link: mensaje.image.link || null, mimeType: mensaje.image.mime_type || null, id: mensaje.image.id || null };
   }
 
   if (texto === null) {
@@ -140,6 +146,7 @@ async function procesarMensaje(value, mensaje) {
     // Click to WhatsApp (anuncios de Facebook/Instagram): Meta y YCloud lo
     // mandan en el primer mensaje del cliente.
     referral: mensaje.referral || null,
+    media,
   });
   try {
     await enviarRespuesta(from, resultado, envio, contarEnvio);
@@ -276,7 +283,7 @@ router.post('/whatsapp/ycloud/webhook', async (req, res) => {
       // Se adapta al formato de Meta para reutilizar procesarMensaje.
       await procesarMensaje(
         { metadata: { phone_number_id: `ycloud_${soloDigitos(m.to)}`, display_phone_number: m.to } },
-        { id: m.wamid || m.id, from: soloDigitos(m.from), type: m.type, text: m.text, interactive: m.interactive, referral: m.referral || null },
+        { id: m.wamid || m.id, from: soloDigitos(m.from), type: m.type, text: m.text, interactive: m.interactive, image: m.image || null, referral: m.referral || null },
       );
     } else if (evento.type === 'whatsapp.smb.message.echoes') {
       await pausarBotPorRespuestaHumana(evento.whatsappMessage || {});

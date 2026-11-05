@@ -8,6 +8,7 @@ const SERVICE_ICONS = {
   odontologia: Smile,
   clinica: Stethoscope,
   veterinaria: PawPrint,
+  peluqueria_canina: PawPrint,
   gimnasio: Dumbbell,
   spa: Flower2,
   otro: Tag,

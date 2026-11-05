@@ -166,6 +166,7 @@ export function createFakeDb(initial = {}) {
     // Ayudas para las pruebas
     _get: (path) => clone(store.get(path)),
     _set: (path, data) => store.set(path, clone(data)),
+    _dump: () => [...store.entries()].map(([k, v]) => [k, clone(v)]),
     _clear: () => { store.clear(); db._aggregateNeedsIndex = false; db._aggregateCalls = 0; },
     _aggregateNeedsIndex: false,
     _aggregateCalls: 0,

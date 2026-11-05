@@ -3,6 +3,7 @@
 // Punto único para que el Assistant Engine obtenga todo lo que necesita
 // saber de un negocio, sin queries sueltas repetidas en cada acción.
 
+import { resolveBookingForm } from '../bookingForms/bookingFormModel.js';
 import { db } from '../../config/firebase.js';
 import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabilityModel.js';
 import { getNegocioAccess } from '../capabilities/capabilityService.js';
@@ -73,6 +74,8 @@ async function leerContexto(negocioId) {
     // apagarlo explícitamente con assistantConfig.enabled = false.
     assistantEnabled: negocio.assistantConfig?.enabled !== false,
     businessSettings: negocio.businessSettings || {},
+    // Formulario del tipo de negocio (peluquería canina: datos de la mascota) o null.
+    bookingForm: resolveBookingForm(negocio.businessType, negocio.bookingFormConfig),
     servicios,
     profesionales,
     sucursales,

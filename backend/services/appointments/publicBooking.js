@@ -14,6 +14,7 @@ import { db } from '../../config/firebase.js';
 import { createAppointment, createPendingAppointment } from './createAppointment.js';
 import { upsertClientFromPhone } from './clientRecord.js';
 import { PENDING_ID } from './pendingModel.js';
+import { resolveBookingForm, validateIntake } from '../bookingForms/bookingFormModel.js';
 
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 export const MIN_ANTICIPACION_MIN = 30; // igual que ClienteApp
@@ -57,7 +58,30 @@ export function validarReserva(body = {}) {
   const candidateIds = (Array.isArray(body.candidateIds) ? body.candidateIds : [])
     .map((s) => texto(s, 80)).filter((s) => ID_RE.test(s)).slice(0, 100);
 
-  return { negocioId, date, time, professionalId, serviceIds, clientName, clientPhone, branch, candidateIds };
+  // Respuestas del formulario del tipo de negocio (se validan contra la
+  // config del negocio en createPublicBooking; aquí solo se acota el tamaño).
+  const intake = body.intake && typeof body.intake === 'object' && !Array.isArray(body.intake) ? body.intake : null;
+
+  return { negocioId, date, time, professionalId, serviceIds, clientName, clientPhone, branch, candidateIds, intake };
+}
+
+/** Fecha de hoy (YYYY-MM-DD) en la zona horaria del negocio. */
+export function hoyNegocio(ahora = new Date(), tz = TZ) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora);
+}
+
+/**
+ * Formulario del negocio (peluquería canina: datos de la mascota).
+ * -> objeto `intake` para la cita, o null si el tipo de negocio no tiene
+ * formulario. Lanza BookingError si falta un obligatorio o hay un valor inválido.
+ */
+export function intakeDeReserva(negocio, rawValues, ahora = new Date()) {
+  const form = resolveBookingForm(negocio?.businessType, negocio?.bookingFormConfig);
+  if (!form) return null;
+  const r = validateIntake(form, rawValues || {}, { hoyIso: hoyNegocio(ahora) });
+  if (r.missing.length) throw new BookingError(`Completa: ${r.missing.join(', ')}.`, 400, 'INTAKE_MISSING');
+  if (r.invalid.length) throw new BookingError(`Revisa: ${r.invalid.join(', ')}.`, 400, 'INTAKE_INVALID');
+  return Object.keys(r.values).length ? { type: form.type, values: r.values, labels: r.labels } : null;
 }
 
 /** Minutos que faltan para date+time en la zona horaria del negocio. */
@@ -129,7 +153,11 @@ export async function createPublicBooking(body, { ahora = new Date() } = {}) {
 
   // Servicios desde el catálogo: nombre y duración reales.
   const negocioRef = db.collection('negocios').doc(r.negocioId);
-  const snaps = await Promise.all(r.serviceIds.map((id) => negocioRef.collection('servicios').doc(id).get()));
+  const [negocioSnap, ...snaps] = await Promise.all([
+    negocioRef.get(),
+    ...r.serviceIds.map((id) => negocioRef.collection('servicios').doc(id).get()),
+  ]);
+  const intake = intakeDeReserva(negocioSnap.data() || {}, r.intake, ahora);
   if (snaps.some((s) => !s.exists)) {
     throw new BookingError('Un servicio ya no existe. Actualiza la página e inténtalo de nuevo.', 409, 'SERVICE_GONE');
   }
@@ -163,6 +191,7 @@ export async function createPublicBooking(body, { ahora = new Date() } = {}) {
     branch: r.branch,
     bookedBy: 'client',
     promoActive: promoDeMartes(r.date),
+    intake,
   };
   if (!datos.clientId) delete datos.clientId;
 

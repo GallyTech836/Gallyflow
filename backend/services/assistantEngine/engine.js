@@ -28,6 +28,8 @@ import { applyPromotions, resolveBranchId } from '../pricing/promotionPricing.js
 import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
 import { crearVoz, aplicarVoz } from './personalidad.js';
 import { findClosure, findSpecialHours, isClosedOn } from '../appointments/closedDays.js';
+import { activeFields, askFor, cleanFieldValue, validateIntake, formatIntakeValue } from '../bookingForms/bookingFormModel.js';
+import { guardarFotoDeWhatsApp, puedeDescargar } from '../media/intakePhoto.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -51,7 +53,7 @@ const mayuscula = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 // "otro día" / "otra hora" NO cuentan como reprogramar (son opciones del paso de horarios).
 const INTENCION_CANCELAR = /cancel|anul/i;
 const INTENCION_REPROGRAMAR = /reprogram|posterg|adelant|(cambi|mov)\w*\s+(de\s+)?(la\s+|mi\s+|el\s+)?(cita|turno|reserva|hora|horario|fecha|d[ií]a)/i;
-const FLUJOS_SIN_INTENCION = new Set(['confirming_reschedule', 'confirming', 'awaiting_name', 'human']);
+const FLUJOS_SIN_INTENCION = new Set(['confirming_reschedule', 'confirming', 'awaiting_name', 'human', 'collecting_intake', 'confirming_pet']);
 
 // ───────────────────────── Fecha/hora del negocio ─────────────────────────
 
@@ -490,7 +492,7 @@ function vozDe(ctx) {
   return crearVoz(ctx?.assistantConfig?.personalidad, { negocio: ctx?.businessName || '', hora: ahoraNegocio().getHours() });
 }
 
-async function motor({ negocioId, phone, message, messageId, branch = null, referral = null }) {
+async function motor({ negocioId, phone, message, messageId, branch = null, referral = null, media = null }) {
   const context = contextoDeSucursal(await getBusinessContext(negocioId), branch);
   const voz = vozDe(context);
 
@@ -562,6 +564,11 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   if (expirada) {
     conversation = await resetConversation(negocioId, phone);
     return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, await bienvenida()), conversation);
+  }
+
+  // Imagen: solo se acepta cuando el formulario pide la foto de la mascota.
+  if (media && !(conversation.currentFlow === 'collecting_intake' && campoActual()?.type === 'image')) {
+    return responder(prefijo('Por ahora solo recibo fotos cuando te las pido 🙂', await menuActual()), conversation);
   }
 
     // Los botones/listas llevan el paso en que se enviaron ("choosing_time|3").
@@ -813,6 +820,57 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
 
         
     
+    // ── Formulario del negocio (peluquería canina: datos de la mascota) ──
+
+    case 'confirming_pet': {
+      const oferta = conversation.intakeOffer;
+      if (oferta && /^misma$|^1$|^s[ií]\b/i.test(texto)) {
+        conversation = await updateConversation(negocioId, phone, { intakeValues: oferta, intakeOffer: null });
+        return siguientePreguntaIntake();
+      }
+      if (/^otra$|^2$|^no\b|otra mascota/i.test(texto) || !oferta) {
+        conversation = await updateConversation(negocioId, phone, { intakeValues: null, intakeOffer: null });
+        return siguientePreguntaIntake();
+      }
+      return responder(prefijo(voz.noEntendi(), mensajeOfertaMascota(oferta)), conversation);
+    }
+
+    case 'collecting_intake': {
+      const campo = campoActual();
+      if (!campo) return siguientePreguntaIntake();
+      const valores = { ...(conversation.intakeValues || {}) };
+      const quiereOmitir = /^omitir$|^no s[eé]$|^no (lo )?recuerdo$|^no tengo$|^saltar$/i.test(texto);
+
+      if (quiereOmitir && campo.required) {
+        return responder(prefijo('Este dato es necesario para la reserva.', preguntaIntake(campo, valores)), conversation);
+      }
+      if (quiereOmitir) {
+        valores[campo.key] = null; // preguntado y omitido
+      } else if (campo.type === 'image') {
+        if (!media) {
+          return responder(prefijo('Envíame la foto como imagen 📷', preguntaIntake(campo, valores)), conversation);
+        }
+        if (!puedeDescargar(media)) {
+          logger.warn(`[assistantEngine] Foto sin link descargable (${negocioId})`);
+          return responder(prefijo('No pude recibir la foto por este medio.', preguntaIntake(campo, valores)), conversation);
+        }
+        try {
+          valores[campo.key] = await guardarFotoDeWhatsApp(media);
+        } catch (err) {
+          logger.warn('[assistantEngine] Foto de la mascota falló:', err.message);
+          return responder(prefijo('No pude guardar esa foto. Prueba con otra imagen (JPG o PNG).', preguntaIntake(campo, valores)), conversation);
+        }
+      } else {
+        const v = cleanFieldValue(campo, texto, { hoyIso: isoLocal(ahoraNegocio()) });
+        if (v === null) {
+          return responder(prefijo(ayudaCampo(campo), preguntaIntake(campo, valores)), conversation);
+        }
+        valores[campo.key] = v;
+      }
+      conversation = await updateConversation(negocioId, phone, { intakeValues: valores });
+      return siguientePreguntaIntake();
+    }
+
         case 'confirming_reschedule': {
           if (/^1$|confirmar|^s[ií]$/i.test(texto)) return confirmarReprogramacion();
           if (/^2$/.test(texto)) {
@@ -854,6 +912,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         clientId,
         paymentMethod: 'Por definir',
         bookedBy: 'assistant',
+        intake: intakeParaCita(conv),
       };
       cita = esPendiente
         ? await createPendingAppointment({ ...datos, branch: conv.selectedStaff.branch || '', candidateIds: conv.selectedStaff.candidateIds })
@@ -895,6 +954,8 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   }
 
   async function irAProfesionales() {
+    // Peluquería canina: primero los datos de la mascota, después el profesional.
+    if (necesitaIntake()) return iniciarIntake('staff');
     const pros = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
 
     // El cliente nombró a un profesional al empezar: si hace estos servicios, va directo con él.
@@ -925,6 +986,9 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   // Horarios del primer día con lugar (hoy, o el siguiente si hoy ya no hay),
   // con la opción "Otro día" al final.
   async function ofrecerHorarios(aviso = '') {
+    // Caminos que saltan el paso de profesional (repetir cita, profesional
+    // nombrado): los datos de la mascota se piden antes de los horarios.
+    if (necesitaIntake()) return iniciarIntake('times', aviso);
     const pros = prosElegidos(context, conversation);
     const duracion = totalDuracion(conversation);
     for (const dia of diasParaConversacion(context, conversation)) {
@@ -990,6 +1054,130 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       selectedStaff: r.staff,
     });
     return ofrecerHorarios();
+  }
+
+  // ── Formulario del negocio (bookingFormModel) ──
+  // Mismos campos, etiquetas y obligatorios que el link público. Las
+  // respuestas quedan en conversation.intakeValues (null = omitido) y se
+  // guardan en la cita como `intake`, validadas igual que en publicBooking.
+
+  function camposIntake() {
+    return activeFields(context.bookingForm);
+  }
+
+  function necesitaIntake() {
+    return camposIntake().length > 0 && !conversation.intakeDone && !conversation.rescheduleCitaId;
+  }
+
+  function campoActual() {
+    return camposIntake().find((f) => f.key === conversation.intakeField) || null;
+  }
+
+  function preguntaIntake(campo, valores = {}) {
+    const pregunta = askFor(campo, valores);
+    const omitir = campo.required ? [] : [{ id: 'omitir', title: 'Omitir' }];
+    if (campo.type === 'select') {
+      const opciones = (campo.options || []).map((o) => ({ id: o, title: o }));
+      if (opciones.length + omitir.length <= 3) {
+        return menuBotones({ texto: `${pregunta}\n\n${campo.options.join(' / ')}`, cuerpo: pregunta, botones: [...opciones, ...omitir] });
+      }
+      return menuLista({ texto: `${pregunta}\n\n${campo.options.join(' / ')}`, cuerpo: pregunta, boton: 'Elegir', items: opciones, fijas: omitir });
+    }
+    if (omitir.length) {
+      const extra = campo.type === 'date' ? ' Si no lo recuerdas, toca Omitir.' : '';
+      return menuBotones({ texto: `${pregunta}${extra}\n\n(Escribe "omitir" para saltar)`, cuerpo: `${pregunta}${extra}`, botones: omitir });
+    }
+    return pregunta;
+  }
+
+  function ayudaCampo(campo) {
+    switch (campo.type) {
+      case 'select': return `Elige una opción: ${(campo.options || []).join(', ')}.`;
+      case 'age': return 'Escribe la edad con número, por ejemplo "3 años" u "8 meses".';
+      case 'date': return 'Escribe la fecha como día/mes/año, por ejemplo 15/10/2026.';
+      default: return 'Escríbelo con un poco más de detalle, por favor.';
+    }
+  }
+
+  async function iniciarIntake(siguiente, aviso = '') {
+    const anterior = await buscarUltimaMascota();
+    if (anterior) {
+      conversation = await updateConversation(negocioId, phone, {
+        currentFlow: 'confirming_pet', intakeNext: siguiente, intakeOffer: anterior, intakeValues: null,
+      });
+      const msg = mensajeOfertaMascota(anterior);
+      return responder(aviso ? prefijo(aviso, msg) : msg, conversation);
+    }
+    conversation = await updateConversation(negocioId, phone, { intakeNext: siguiente, intakeValues: null });
+    return siguientePreguntaIntake(aviso);
+  }
+
+  // Pregunta el próximo campo sin respuesta; si no queda ninguno, sigue con
+  // el flujo de reserva donde se había quedado.
+  async function siguientePreguntaIntake(aviso = '') {
+    const valores = conversation.intakeValues || {};
+    const campo = camposIntake().find((f) => !(f.key in valores));
+    if (campo) {
+      conversation = await updateConversation(negocioId, phone, { currentFlow: 'collecting_intake', intakeField: campo.key });
+      const msg = preguntaIntake(campo, valores);
+      return responder(aviso ? prefijo(aviso, msg) : msg, conversation);
+    }
+    const siguiente = conversation.intakeNext;
+    conversation = await updateConversation(negocioId, phone, { intakeDone: true, intakeField: null });
+    return siguiente === 'times' ? ofrecerHorarios(aviso) : irAProfesionales();
+  }
+
+  function mensajeOfertaMascota(valores) {
+    const nombre = valores.petName || 'tu mascota';
+    const detalle = [valores.breed, valores.size].filter(Boolean).join(', ');
+    const cuerpo = `¿La reserva es para ${nombre}${detalle ? ` (${detalle})` : ''}?`;
+    return menuBotones({
+      texto: `${cuerpo}\n\n1. Sí, ${nombre}\n2. Otra mascota`,
+      cuerpo,
+      botones: [{ id: 'misma', title: `Sí, ${nombre}` }, { id: 'otra', title: 'Otra mascota' }],
+    });
+  }
+
+  // Mascota de la última cita del cliente con formulario del mismo tipo. Solo
+  // los campos que el negocio pide hoy; si falta algún obligatorio, se pregunta.
+  async function buscarUltimaMascota() {
+    const form = context.bookingForm;
+    if (!form) return null;
+    try {
+      const snap = await db.collection('negocios').doc(negocioId).collection('citas')
+        .where('clientPhone', 'in', variantesTelefono(String(phone).replace(/\D/g, '')))
+        .get();
+      const ultima = snap.docs
+        .map((d) => d.data())
+        .filter((c) => c.status !== 'cancelled' && c.intake?.type === form.type && c.intake?.values?.petName)
+        .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))[0];
+      if (!ultima) return null;
+      const out = {};
+      for (const f of camposIntake()) {
+        const v = cleanFieldValue(f, ultima.intake.values[f.key], { hoyIso: isoLocal(ahoraNegocio()) });
+        if (v !== null) out[f.key] = v;
+      }
+      return out.petName ? out : null;
+    } catch (err) {
+      logger.warn('[assistantEngine] buscarUltimaMascota falló:', err.message);
+      return null;
+    }
+  }
+
+  // `intake` para createAppointment. Si la config cambió a mitad de la
+  // conversación, se guarda solo lo válido (nunca bloquea la reserva).
+  function intakeParaCita(conv) {
+    const form = context.bookingForm;
+    if (!form || !conv.intakeValues) return null;
+    const r = validateIntake(form, conv.intakeValues, { hoyIso: isoLocal(ahoraNegocio()) });
+    return Object.keys(r.values).length ? { type: form.type, values: r.values, labels: r.labels } : null;
+  }
+
+  function lineaMascota(conv) {
+    const v = conv.intakeValues || {};
+    if (!context.bookingForm || !v.petName) return '';
+    const detalle = ['breed', 'size', 'age'].map((k) => formatIntakeValue(k, v[k])).filter(Boolean).join(', ');
+    return `\n${context.bookingForm.adminTitle}: ${v.petName}${detalle ? ` (${detalle})` : ''}${v.photo ? ' 📷' : ''}`;
   }
 
   // Saludo: con nombre y "Repetir cita" si el cliente ya reservó antes.
@@ -1423,6 +1611,10 @@ ${cierre}`,
           return mensajeResumenReprogramar(conversation);
         case 'awaiting_name':
           return '¿A nombre de quién hago la reserva?';
+        case 'confirming_pet':
+          return conversation.intakeOffer ? mensajeOfertaMascota(conversation.intakeOffer) : menuDelPaso();
+        case 'collecting_intake':
+          return campoActual() ? preguntaIntake(campoActual(), conversation.intakeValues || {}) : menuDelPaso();
         default:
           return menuDelPaso();
       }
@@ -1585,7 +1777,7 @@ ${cierre}`,
       date: conv.selectedDate, branch: conv.selectedStaff?.branch || branch || '',
     });
     const lineaPrecio = precio ? `\nPrecio: ${precio}${conv.selectedStaff?.id === PENDING_ID && /–/.test(precio) ? ` (según quién te atienda)` : ''}` : '';
-    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}\nA nombre de: ${conv.clientName}`;
+    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}${lineaMascota(conv)}\nA nombre de: ${conv.clientName}`;
     return menuBotones({
       texto: `${resumen}\n\n1. Confirmar\n2. Cancelar\n(Escribe "nombre" para cambiar el nombre)`,
       cuerpo: resumen,
