@@ -434,3 +434,136 @@ export async function registerCommissionPayment(negocioId, { barberId, startDate
     return { paymentId: pagoRef.id, monto, citaIds, method: metodo, isCash, cashSessionId: sessionId, pendingCashSession: isCash && !sessionId, scopeName: scope?.name || null };
   });
 }
+
+// ───────────────────── Información de pago de comisiones ─────────────────────
+
+const pagoView = (id, p) => ({
+  id,
+  barberId: p.barberId,
+  barberName: p.barberName || '',
+  amount: round2(p.amount),
+  method: p.method || '',
+  isCash: !!p.isCash,
+  paidAt: p.paidAt || null,
+  startDate: p.startDate || null,
+  endDate: p.endDate || null,
+  citaIds: Array.isArray(p.citaIds) ? p.citaIds : [],
+  createdBy: p.createdBy || null,
+  cashPendingSession: !!p.cashPendingSession,
+  methodChanges: Array.isArray(p.methodChanges) ? p.methodChanges : [],
+});
+
+/**
+ * Pagos de comisión de un profesional que tocan el periodo elegido (día,
+ * semana, mes o año): el periodo que se pagó se cruza con el elegido.
+ * Índice: commissionPayments (barberId) — un solo campo, automático.
+ */
+export async function listCommissionPayments(negocioId, { barberId, startDate, endDate }) {
+  if (!barberId) throw new CashError(400, 'Falta el profesional.', 'BARBER_REQUIRED');
+  if (!startDate || !endDate) throw new CashError(400, 'Falta el periodo.', 'RANGE_REQUIRED');
+  const snap = await negRef(negocioId).collection('commissionPayments').where('barberId', '==', barberId).get();
+  const items = snap.docs
+    .map((d) => pagoView(d.id, d.data()))
+    .filter((p) => !p.startDate || !p.endDate || (p.startDate <= endDate && p.endDate >= startDate))
+    .sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)));
+  return { items };
+}
+
+/**
+ * Cambia el método de un pago de comisión ya registrado.
+ *  - Otro método que no es efectivo: solo cambia el dato.
+ *  - Efectivo -> otro: la salida de efectivo se anula. Si esa salida es de una
+ *    caja ya CERRADA, pide el PIN de Analítica y queda como corrección de esa caja.
+ *  - Otro -> efectivo: se crea la salida en la caja abierta de la sucursal (o
+ *    queda pendiente para la próxima caja), igual que al pagar con la caja cerrada.
+ */
+export async function changeCommissionPaymentMethod(negocioId, paymentId, { method, pin, reason, branchId, actor }) {
+  const metodo = String(method || '').trim();
+  if (!isRealPaymentMethod(metodo)) throw new CashError(400, 'Elige el método de pago.', 'METHOD_REQUIRED');
+  const motivo = String(reason || '').trim().slice(0, 300);
+
+  const nRef = negRef(negocioId);
+  const pagoRef = nRef.collection('commissionPayments').doc(paymentId);
+  const pagoSnap0 = await pagoRef.get();
+  if (!pagoSnap0.exists) throw new CashError(404, 'Ese pago no existe.', 'NOT_FOUND');
+  const pago0 = pagoSnap0.data();
+  const aEfectivo = isCashMethod(metodo);
+
+  // Datos que se leen fuera de la transacción (no cambian con el pago).
+  let scope = null;
+  if (aEfectivo && !pago0.isCash) {
+    const barberSnap = await nRef.collection('profesionales').doc(pago0.barberId).get();
+    scope = await resolveScope(negocioId, { branchId, branchName: branchId ? null : barberSnap.data()?.branch || null }).catch(() => null);
+    if (!scope) throw new CashError(400, 'Elige de qué caja sale el efectivo.', 'SCOPE_REQUIRED');
+  }
+  // ¿La salida de efectivo es de una caja ya cerrada? Entonces hace falta el PIN.
+  let cajaCerradaId = null;
+  if (pago0.isCash && !aEfectivo && pago0.cashMovementId) {
+    const mov = (await movCol(negocioId).doc(pago0.cashMovementId).get()).data();
+    if (mov?.sessionId) {
+      const ses = (await cajasCol(negocioId).doc(mov.sessionId).get()).data();
+      if (ses?.status === 'closed') cajaCerradaId = mov.sessionId;
+    }
+  }
+  if (cajaCerradaId) {
+    if (!pin) throw new CashError(403, 'Ese pago salió de una caja que ya se cerró: ingresa el PIN de Analítica para cambiarlo.', 'PIN_REQUIRED');
+    if (motivo.length < 5) throw new CashError(400, 'Explica el motivo del cambio.', 'REASON_REQUIRED');
+    const hash = await getPinHash(negocioId);
+    if (!hash) throw new CashError(409, 'Primero crea el PIN de Analítica.', 'PIN_MISSING');
+    if (!(await verifyPin(String(pin || ''), hash))) throw new CashError(401, 'PIN incorrecto.', 'PIN_INVALID');
+  }
+
+  const movRefNuevo = movCol(negocioId).doc();
+  return db.runTransaction(async (tx) => {
+    const pagoSnap = await tx.get(pagoRef);
+    const pago = pagoSnap.data();
+    if ((pago.method || '') === metodo) throw new CashError(400, 'El pago ya tiene ese método.', 'NO_CHANGES');
+    const movSnap = pago.isCash && !aEfectivo && pago.cashMovementId ? await tx.get(movCol(negocioId).doc(pago.cashMovementId)) : null;
+    const sesSnap = cajaCerradaId ? await tx.get(cajasCol(negocioId).doc(cajaCerradaId)) : null;
+    const estadoSnap = scope ? await tx.get(estadoRef(negocioId, scope.key)) : null;
+
+    const at = nowIso();
+    const cambio = { at, by: actorInfo(actor), from: pago.method || '', to: metodo, ...(motivo ? { reason: motivo } : {}) };
+    const update = { method: metodo, isCash: aEfectivo, methodChanges: [...(pago.methodChanges || []), cambio] };
+
+    if (movSnap?.exists && !movSnap.data().voided) {
+      // Efectivo -> otro: la salida deja de contar en la caja.
+      tx.update(movSnap.ref, { voided: true, voidedAt: at, voidedBy: actorInfo(actor), voidReason: motivo || `Pago cambiado a ${metodo}` });
+      Object.assign(update, { cashMovementId: null, cashPendingSession: false });
+      if (sesSnap?.exists) {
+        // La caja ya se cerró: se rehace su resumen y queda la corrección.
+        const session = sesSnap.data();
+        const prev = session.close || {};
+        const salidas = (prev.salidas || []).map((s) => (s.id === movSnap.id ? { ...s, voided: true } : s));
+        const summary = computeCashSummary({ openingFund: session.openingFund, cobros: prev.cobros || [], salidas, paymentMethods: (prev.summary?.byMethod || []).map((r) => r.method) });
+        const difference = round2(round2(prev.countedCash) - summary.expectedCash);
+        const next = { ...prev, salidas, summary, difference };
+        const corrRef = sesSnap.ref.collection('correcciones').doc();
+        tx.set(corrRef, {
+          at, by: actorInfo(actor), reason: motivo,
+          changes: [
+            { field: 'salidaAnulada', before: `Comisión ${pago.barberName || ''}: Bs ${round2(pago.amount)}`.trim(), after: `pagada por ${metodo}` },
+            { field: 'expectedCash', before: prev.summary?.expectedCash ?? null, after: summary.expectedCash },
+            { field: 'difference', before: prev.difference ?? null, after: difference },
+          ],
+        });
+        tx.update(sesSnap.ref, { close: next, corrected: true, lastCorrectedAt: at, correctionsCount: (session.correctionsCount || 0) + 1 });
+      }
+    }
+
+    if (scope) {
+      // Otro -> efectivo: nueva salida en la caja abierta o pendiente para la próxima.
+      const sessionId = estadoSnap.exists ? estadoSnap.data().openSessionId || null : null;
+      tx.set(movRefNuevo, {
+        type: 'salida', source: 'comision', method: metodo, amount: round2(pago.amount),
+        reason: `Comisión ${pago.barberName || ''}`.trim(), scopeKey: scope.key, sessionId,
+        commissionPaymentId: paymentId, createdAt: at, createdBy: actorInfo(actor), voided: false,
+        registeredWithoutOpenCash: !sessionId,
+      });
+      Object.assign(update, { cashMovementId: movRefNuevo.id, cashScopeKey: scope.key, cashSessionId: sessionId, cashPendingSession: !sessionId });
+    }
+
+    tx.update(pagoRef, update);
+    return { payment: pagoView(paymentId, { ...pago, ...update }), correctedSessionId: cajaCerradaId, scopeName: scope?.name || null };
+  });
+}

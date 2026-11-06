@@ -341,3 +341,88 @@ describe('el profesional registra el cobro de sus comisiones', () => {
     assert.equal(otroNegocio.status, 403);
   });
 });
+
+describe('información de pago: listar y cambiar el método de un pago de comisión', () => {
+  const D = '2026-02-10';
+  const pagar = (method) => call('POST', '/cash/commission-payments', { barberId: 'p5', startDate: D, endDate: D, method, branchId: 's1' });
+  const cambiar = (id, body) => call('POST', `/cash/commission-payments/${id}/method`, { branchId: 's1', ...body });
+  let pagoId;
+  let monto;
+
+  before(async () => {
+    const svc = [{ serviceId: 'corte', commissionEnabled: true, type: '%', value: 50 }];
+    db._set(`${N}/profesionales/p5`, { name: 'Lucas', branch: 'Central', services: svc });
+    // Caja cerrada de pruebas anteriores: se deja abierta y limpia para estas pruebas.
+    const c = await current();
+    if (c.open) await call('POST', '/cash/close', { countedCash: c.summary.expectedCash, envelopeAmount: 0, nextFund: c.summary.expectedCash });
+    await call('POST', '/cash/open', { openingFund: 100 });
+    cita({ date: D, professionalId: 'p5', barberId: 'p5', price: 80, paymentMethod: 'QR' });
+  });
+
+  test('pagar en efectivo con la caja abierta y verlo en la información de pago', async () => {
+    const antes = (await current()).summary.expectedCash;
+    const r = await pagar('Efectivo');
+    assert.equal(r.status, 200);
+    pagoId = r.body.paymentId;
+    monto = r.body.monto;
+    assert.ok(monto > 0);
+    assert.equal((await current()).summary.expectedCash, antes - monto);
+
+    const lista = await call('GET', '/cash/commission-payments', {}, ADMIN, { barberId: 'p5', startDate: '2026-02-01', endDate: '2026-02-28' });
+    assert.equal(lista.status, 200);
+    assert.equal(lista.body.items.length, 1);
+    assert.equal(lista.body.items[0].method, 'Efectivo');
+    assert.equal(lista.body.items[0].amount, monto);
+    const fuera = await call('GET', '/cash/commission-payments', {}, ADMIN, { barberId: 'p5', startDate: '2026-03-01', endDate: '2026-03-31' });
+    assert.equal(fuera.body.items.length, 0);
+    // Un profesional no ve esta lista.
+    assert.equal((await call('GET', '/cash/commission-payments', {}, BARBER, { barberId: 'p5', startDate: D, endDate: D })).status, 401);
+  });
+
+  test('efectivo -> transferencia con la caja abierta: vuelve el efectivo, sin PIN', async () => {
+    const antes = (await current()).summary.expectedCash;
+    const r = await cambiar(pagoId, { method: 'Transferencia' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.payment.method, 'Transferencia');
+    assert.equal((await current()).summary.expectedCash, antes + monto);
+    const p = db._get(`${N}/commissionPayments/${pagoId}`);
+    assert.equal(p.isCash, false);
+    assert.equal(p.methodChanges.length, 1);
+    assert.equal(p.methodChanges[0].from, 'Efectivo');
+    // Mismo método: no hay cambio.
+    assert.equal((await cambiar(pagoId, { method: 'Transferencia' })).status, 400);
+  });
+
+  test('transferencia -> efectivo: sale otra vez de la caja abierta', async () => {
+    const antes = (await current()).summary.expectedCash;
+    const r = await cambiar(pagoId, { method: 'Efectivo' });
+    assert.equal(r.status, 200);
+    assert.equal((await current()).summary.expectedCash, antes - monto);
+    const activas = db._list(`${N}/cajaMovimientos`).filter((m) => m.commissionPaymentId === pagoId && !m.voided);
+    assert.equal(activas.length, 1);
+  });
+
+  test('con la caja ya cerrada pide PIN, y con PIN corrige ese cierre', async () => {
+    const c = await current();
+    const ses = c.session.id;
+    await call('POST', '/cash/close', { countedCash: c.summary.expectedCash, envelopeAmount: 0, nextFund: c.summary.expectedCash });
+    const cerrada = db._get(`${N}/cajas/${ses}`);
+    assert.equal(cerrada.close.difference, 0);
+
+    const sinPin = await cambiar(pagoId, { method: 'QR' });
+    assert.equal(sinPin.status, 403);
+    assert.equal(sinPin.body.code, 'PIN_REQUIRED');
+    assert.equal((await cambiar(pagoId, { method: 'QR', pin: '1111', reason: 'Le pagué por QR' })).status, 401);
+    assert.equal((await cambiar(pagoId, { method: 'QR', pin: '4321' })).status, 400); // falta el motivo
+
+    const ok = await cambiar(pagoId, { method: 'QR', pin: '4321', reason: 'Le pagué por QR' });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.correctedSessionId, ses);
+    const s = db._get(`${N}/cajas/${ses}`);
+    assert.equal(s.corrected, true);
+    assert.equal(s.close.summary.expectedCash, cerrada.close.summary.expectedCash + monto);
+    assert.equal(s.close.difference, -monto); // lo contado ahora queda corto: se ve en el cierre
+    assert.equal(db._list(`${N}/cajas/${ses}/correcciones`).length, 1);
+    assert.equal(db._get(`${N}/commissionPayments/${pagoId}`).method, 'QR');
+  });
+});

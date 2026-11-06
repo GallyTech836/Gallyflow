@@ -16,7 +16,7 @@ import { requireCapability } from '../services/capabilities/capabilityService.js
 import { logger } from '../utils/logger.js';
 import {
   CashError, getCurrentCash, listCashSessions, getCashSession, openCash, addCashOut, closeCash,
-  correctCashSession, registerCommissionPayment,
+  correctCashSession, registerCommissionPayment, listCommissionPayments, changeCommissionPaymentMethod,
 } from '../services/cash/cashService.js';
 
 const router = Router();
@@ -69,6 +69,23 @@ router.post('/cash/commission-payments', ...admin, requireCapability('comisiones
   startDate: req.body?.startDate,
   endDate: req.body?.endDate,
   method: req.body?.method,
+  branchId: req.body?.branchId || null,
+  actor: req.actor,
+})));
+
+// Información de pago: pagos de comisión de un profesional en el periodo elegido.
+router.get('/cash/commission-payments', ...admin, requireCapability('comisiones', 'analiticas'), handle((req) => listCommissionPayments(req.negocioId, {
+  barberId: req.query?.barberId,
+  startDate: req.query?.startDate,
+  endDate: req.query?.endDate,
+})));
+
+// Cambiar el método de un pago de comisión. Si el efectivo salió de una caja ya
+// cerrada, pide el PIN de Analítica (y queda como corrección de esa caja).
+router.post('/cash/commission-payments/:paymentId/method', ...admin, requireCapability('comisiones', 'analiticas'), financePinRateLimit, handle((req) => changeCommissionPaymentMethod(req.negocioId, req.params.paymentId, {
+  method: req.body?.method,
+  pin: req.body?.pin,
+  reason: req.body?.reason,
   branchId: req.body?.branchId || null,
   actor: req.actor,
 })));
