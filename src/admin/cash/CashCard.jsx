@@ -97,22 +97,40 @@ function EnvelopeView({ session }) {
 // ───────────────────────── Modales ─────────────────────────
 
 function OpenModal({ branchName, suggested, pendingCashOut, onClose, onDone }) {
+  // Con fondo sugerido (lo que quedó en el último cierre) se abre con un toque.
+  const [otro, setOtro] = useState(suggested == null);
   const [fund, setFund] = useState(suggested != null ? String(suggested) : '');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const pendiente = round2((pendingCashOut || []).reduce((s, m) => s + m.amount, 0));
-  async function submit() {
+  async function abrir(monto) {
     setError('');
-    if (fund === '' || Number(fund) < 0 || !Number.isFinite(Number(fund))) return setError('Ingresa el fondo inicial (puede ser 0).');
-    return onDone(Number(fund), setError);
+    if (monto === '' || Number(monto) < 0 || !Number.isFinite(Number(monto))) return setError('Escribe cuánto efectivo hay para dar cambio (puede ser 0).');
+    setBusy(true);
+    await onDone(Number(monto), setError);
+    setBusy(false);
   }
   return (
     <Modal open onClose={onClose} title="Abrir caja" description={branchName} size="sm"
-      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button onClick={submit} icon={LockOpen}>Abrir caja</Button></>}>
+      footer={otro ? <><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button onClick={() => abrir(fund)} icon={LockOpen} disabled={busy}>Abrir caja</Button></> : null}>
       <div className="space-y-4">
-        <Field label="Fondo inicial en efectivo" hint="El dinero para dar cambio. No cuenta como venta." error={error}>
-          <Input type="number" inputMode="decimal" min="0" step="0.5" value={fund} onChange={(e) => setFund(e.target.value)} autoFocus />
-        </Field>
-        {suggested != null && <p className="text-xs text-nexus-text-muted">En el último cierre quedaron {bs(suggested)} de fondo.</p>}
+        {!otro ? (
+          <>
+            <p className="text-sm text-nexus-text-secondary">¿Con cuánto efectivo empiezas? Es el dinero para dar cambio.</p>
+            <Button fullWidth icon={LockOpen} onClick={() => abrir(suggested)} disabled={busy}>
+              Abrir con {bs(suggested)}
+            </Button>
+            <p className="-mt-2 text-center text-xs text-nexus-text-muted">Es lo que quedó de cambio en el último cierre.</p>
+            <button type="button" onClick={() => setOtro(true)} className="w-full text-center text-sm font-semibold text-nexus-text-secondary underline cursor-pointer">
+              Empiezo con otro monto
+            </button>
+            {error && <p role="alert" className="text-sm text-nexus-error-text">{error}</p>}
+          </>
+        ) : (
+          <Field label="¿Con cuánto efectivo empiezas?" hint="Es el dinero para dar cambio. No cuenta como venta." error={error}>
+            <Input type="number" inputMode="decimal" min="0" step="0.5" value={fund} onChange={(e) => setFund(e.target.value)} autoFocus />
+          </Field>
+        )}
         {pendiente > 0 && (
           <p className="text-sm rounded-lg bg-nexus-warning-bg text-nexus-warning-text px-3 py-2">
             Hay {bs(pendiente)} en salidas de efectivo registradas con la caja cerrada. Se descontarán de esta caja.
@@ -149,55 +167,95 @@ function CashOutModal({ onClose, onDone }) {
   );
 }
 
+// Cierre en dos preguntas: ¿cuánto contaste? y ¿cuánto dejas de cambio?
+// El sobre se calcula solo (lo contado menos lo que queda de cambio).
 function CloseModal({ cash, userEmail, onClose, onDone }) {
   const { summary, session, salidas } = cash;
+  const esperado = summary.expectedCash;
+  const fondoHoy = round2(session.openingFund ?? 0);
   const [counted, setCounted] = useState('');
-  const [fund, setFund] = useState(String(session.openingFund ?? 0));
-  const [envelope, setEnvelope] = useState('');
-  const [envelopeTouched, setEnvelopeTouched] = useState(false);
+  const [fundChoice, setFundChoice] = useState('igual'); // 'igual' | 'nada' | 'otro'
+  const [fundOtro, setFundOtro] = useState('');
   const [note, setNote] = useState('');
+  const [verDetalle, setVerDetalle] = useState(false);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  // Mientras no lo edite a mano, el sobre es lo contado menos el fondo que queda.
-  const envelopeValue = envelopeTouched ? envelope : (counted === '' ? '' : String(round2(Math.max(0, Number(counted) - Number(fund || 0)))));
-  const check = counted === '' ? null : validateClose({ expectedCash: summary.expectedCash, countedCash: counted, envelopeAmount: envelopeValue, nextFund: fund });
-  const d = check ? diffLabel(check.difference) : null;
+  const contado = counted === '' ? null : round2(counted);
+  const fund = fundChoice === 'igual' ? fondoHoy : fundChoice === 'nada' ? 0 : (fundOtro === '' ? null : round2(fundOtro));
+  const diferencia = contado === null ? null : round2(contado - esperado);
+  const d = diferencia === null ? null : diffLabel(diferencia);
+  const fondoInvalido = contado !== null && fund !== null && fund > contado;
+  const sobre = contado !== null && fund !== null && !fondoInvalido ? round2(contado - fund) : null;
+  const chipClass = (active) => `inline-flex h-10 items-center rounded-full border px-3.5 text-sm font-semibold transition-colors cursor-pointer ${active
+    ? 'border-nexus-primary bg-nexus-primary text-white'
+    : 'border-nexus-border bg-nexus-surface text-nexus-text hover:bg-nexus-surface-hover'}`;
 
   async function submit() {
+    if (busy) return;
     setError('');
-    if (!check || !check.ok) return setError(check?.errors?.[0]?.message || 'Ingresa el efectivo contado.');
-    if (check.difference !== 0 && note.trim().length < 3) return setError('Hay diferencia: escribe una nota que la explique.');
-    return onDone({ sessionId: session.id, countedCash: Number(counted), envelopeAmount: Number(envelopeValue), nextFund: Number(fund), note: note.trim() }, setError);
+    if (contado === null || contado < 0) return setError('Escribe cuánto efectivo contaste.');
+    if (fund === null || fund < 0) return setError('Elige cuánto dejas de cambio para mañana.');
+    if (fondoInvalido) return setError('No puedes dejar de cambio más de lo que contaste.');
+    const check = validateClose({ expectedCash: esperado, countedCash: contado, envelopeAmount: sobre, nextFund: fund });
+    if (!check.ok) return setError(check.errors[0].message);
+    if (check.difference !== 0 && note.trim().length < 3) return setError('No cuadra: escribe brevemente por qué.');
+    setBusy(true);
+    await onDone({ sessionId: session.id, countedCash: contado, envelopeAmount: sobre, nextFund: fund, note: note.trim() }, setError);
+    setBusy(false);
   }
 
   return (
     <Modal open onClose={onClose} title="Cerrar caja" description={`${session.scopeName} · ${fechaLarga(new Date().toISOString())} · ${userEmail || 'Administrador'}`} size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button onClick={submit} icon={Lock}>Cerrar caja</Button></>}>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button onClick={submit} icon={Lock} disabled={busy}>{busy ? 'Cerrando…' : 'Cerrar caja'}</Button></>}>
       <div className="space-y-5">
-        <SummaryBlock summary={summary} salidas={salidas} />
-        <div className="space-y-3">
-          <Field label="Efectivo contado" hint="Cuenta todos los billetes y monedas de la caja, incluido el fondo.">
-            <Input type="number" inputMode="decimal" min="0" step="0.5" value={counted} onChange={(e) => setCounted(e.target.value)} autoFocus />
-          </Field>
-          {d && (
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-nexus-text-secondary">Contado vs esperado ({bs(summary.expectedCash)})</span>
-              <Badge tone={d.tone} icon={check.difference === 0 ? CircleCheck : TriangleAlert}>{d.text}</Badge>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Queda de fondo para mañana">
-              <Input type="number" inputMode="decimal" min="0" step="0.5" value={fund} onChange={(e) => setFund(e.target.value)} />
-            </Field>
-            <Field label="Se guarda en el sobre">
-              <Input type="number" inputMode="decimal" min="0" step="0.5" value={envelopeValue} onChange={(e) => { setEnvelopeTouched(true); setEnvelope(e.target.value); }} />
-            </Field>
+        <div className="rounded-xl border border-nexus-border bg-nexus-background p-4 text-center">
+          <p className="text-sm text-nexus-text-secondary">Deberías tener en efectivo</p>
+          <p className="text-3xl font-bold text-nexus-text nx-num mt-1">{bs(esperado)}</p>
+          <button type="button" onClick={() => setVerDetalle((v) => !v)} className="mt-2 text-xs font-semibold text-nexus-text-secondary underline cursor-pointer">
+            {verDetalle ? 'Ocultar detalle del día' : 'Ver detalle del día'}
+          </button>
+          {verDetalle && <div className="mt-3 text-left"><SummaryBlock summary={summary} salidas={salidas} /></div>}
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-nexus-text">1. ¿Cuánto efectivo contaste?</p>
+          <p className="text-xs text-nexus-text-muted">Todos los billetes y monedas de la caja, incluido el cambio.</p>
+          <div className="flex gap-2">
+            <Input type="number" inputMode="decimal" min="0" step="0.5" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="0" autoFocus className="nx-num" />
+            <Button variant="secondary" onClick={() => setCounted(String(esperado))}>Está exacto</Button>
           </div>
-          {check && !check.ok && <p className="text-xs text-nexus-error-text">{check.errors[0].message}</p>}
-          <Field label={check && check.difference !== 0 ? 'Nota (obligatoria si hay diferencia)' : 'Nota (opcional)'} error={error}>
+          {d && (
+            <Badge tone={d.tone} icon={diferencia === 0 ? CircleCheck : TriangleAlert}>{d.text}</Badge>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-nexus-text">2. ¿Cuánto dejas de cambio para mañana?</p>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Cambio para mañana">
+            <button type="button" role="radio" aria-checked={fundChoice === 'igual'} onClick={() => setFundChoice('igual')} className={chipClass(fundChoice === 'igual')}>{bs(fondoHoy)} (igual que hoy)</button>
+            <button type="button" role="radio" aria-checked={fundChoice === 'nada'} onClick={() => setFundChoice('nada')} className={chipClass(fundChoice === 'nada')}>Nada</button>
+            <button type="button" role="radio" aria-checked={fundChoice === 'otro'} onClick={() => setFundChoice('otro')} className={chipClass(fundChoice === 'otro')}>Otro monto</button>
+          </div>
+          {fundChoice === 'otro' && (
+            <Input type="number" inputMode="decimal" min="0" step="0.5" value={fundOtro} onChange={(e) => setFundOtro(e.target.value)} placeholder="0" autoFocus className="nx-num" />
+          )}
+          {fondoInvalido && <p className="text-xs text-nexus-error-text">No puedes dejar de cambio más de lo que contaste.</p>}
+        </div>
+
+        {sobre !== null && (
+          <div className="rounded-xl border-2 border-nexus-text/80 p-4 flex items-baseline justify-between gap-3">
+            <span className="text-sm font-semibold text-nexus-text">Va al sobre</span>
+            <span className="text-2xl font-bold text-nexus-text nx-num">{bs(sobre)}</span>
+          </div>
+        )}
+
+        {diferencia !== null && diferencia !== 0 && (
+          <Field label="¿Por qué no cuadra?" hint="Una frase basta. Ej.: di cambio de más.">
             <Textarea rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
-        </div>
+        )}
+        {error && <p role="alert" className="text-sm text-nexus-error-text">{error}</p>}
       </div>
     </Modal>
   );

@@ -9,6 +9,7 @@ export { default as Modal } from './Modal';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { useConfirm } from './useConfirm';
 export { default as SegmentedControl } from './SegmentedControl';
+export { default as ChoiceChips } from './ChoiceChips';
 export { default as ResponsiveTable } from './ResponsiveTable';
 export { default as EmptyState } from './EmptyState';
 export { default as Spinner, LoadingState } from './Spinner';

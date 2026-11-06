@@ -9,6 +9,7 @@ import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/app
 import { paymentStampFields } from '../shared/appointments/paymentStamp';
 import CashCard from './cash/CashCard';
 import CommissionPayModal from './cash/CommissionPayModal';
+import CommissionDetail from './cash/CommissionDetail';
 import { payCommission } from './cash/cashApi';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import ClosedDayBanner from '../shared/businessSettings/ClosedDayBanner';
@@ -3912,23 +3913,15 @@ const { heroConfig } = useHeroConfig(negocioId);
                     description={detailBarber?.name}
                     size="md"
                   >
-                    <div className="space-y-2">
-                      {(detailBarber?.detalle || []).map(item => (
-                        <div key={item.id} className="flex items-center justify-between gap-3 bg-nexus-background border border-nexus-border rounded-lg p-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-nexus-text truncate">{item.serviceName}</p>
-                            <p className="text-xs text-nexus-text-secondary nx-num">{item.date}</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-sm nx-num font-bold text-nexus-primary">{formatBs(item.amount)}</p>
-                            <Badge tone={item.paid ? 'success' : 'danger'}>{item.paid ? 'Pagada' : 'Pendiente'}</Badge>
-                          </div>
-                        </div>
-                      ))}
-                      {(detailBarber?.detalle || []).length === 0 && (
-                        <p className="text-center text-nexus-text-muted text-sm py-6">Sin {tl('services')} {g('service', 'completados', 'completadas')} en este periodo.</p>
-                      )}
-                    </div>
+                    <CommissionDetail
+                      barber={detailBarber}
+                      startDate={periodStart}
+                      endDate={periodEnd}
+                      branchId={branches.find(b => b?.name === detailBarber?.branch)?.id || null}
+                      paymentMethods={businessSettings.paymentMethods}
+                      emptyText={`Sin ${tl('services')} ${g('service', 'completados', 'completadas')} en este periodo.`}
+                      onToast={(msg) => triggerToast(msg, 'success')}
+                    />
                   </Modal>
                 );
               })()}

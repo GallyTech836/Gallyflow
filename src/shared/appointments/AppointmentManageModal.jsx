@@ -7,7 +7,7 @@ import { formatServicePriceFor } from '../servicePricing/servicePricing';
 import { buildCitaService, buildPendingCitaService, getMinimumPrice, distributeFinalPrice, summarizeCitaServices } from '../servicePricing/professionalPricing';
 import { professionalCanDo } from './pendingModel';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
-import { Modal, Button, Field, Input, Select, Textarea, useConfirm } from '../ui';
+import { Modal, Button, Field, Input, Select, Textarea, ChoiceChips, useConfirm } from '../ui';
 import AppointmentIntakeDetails from './AppointmentIntakeDetails';
 
 /**
@@ -191,6 +191,15 @@ export default function AppointmentManageModal({
     onDelete(appointment.id);
     onClose();
   };
+
+  // --- Total a cobrar: suma de los servicios. Con precio variable se cuenta el
+  // mínimo ("Desde") hasta que se registra el precio final al completar. ---
+  const fmtBs = (n) => `Bs ${Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  const finalPriceSet = isCompleting && Number(appointment.price) > 0;
+  const totalLabel = hasVariable && !finalPriceSet
+    ? `Desde ${fmtBs(minTotal)}`
+    : fmtBs(Number(appointment.price) > 0 ? appointment.price : calculateTotals(currentServices).totalPrice);
+  const realPaymentMethods = (paymentMethods || []).filter(m => m && m !== 'Pendiente');
 
   const saveDisabled = !anyEditable || paymentMethodMissing || finalPriceMissing || clientMissing || durationInvalid;
   const actionBtn = 'inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-nexus-primary/20 bg-nexus-primary-soft px-3 text-sm font-semibold text-nexus-primary whitespace-nowrap cursor-pointer hover:brightness-95';
@@ -398,6 +407,17 @@ export default function AppointmentManageModal({
 
         {currentServices.length > 0 && (
           <div className="rounded-lg border border-nexus-border bg-nexus-background p-3">
+            {showPrices && (
+              <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-nexus-border pb-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">Total a cobrar</p>
+                  {hasVariable && !finalPriceSet && (
+                    <p className="text-xs text-nexus-text-muted">El precio final se anota al terminar.</p>
+                  )}
+                </div>
+                <p className="nx-num shrink-0 text-xl font-bold text-nexus-text">{totalLabel}</p>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-nexus-text-secondary">Duración</p>
@@ -457,18 +477,13 @@ export default function AppointmentManageModal({
             required
             error={paymentMethodMissing ? `Elige el método de pago para poder guardar ${terms.g('appointment', 'el', 'la')} ${terms.tl('appointment')} como ${terms.g('appointment', 'completado', 'completada')}.` : null}
           >
-            <Select
-              required
-              disabled={!canEdit('paymentMethod')}
+            <ChoiceChips
+              label="Método de pago"
+              options={realPaymentMethods}
               value={appointment.paymentMethod || ''}
-              onChange={(e) => onChangeField('paymentMethod', e.target.value)}
-              error={paymentMethodMissing}
-            >
-              <option value="" disabled>Selecciona un método...</option>
-              {paymentMethods.map((method) => (
-                <option key={method} value={method}>{method}</option>
-              ))}
-            </Select>
+              disabled={!canEdit('paymentMethod')}
+              onChange={(method) => onChangeField('paymentMethod', method)}
+            />
           </Field>
         )}
 

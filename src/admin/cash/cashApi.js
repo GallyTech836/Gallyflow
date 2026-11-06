@@ -34,3 +34,7 @@ export const correctCashSession = (sessionId, { pin, reason, changes }) =>
   request('POST', `/cash/sessions/${encodeURIComponent(sessionId)}/correct`, { body: { pin, reason, changes } });
 export const payCommission = ({ barberId, startDate, endDate, method, branchId }) =>
   request('POST', '/cash/commission-payments', { body: { barberId, startDate, endDate, method, branchId } });
+export const listCommissionPayments = ({ barberId, startDate, endDate }) =>
+  request('GET', '/cash/commission-payments', { query: { barberId, startDate, endDate } });
+export const changeCommissionPaymentMethod = (paymentId, { method, pin, reason, branchId }) =>
+  request('POST', `/cash/commission-payments/${encodeURIComponent(paymentId)}/method`, { body: { method, pin, reason, branchId } });
