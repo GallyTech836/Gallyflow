@@ -278,6 +278,9 @@ describe('Fotos y archivos en el motor (un lote = una respuesta)', () => {
     const r = await sayLote('', null, 2);
     assert.match(r.interactive.body.text, /^Todavía no puedo escuchar audios ni abrir archivos\. ¿Me escribes tu consulta\?/);
     assert.doesNotMatch(r.interactive.body.text, /🙂/);
+    // Una sola pregunta: sin "¿En qué te ayudo?" después del aviso.
+    assert.equal(r.interactive.body.text, 'Todavía no puedo escuchar audios ni abrir archivos. ¿Me escribes tu consulta?');
+    assert.deepEqual(botones(r), ['1', 'info_servicios', '2']);
   });
 
   test('personalidad formal: los textos nuevos hablan de «usted» sin mezclar', async () => {

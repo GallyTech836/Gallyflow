@@ -598,7 +598,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     if (fotos.length > 0 || otrosArchivos > 0) {
       const aviso = textoArchivosRecibidos(fotos.length, otrosArchivos, voz);
       // Solo fotos/archivos: una respuesta corta con opciones (sin repetir el saludo).
-      if (!texto) return responder(await menuTrasArchivos(aviso), conversation);
+      if (!texto) return responder(await menuTrasArchivos(aviso, { conPregunta: otrosArchivos === 0 }), conversation);
       // Con texto (o descripción de la foto): se responde al texto con el aviso delante.
       extra.aviso = aviso;
     }
@@ -1814,10 +1814,12 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
 
     // Respuesta a fotos/archivos sin texto: en el inicio, opciones para seguir;
     // a mitad de una reserva, el menú del paso en curso.
-    async function menuTrasArchivos(aviso) {
+    // `conPregunta`: solo con fotos. El aviso de audios/archivos ya le pide
+    // que escriba su consulta, así que no se agrega "¿En qué te ayudo?".
+    async function menuTrasArchivos(aviso, { conPregunta = true } = {}) {
       if (conversation.currentFlow !== 'welcome') return prefijo(aviso, await menuActual());
       const { tl } = context.terms;
-      const cuerpo = `${aviso}\n\n${voz.ayuda()}`;
+      const cuerpo = conPregunta ? `${aviso}\n\n${voz.ayuda()}` : aviso;
       return menuBotones({
         texto: `${cuerpo}\n\n1. Agendar\n2. Hablar con alguien\n(Escribe "precios" para ver ${tl('services')} y precios)`,
         cuerpo,
