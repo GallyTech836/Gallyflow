@@ -192,6 +192,16 @@ describe('Fotos, archivos, reacciones', () => {
     assert.equal(llamados[0].message, '¿tienen este corte?');
   });
 
+  test('álbum con un mensaje de tipo desconocido: cuenta solo las fotos', async () => {
+    await webhook([foto('f1')]);
+    await webhook([{ id: 'u1', from: CLIENTE, type: 'unsupported', unsupported: {} }]);
+    await webhook([foto('f2')]);
+    await esperar(250);
+    assert.equal(llamados.length, 1);
+    assert.equal(llamados[0].media.length, 2);
+    assert.equal(llamados[0].unsupportedCount, 0);
+  });
+
   test('reacción y sticker: no llaman al motor ni responden', async () => {
     await webhook([{ id: 'r1', from: CLIENTE, type: 'reaction', reaction: { emoji: '👍', message_id: 'x' } }]);
     await webhook([{ id: 's1', from: CLIENTE, type: 'sticker', sticker: { id: 'st' } }]);
@@ -304,7 +314,10 @@ describe('normalizarMensaje', () => {
   test('tipos', () => {
     assert.equal(W.normalizarMensaje(texto('1'), v).kind, 'text');
     assert.equal(W.normalizarMensaje({ id: '2', from: 'x', type: 'interactive', interactive: { list_reply: { id: 'welcome|1' } } }, v).text, 'welcome|1');
-    assert.equal(W.normalizarMensaje({ id: '3', from: 'x', type: 'interactive', interactive: { nfm_reply: {} } }, v).kind, 'unsupported');
+    assert.equal(W.normalizarMensaje({ id: '3', from: 'x', type: 'interactive', interactive: { nfm_reply: {} } }, v).kind, 'ignored');
+    assert.equal(W.normalizarMensaje({ id: '3b', from: 'x', type: 'algo_nuevo' }, v).kind, 'ignored');
+    assert.equal(W.normalizarMensaje({ id: '3c', from: 'x', type: 'location', location: {} }, v).kind, 'ignored');
+    assert.equal(W.normalizarMensaje({ id: '3d', from: 'x', type: 'voice', voice: {} }, v).kind, 'unsupported');
     assert.equal(W.normalizarMensaje({ id: '4', from: 'x', type: 'reaction' }, v).kind, 'ignored');
     assert.equal(W.normalizarMensaje({ id: '5', from: 'x', type: 'sticker' }, v).kind, 'ignored');
     const doc = W.normalizarMensaje({ id: '6', from: 'x', type: 'document', document: { caption: 'mi cv' } }, v);

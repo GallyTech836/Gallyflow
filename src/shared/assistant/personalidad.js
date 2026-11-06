@@ -56,6 +56,7 @@ export const TONOS = {
     cerradoYa: ({ vuelve }) => `Por hoy ya no estamos atendiendo 🙏${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Quieres agendar para otro día?',
     sinEquipo: 'Hoy no hay nadie del equipo para responderte por aquí, pero puedo ayudarte a agendar para otro día.',
+    archivos: 'Todavía no puedo escuchar audios ni abrir archivos. ¿Me escribes tu consulta?',
   },
   formal: {
     label: 'Formal',
@@ -78,6 +79,7 @@ export const TONOS = {
     cerradoYa: ({ vuelve }) => `Le informamos que por hoy ya no estamos atendiendo.${vuelve ? ` Retomamos la atención ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Desea agendar para otro día?',
     sinEquipo: 'Hoy no contamos con personal para atenderle por este medio, pero con gusto puedo ayudarle a agendar para otro día.',
+    archivos: 'Por el momento no puedo escuchar audios ni abrir archivos. ¿Podría escribirme su consulta?',
   },
   profesional: {
     label: 'Profesional',
@@ -100,6 +102,7 @@ export const TONOS = {
     cerradoYa: ({ vuelve }) => `Por hoy ya terminó nuestra atención.${vuelve ? ` Volvemos a atender ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Quieres reservar para otro día?',
     sinEquipo: 'Hoy el equipo no está disponible por aquí. Puedo ayudarte a reservar para otro día.',
+    archivos: 'Por ahora no puedo escuchar audios ni abrir archivos. Escríbenos tu consulta, por favor.',
   },
   cercano: {
     label: 'Cercano',
@@ -122,6 +125,7 @@ export const TONOS = {
     cerradoYa: ({ vuelve }) => `¡Por hoy ya cerramos! 😴${vuelve ? ` Volvemos ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Te agendo para otro día?',
     sinEquipo: 'Hoy no hay nadie del equipo por aquí 😅 pero te puedo agendar para otro día.',
+    archivos: 'Ups, todavía no puedo escuchar audios ni abrir archivos 😅 ¿Me lo escribes?',
   },
   entusiasta: {
     label: 'Entusiasta',
@@ -144,6 +148,7 @@ export const TONOS = {
     cerradoYa: ({ vuelve }) => `¡Por hoy ya cerramos! 🎈${vuelve ? ` Volvemos ${vuelve} con todo ✨` : ''}`,
     cerradoPregunta: '¿Te gustaría agendar para otro día?',
     sinEquipo: 'Hoy el equipo está descansando 😊 pero yo te ayudo a agendar para otro día ✨',
+    archivos: '¡Uy! Todavía no puedo escuchar audios ni abrir archivos 🙈 ¿Me escribes tu consulta?',
   },
   breve: {
     label: 'Breve',
@@ -166,6 +171,7 @@ export const TONOS = {
     cerradoYa: ({ vuelve }) => `Hoy ya cerrado.${vuelve ? ` Abrimos ${vuelve}.` : ''}`,
     cerradoPregunta: '¿Agendas para otro día?',
     sinEquipo: 'Hoy no hay atención del equipo. Puedo agendarte para otro día.',
+    archivos: 'No puedo escuchar audios ni abrir archivos. Escríbeme.',
   },
 };
 
@@ -223,6 +229,11 @@ const A_USTED = [
   [/\bprefieras\b/g, 'prefiera'],
   [/\belijas\b/g, 'elija'],
   [/\bEscribe\b/g, 'Escriba'],
+  [/\bEscríbeme\b/g, 'Escríbame'],
+  [/\bescríbeme\b/g, 'escríbame'],
+  [/\bte interese\b/g, 'le interese'],
+  [/\bte paso\b/g, 'le paso'],
+  [/\bbuscas\b/g, 'busca'],
   [/\bescribe\b/g, 'escriba'],
   [/\bToca\b/g, 'Toque'],
   [/\btoca\b/g, 'toque'],
@@ -310,6 +321,8 @@ export function crearVoz(rawPersonalidad, { negocio = '', hora = 12 } = {}) {
     /** Respuesta a "gracias", "ok"... */
     deNada: () => frase(t.deNada),
     sinEquipo: () => frase(t.sinEquipo),
+    /** Audios, videos y documentos que el bot todavía no puede leer. */
+    archivos: () => frase(t.archivos),
     despedida: () => (p.despedida ? frase(rellenar(p.despedida, { nombre: '', negocio })) : ''),
     /** Post-proceso de TODO lo que envía el bot. */
     texto: (s) => (typeof s === 'string' ? frase(s) : s),

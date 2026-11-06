@@ -500,12 +500,13 @@ function conAvisoDelante(resultado, aviso) {
   };
 }
 
-// "Recibí tus 3 fotos 📷" / aviso de audios y archivos que no se pueden abrir.
-function textoArchivosRecibidos(fotos, otros) {
+// "Recibí tus 3 fotos 📷" / aviso de audios y archivos que no se pueden abrir
+// (con el tono de la personalidad configurada).
+function textoArchivosRecibidos(fotos, otros, voz) {
   const foto = fotos === 1 ? 'Recibí tu foto 📷' : `Recibí tus ${fotos} fotos 📷`;
-  if (fotos > 0 && otros > 0) return `${foto} Los audios y archivos todavía no los puedo abrir.`;
+  if (fotos > 0 && otros > 0) return `${foto} ${voz.archivos()}`;
   if (fotos > 0) return foto;
-  return 'Por ahora no puedo escuchar audios ni abrir archivos 🙂 Escríbeme tu consulta.';
+  return voz.archivos();
 }
 
 // `media`: lista de fotos del lote (o una sola foto, formato anterior).
@@ -595,7 +596,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   } else {
     media = null; // fuera del formulario no se guardan fotos
     if (fotos.length > 0 || otrosArchivos > 0) {
-      const aviso = textoArchivosRecibidos(fotos.length, otrosArchivos);
+      const aviso = textoArchivosRecibidos(fotos.length, otrosArchivos, voz);
       // Solo fotos/archivos: una respuesta corta con opciones (sin repetir el saludo).
       if (!texto) return responder(await menuTrasArchivos(aviso), conversation);
       // Con texto (o descripción de la foto): se responde al texto con el aviso delante.
@@ -1546,7 +1547,7 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
     if (encontrados.length === 1) {
       const s = encontrados[0];
       const datos = datosDeServicio(s);
-      const cuerpo = `Sí, tenemos *${s.name}*${datos ? `: ${datos}` : ''}.`;
+      const cuerpo = `Sí, tenemos *${String(s.name || '').trim()}*${datos ? `: ${datos}` : ''}.`;
       return menuBotones({
         texto: `${cuerpo}\n\nEscribe "agendar" para reservar.`,
         cuerpo,
@@ -1876,7 +1877,7 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
     const cita = tl('appointment');
     const intro = voz.bienvenida(nombre ? nombre.split(' ')[0] : '');
     if (repetir) {
-      const ultima = `${repetir.services.map((x) => x.serviceName).join(' + ')} con ${repetir.staff.name}`;
+      const ultima = `${repetir.services.map((x) => String(x.serviceName || '').trim()).join(' + ')} con ${String(repetir.staff.name || '').trim()}`;
       const cuerpo = `${intro} ${voz.ayuda()}\n\n¿Repetimos tu ${g('appointment', 'último', 'última')} ${cita}?\n${ultima}`;
       return menuBotones({
         texto: `${cuerpo}\n\nEscribe "repetir", 1 para agendar ${g('appointment', 'otro', 'otra')} ${cita} o 2 para hablar con alguien.`,

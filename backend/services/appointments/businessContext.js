@@ -44,7 +44,12 @@ async function leerContexto(negocioId) {
     negocioRef.collection('sucursales').get(),
   ]);
 
-  const servicios = serviciosSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Nombres sin espacios sobrantes ("Corte " -> "Corte"): rompen la negrita
+  // de WhatsApp y dejan dobles espacios en los mensajes del asistente.
+  const servicios = serviciosSnap.docs.map((d) => {
+    const data = d.data();
+    return { id: d.id, ...data, ...(typeof data.name === 'string' ? { name: data.name.trim() } : {}) };
+  });
   const profesionales = profesionalesSnap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .filter((p) => p.active !== false);

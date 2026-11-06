@@ -276,7 +276,23 @@ describe('Fotos y archivos en el motor (un lote = una respuesta)', () => {
     seed(muchos(3));
     await say('hola');
     const r = await sayLote('', null, 2);
-    assert.match(r.interactive.body.text, /^Por ahora no puedo escuchar audios ni abrir archivos/);
+    assert.match(r.interactive.body.text, /^Todavía no puedo escuchar audios ni abrir archivos\. ¿Me escribes tu consulta\?/);
+    assert.doesNotMatch(r.interactive.body.text, /🙂/);
+  });
+
+  test('personalidad formal: los textos nuevos hablan de «usted» sin mezclar', async () => {
+    seed([{ id: 's1', name: 'Corte ', price: 100, duration: 30 }]);
+    db._set(N(), { slug: neg, heroConfig: { businessName: 'Estudio Test' }, assistantConfig: { personalidad: { tono: 'formal' } } });
+    invalidateBusinessContext?.(neg);
+    await say('hola');
+    const audio = await sayLote('', null, 1);
+    assert.match(audio.interactive.body.text, /^Por el momento no puedo escuchar audios ni abrir archivos\. ¿Podría escribirme su consulta\?/);
+    const lista = await say('welcome|info_servicios');
+    assert.match(lista.interactive.body.text, /Toque el que le interese para agendarlo\./);
+    assert.match(lista.replyText, /Escríbame el nombre del servicio que busca y le paso su precio/);
+    const corte = await say('¿tienen corte?');
+    // Nombre sin espacio sobrante: la negrita de WhatsApp funciona.
+    assert.match(corte.interactive.body.text, /Sí, tenemos \*Corte\*: Bs 100 · 30 min\./);
   });
 
   test('fotos a mitad de una reserva: aviso y el mismo paso, sin perder lo elegido', async () => {

@@ -83,8 +83,10 @@ function registrarActividad(negocioId, displayPhone) {
 // negocio abre el chat (en YCloud, marcar leído y "escribiendo…" son la
 // misma llamada, así que tampoco se muestra "escribiendo…").
 
-// Tipos que se aceptan sin responder nada.
-const TIPOS_IGNORADOS = new Set(['reaction', 'sticker', 'system', 'ephemeral', 'unknown']);
+// Archivos que el bot todavía no puede leer: un solo aviso por lote.
+const TIPOS_NO_SOPORTADOS = new Set(['audio', 'voice', 'video', 'document']);
+// Tipos conocidos que se aceptan sin responder nada.
+const TIPOS_IGNORADOS = new Set(['reaction', 'sticker', 'system', 'ephemeral', 'unknown', 'unsupported', 'location', 'contacts', 'order']);
 
 /**
  * Mensaje del proveedor -> forma única que guarda la cola:
@@ -110,7 +112,7 @@ export function normalizarMensaje(mensaje = {}, value = {}) {
   if (type === 'interactive') {
     // Toque en un botón / fila de lista: su id es lo que entiende el motor.
     const id = mensaje.interactive?.button_reply?.id ?? mensaje.interactive?.list_reply?.id ?? null;
-    return id === null ? { ...base, kind: 'unsupported' } : { ...base, kind: 'interactive', text: String(id) };
+    return id === null ? base : { ...base, kind: 'interactive', text: String(id) };
   }
   // Respuesta rápida de una plantilla (botón de un mensaje con plantilla).
   if (type === 'button') return { ...base, kind: 'text', text: mensaje.button?.payload || mensaje.button?.text || '' };
@@ -123,11 +125,15 @@ export function normalizarMensaje(mensaje = {}, value = {}) {
       media: { link: mensaje.image.link || null, mimeType: mensaje.image.mime_type || null, id: mensaje.image.id || null },
     };
   }
-  if (TIPOS_IGNORADOS.has(type)) return base;
-  // Audio, video, documento, ubicación y cualquier tipo nuevo: no soportado
-  // (un solo aviso por lote). La descripción, si viene, se usa como texto.
-  const caption = mensaje[type]?.caption;
-  return { ...base, kind: 'unsupported', text: caption ? String(caption) : null };
+  if (TIPOS_NO_SOPORTADOS.has(type)) {
+    // La descripción, si viene, se usa como texto.
+    const caption = mensaje[type]?.caption;
+    return { ...base, kind: 'unsupported', text: caption ? String(caption) : null };
+  }
+  // Cualquier otro tipo (también los que WhatsApp agregue después): sin
+  // respuesta. Si no es uno conocido, queda en el log para saber qué llegó.
+  if (!TIPOS_IGNORADOS.has(type)) logger.info(`[whatsappWebhook] Tipo de mensaje sin respuesta: ${type}`);
+  return base;
 }
 
 /**

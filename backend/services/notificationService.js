@@ -21,9 +21,12 @@ const PROVIDERS = {
 };
 
 // URLs de destino según el rol de quien recibe la notificación. Deben
-// coincidir exactamente con las rutas que reconoce App.jsx en el frontend.
-const APP_URLS = {
-  admin: `${PUBLIC_APP_URL}/`,
+// coincidir exactamente con las rutas que reconoce App.jsx en el frontend y
+// quedar DENTRO del `scope` de cada manifest (public/manifest-*.json): si la
+// URL está fuera ("/" con scope "/admin"), el celular abre el navegador en
+// vez de la app instalada.
+export const APP_URLS = {
+  admin: `${PUBLIC_APP_URL}/admin`,
   barber: `${PUBLIC_APP_URL}/barber`,
 };
 
