@@ -24,7 +24,9 @@ export async function runAssistant(args) {
 
   if (vertical === 'restaurante') {
     // Las fotos solo las usa el formulario de reservas (vertical 'citas').
-    if (args.media) return { replyText: 'Por ahora solo entiendo mensajes de texto 🙂 Toca una opción o escribe su número.', interactive: null, preMessages: [], conversation: null };
+    // Un lote de fotos/archivos sin texto recibe un solo aviso.
+    const conArchivos = (Array.isArray(args.media) ? args.media.length > 0 : Boolean(args.media)) || Number(args.unsupportedCount) > 0;
+    if (conArchivos && !String(args.message || '').trim()) return { replyText: 'Por ahora solo entiendo mensajes de texto 🙂 Toca una opción o escribe su número.', interactive: null, preMessages: [], conversation: null };
     return restauranteEngine(args);
   }
   return assistantEngine(args);

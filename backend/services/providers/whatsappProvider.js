@@ -80,6 +80,7 @@ export async function sendInteractive(destinatario, interactive, opciones = {}) 
  * Marca el mensaje como leído (doble check azul) y muestra "escribiendo…"
  * mientras el bot arma la respuesta. Si Meta no acepta el indicador de
  * escritura, al menos marca como leído. Nunca lanza.
+ * Sin uso desde 2026-11: el webhook ya no marca los mensajes como leídos.
  */
 export async function markAsRead(messageId, opciones = {}) {
   if (!messageId) return;

@@ -57,6 +57,7 @@ function seed({ conCita = false } = {}) {
 }
 
 const say = (message, referral = null) => assistantEngine({ negocioId: 'neg', phone, message, referral });
+const filas = (r) => r.interactive?.action?.sections?.[0]?.rows || [];
 const botones = (r) => (r.interactive?.action?.buttons || []).map((b) => b.reply.id.replace(/^[a-z_]+\|/, ''));
 
 describe('Mensaje desde un anuncio', () => {
@@ -81,13 +82,19 @@ describe('Mensaje desde un anuncio', () => {
     assert.deepEqual(botones(r), ['1', '2']);
   });
 
-  test('Servicios y precios: lista con precio por profesional y botones para seguir', async () => {
+  test('Servicios y precios: lista interactiva con precio por profesional, duración y atajos', async () => {
     await say('Quiero más información', AD);
     const r = await say('welcome|info_servicios');
-    assert.match(r.interactive.body.text, /• Corte — Bs 100 – 150 · 30 min/);
-    assert.match(r.interactive.body.text, /• Barba — Bs 50 · 20 min/);
-    assert.deepEqual(botones(r), ['1', 'info_ubicacion', '2']);
-    // "Agendar cita" entra al flujo normal de reserva.
+    assert.equal(r.interactive.type, 'list');
+    assert.match(r.interactive.body.text, /Aquí tienes nuestros servicios con su precio y duración/);
+    const rows = filas(r);
+    assert.deepEqual(rows.map((x) => x.id.replace(/^welcome\|/, '')), ['info_svc|s1', 'info_svc|s2', 'info_ubicacion', '2']);
+    assert.equal(rows[0].title, 'Corte');
+    assert.equal(rows[0].description, 'Bs 100 – 150 · 30 min');
+    assert.equal(rows[1].description, 'Bs 50 · 20 min');
+    // El respaldo en texto es corto: nunca la lista completa.
+    assert.doesNotMatch(r.replyText, /Barba/);
+    // "Agendar cita" sigue entrando al flujo normal de reserva.
     const agendar = await say('welcome|1');
     assert.equal(agendar.conversation.currentFlow, 'choosing_service');
   });
@@ -107,7 +114,8 @@ describe('Mensaje desde un anuncio', () => {
 
   test('preguntas escritas: "cuánto cuesta" y "dónde están"', async () => {
     await say('hola');
-    assert.match((await say('¿Cuánto cuesta el corte?')).interactive.body.text, /Nuestros servicios/);
+    assert.match((await say('¿Cuánto cuesta el corte?')).interactive.body.text, /Sí, tenemos \*Corte\*: Bs 100 – 150 · 30 min\./);
+    assert.match((await say('¿Qué servicios tienen?')).interactive.body.text, /Aquí tienes nuestros servicios/);
     assert.match((await say('¿dónde están?')).interactive.body.text, /📍 \*Centro\*/);
   });
 

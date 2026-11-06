@@ -53,6 +53,10 @@ const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)
 
 export function createFakeDb(initial = {}) {
   const store = new Map();
+  // Versión de cada documento: las transacciones la usan para detectar que
+  // otro proceso escribió en medio (como Firestore real, que reintenta).
+  const versions = new Map();
+  const bump = (path) => versions.set(path, (versions.get(path) || 0) + 1);
   let autoId = 0;
 
   function writeNow(path, data, { merge: doMerge = false, mustExist = false } = {}) {
@@ -60,6 +64,7 @@ export function createFakeDb(initial = {}) {
     assertNoUndefined(data);
     const prev = doMerge || mustExist ? store.get(path) || {} : {};
     store.set(path, merge(prev, data, doMerge));
+    bump(path);
   }
 
   function snap(path) {
@@ -76,7 +81,12 @@ export function createFakeDb(initial = {}) {
       get: async () => snap(path),
       set: async (data, opts = {}) => writeNow(path, data, { merge: !!opts.merge }),
       update: async (data) => writeNow(path, data, { mustExist: true }),
-      delete: async () => { store.delete(path); },
+      delete: async () => { store.delete(path); bump(path); },
+      // Como Firestore real: falla si el documento ya existe.
+      create: async (data) => {
+        if (store.has(path)) { const e = new Error(`ALREADY_EXISTS: ${path}`); e.code = 6; throw e; }
+        writeNow(path, data);
+      },
     };
   }
 
@@ -144,30 +154,37 @@ export function createFakeDb(initial = {}) {
     collection: (name) => colRef(name),
     doc: (path) => docRef(path),
     async runTransaction(fn) {
-      const writes = [];
-      const creates = [];
-      const tx = {
-        get: async (refOrQuery) => {
-          if (writes.length) throw new Error('Firestore: todas las lecturas deben ir antes de las escrituras en una transacción.');
-          return refOrQuery.get();
-        },
-        set: (ref, data, opts = {}) => { writes.push(() => writeNow(ref.path, data, { merge: !!opts.merge })); return tx; },
-        update: (ref, data) => { writes.push(() => writeNow(ref.path, data, { mustExist: true })); return tx; },
-        delete: (ref) => { writes.push(() => store.delete(ref.path)); return tx; },
-        // Como Firestore real: si el documento ya existe, la transacción entera falla.
-        create: (ref, data) => { creates.push(ref.path); writes.push(() => writeNow(ref.path, data)); return tx; },
-      };
-      const result = await fn(tx);
-      const taken = creates.find((path) => store.has(path));
-      if (taken) { const e = new Error(`ALREADY_EXISTS: ${taken}`); e.code = 6; throw e; }
-      writes.forEach((w) => w());
-      return result;
+      for (let intento = 0; intento < 10; intento++) {
+        const writes = [];
+        const creates = [];
+        const leidos = new Map(); // path -> versión al leer
+        const tx = {
+          get: async (refOrQuery) => {
+            if (writes.length) throw new Error('Firestore: todas las lecturas deben ir antes de las escrituras en una transacción.');
+            if (typeof refOrQuery?.collection === 'function' && refOrQuery.path) leidos.set(refOrQuery.path, versions.get(refOrQuery.path) || 0);
+            return refOrQuery.get();
+          },
+          set: (ref, data, opts = {}) => { writes.push(() => writeNow(ref.path, data, { merge: !!opts.merge })); return tx; },
+          update: (ref, data) => { writes.push(() => writeNow(ref.path, data, { mustExist: true })); return tx; },
+          delete: (ref) => { writes.push(() => { store.delete(ref.path); bump(ref.path); }); return tx; },
+          // Como Firestore real: si el documento ya existe, la transacción entera falla.
+          create: (ref, data) => { creates.push(ref.path); writes.push(() => writeNow(ref.path, data)); return tx; },
+        };
+        const result = await fn(tx);
+        // Otro proceso escribió algo que esta transacción leyó: se reintenta.
+        if ([...leidos].some(([path, v]) => (versions.get(path) || 0) !== v)) continue;
+        const taken = creates.find((path) => store.has(path));
+        if (taken) { const e = new Error(`ALREADY_EXISTS: ${taken}`); e.code = 6; throw e; }
+        writes.forEach((w) => w());
+        return result;
+      }
+      throw new Error('ABORTED: demasiados reintentos en la transacción');
     },
     // Ayudas para las pruebas
     _get: (path) => clone(store.get(path)),
     _set: (path, data) => store.set(path, clone(data)),
     _dump: () => [...store.entries()].map(([k, v]) => [k, clone(v)]),
-    _clear: () => { store.clear(); db._aggregateNeedsIndex = false; db._aggregateCalls = 0; },
+    _clear: () => { store.clear(); versions.clear(); db._aggregateNeedsIndex = false; db._aggregateCalls = 0; },
     _aggregateNeedsIndex: false,
     _aggregateCalls: 0,
     _list: (colPath) => [...store.keys()].filter((p) => p.startsWith(`${colPath}/`) && !p.slice(colPath.length + 1).includes('/')).map((p) => ({ id: p.split('/').pop(), ...clone(store.get(p)) })),

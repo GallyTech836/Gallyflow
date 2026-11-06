@@ -99,11 +99,27 @@ describe('WhatsApp: datos de la mascota', () => {
     assert.match(cuerpo(r), /¿Cómo se llama tu mascota\?/);
   });
 
-  test('una foto fuera del paso de la foto no se toma', async () => {
+  test('una foto fuera del paso de la foto no se toma: aviso y la misma pregunta', async () => {
     await hastaServicio();
-    const r = await say('', { link: 'https://api.ycloud.com/x' });
-    assert.match(cuerpo(r), /solo recibo fotos cuando te las pido/);
+    const r = await say('', [{ link: 'https://api.ycloud.com/x' }]);
+    assert.match(cuerpo(r), /^Recibí tu foto 📷/);
     assert.match(cuerpo(r), /¿Cómo se llama tu mascota\?/);
+    assert.equal(r.conversation.intakeValues?.petName ?? null, null);
+  });
+
+  test('varias fotos en el paso de la foto: guarda una y el formulario avanza una sola vez', async () => {
+    await hastaServicio();
+    await say('Toby');
+    await say('Caniche');
+    await say('collecting_intake|Pequeño');
+    await say('3 años');
+    let r = await say('omitir');
+    assert.match(cuerpo(r), /foto de Toby/);
+    const foto = (n) => ({ link: `https://api.ycloud.com/v2/whatsapp/media/download/${n}?sig=x`, mimeType: 'image/jpeg' });
+    r = await say('', [foto(1), foto(2), foto(3)]);
+    assert.match(cuerpo(r), /^Recibí 3 fotos, usé la primera 📷/);
+    assert.match(cuerpo(r), /¿Con quién/);
+    assert.equal(r.conversation.intakeValues.photo, FOTO);
   });
 
   test('cliente que vuelve: ofrece la última mascota y no la vuelve a preguntar', async () => {

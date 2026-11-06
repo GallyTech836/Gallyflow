@@ -8,6 +8,7 @@ import {
   checkCapability, incrementUsage, incrementRejected, resolveUsageBranch, checkBranchLimit, incrementBranchUsage, incrementClientUsage,
 } from '../services/capabilities/capabilityService.js';
 import { updateConversation } from '../services/appointments/conversationState.js';
+import { enqueue, drain, inboxEnabled, registerBatchHandler } from '../services/whatsapp/inboundQueue.js';
 import {
   recordInbound, recordOutboundDaily, recordConversationEvent, safe,
 } from '../services/assistantMetrics/assistantMetrics.js';
@@ -70,19 +71,81 @@ function registrarActividad(negocioId, displayPhone) {
   }).catch((err) => logger.warn('[whatsappWebhook] No se pudo registrar actividad:', err.message));
 }
 
-const MENSAJE_NO_TEXTO = 'Por ahora solo entiendo mensajes de texto 🙂 Toca una opción o escribe su número.';
+// ───────────────────── Mensajes entrantes (Meta y YCloud) ─────────────────────
+//
+// 1. Se normaliza cada mensaje (texto, botón, foto, archivo, reacción...).
+// 2. Se guarda en la cola de Firestore ANTES de responder 200: si el guardado
+//    falla se responde 500 y el proveedor reintenta. Un mensaje repetido (mismo
+//    id de WhatsApp) no se guarda dos veces.
+// 3. La cola procesa cada conversación de a un lote por vez (inboundQueue.js):
+//    varias fotos seguidas = una sola respuesta.
+// No se marca como leído: el cliente ve "leído" solo cuando alguien del
+// negocio abre el chat (en YCloud, marcar leído y "escribiendo…" son la
+// misma llamada, así que tampoco se muestra "escribiendo…").
 
-async function procesarMensaje(value, mensaje) {
-  const phoneNumberId = value?.metadata?.phone_number_id;
-  const from = mensaje.from;
+// Tipos que se aceptan sin responder nada.
+const TIPOS_IGNORADOS = new Set(['reaction', 'sticker', 'system', 'ephemeral', 'unknown']);
 
-  const cuenta = await whatsappProvider.resolveAccount(phoneNumberId);
+/**
+ * Mensaje del proveedor -> forma única que guarda la cola:
+ * { id, from, phoneNumberId, displayPhone, kind, type, text, media, referral }
+ *   kind: 'text' | 'interactive' | 'media' (foto) | 'unsupported' | 'ignored'
+ * Nunca deja campos en undefined (Firestore no los acepta).
+ */
+export function normalizarMensaje(mensaje = {}, value = {}) {
+  const type = String(mensaje.type || 'unknown');
+  const base = {
+    id: mensaje.id ? String(mensaje.id) : null,
+    from: mensaje.from ? String(mensaje.from) : null,
+    phoneNumberId: String(value?.metadata?.phone_number_id || ''),
+    displayPhone: value?.metadata?.display_phone_number || null,
+    type,
+    kind: 'ignored',
+    text: null,
+    media: null,
+    // Click to WhatsApp (anuncios de Facebook/Instagram): llega en el primer mensaje.
+    referral: mensaje.referral || null,
+  };
+  if (type === 'text') return { ...base, kind: 'text', text: mensaje.text?.body || '' };
+  if (type === 'interactive') {
+    // Toque en un botón / fila de lista: su id es lo que entiende el motor.
+    const id = mensaje.interactive?.button_reply?.id ?? mensaje.interactive?.list_reply?.id ?? null;
+    return id === null ? { ...base, kind: 'unsupported' } : { ...base, kind: 'interactive', text: String(id) };
+  }
+  // Respuesta rápida de una plantilla (botón de un mensaje con plantilla).
+  if (type === 'button') return { ...base, kind: 'text', text: mensaje.button?.payload || mensaje.button?.text || '' };
+  if (type === 'image' && mensaje.image) {
+    return {
+      ...base,
+      kind: 'media',
+      // La descripción de la foto se usa como texto del cliente.
+      text: mensaje.image.caption ? String(mensaje.image.caption) : null,
+      media: { link: mensaje.image.link || null, mimeType: mensaje.image.mime_type || null, id: mensaje.image.id || null },
+    };
+  }
+  if (TIPOS_IGNORADOS.has(type)) return base;
+  // Audio, video, documento, ubicación y cualquier tipo nuevo: no soportado
+  // (un solo aviso por lote). La descripción, si viene, se usa como texto.
+  const caption = mensaje[type]?.caption;
+  return { ...base, kind: 'unsupported', text: caption ? String(caption) : null };
+}
+
+/**
+ * Procesa un lote de mensajes de UN cliente en UN número del negocio
+ * (normalmente uno; varios si mandó fotos o archivos seguidos).
+ */
+async function procesarLote(lote) {
+  if (!lote?.length) return;
+  const base = lote[0];
+  const from = base.from;
+
+  const cuenta = await whatsappProvider.resolveAccount(base.phoneNumberId);
   if (!cuenta) {
-    logger.warn('[whatsappWebhook] Sin negocio para phoneNumberId:', phoneNumberId);
+    logger.warn('[whatsappWebhook] Sin negocio para phoneNumberId:', base.phoneNumberId);
     return;
   }
   const envio = { phoneNumberId: cuenta.phoneNumberId, token: cuenta.token, provider: cuenta.provider, from: cuenta.phone };
-  registrarActividad(cuenta.negocioId, value?.metadata?.display_phone_number);
+  registrarActividad(cuenta.negocioId, base.displayPhone);
   // Capacidad `asistenteWhatsapp` + límite mensual de mensajes. Si no está
   // permitido, el bot no responde (no gasta mensajes). Se valida aquí, en el
   // servidor, sin importar lo que muestre AdminApp.
@@ -92,9 +155,19 @@ async function procesarMensaje(value, mensaje) {
     if (permiso.reason === 'limite_alcanzado') incrementRejected(cuenta.negocioId, permiso.usageKey);
     return;
   }
-  // Métricas de Super Admin: entrante sin duplicados (un webhook repetido
-  // trae el mismo id). Corre en paralelo para no retrasar la respuesta.
-  const entrante = safe(recordInbound({ negocioId: cuenta.negocioId, phone: from, messageId: mensaje.id }), 'entrante');
+  // Métricas de Super Admin: cada entrante sin duplicados. En paralelo para
+  // no retrasar la respuesta.
+  const entrantes = lote.map((m) => safe(recordInbound({ negocioId: cuenta.negocioId, phone: from, messageId: m.id }), 'entrante'));
+
+  // Reacciones y stickers: se registran como entrantes, sin respuesta.
+  const principal = [...lote].reverse().find((m) => m.kind === 'text' || m.kind === 'interactive') || null;
+  const fotos = lote.filter((m) => m.kind === 'media' && m.media).map((m) => m.media);
+  const noSoportados = lote.filter((m) => m.kind === 'unsupported').length;
+  if (!principal && fotos.length === 0 && noSoportados === 0) {
+    await Promise.all(entrantes);
+    return;
+  }
+
   // Límite POR SUCURSAL: respuestas que el bot envía desde el número de esta
   // sucursal en el mes. Si ya llegó, el bot no responde en ese número (las
   // demás sucursales siguen normales).
@@ -115,46 +188,28 @@ async function procesarMensaje(value, mensaje) {
     safe(recordOutboundDaily({ negocioId: cuenta.negocioId }), 'saliente diario'),
   ]);
 
-  whatsappProvider.markAsRead(mensaje.id, envio); // sin await: no retrasa la respuesta
-
-  // Texto escrito, o toque en un botón / fila de lista (su id es el mismo
-  // número que se escribiría a mano: "1", "2", ... o "mas").
-  let texto = null;
-  let media = null;
-  if (mensaje.type === 'text') texto = mensaje.text?.body || '';
-  else if (mensaje.type === 'interactive') {
-    texto = mensaje.interactive?.button_reply?.id ?? mensaje.interactive?.list_reply?.id ?? null;
-  } else if (mensaje.type === 'image' && mensaje.image) {
-    // Foto (formulario de peluquería canina). El motor decide si la esperaba;
-    // si no, responde que solo recibe fotos cuando las pide.
-    texto = '';
-    media = { link: mensaje.image.link || null, mimeType: mensaje.image.mime_type || null, id: mensaje.image.id || null };
-  }
-
-  if (texto === null) {
-    await whatsappProvider.send(from, MENSAJE_NO_TEXTO, envio);
-    await contarEnvio();
-    return;
-  }
+  // Texto del lote: lo que escribió o tocó; si solo mandó fotos/archivos,
+  // la descripción que les puso (si la hay).
+  const descripciones = lote.filter((m) => m !== principal && m.kind !== 'text' && m.kind !== 'interactive' && m.text).map((m) => m.text);
+  const texto = principal ? principal.text : descripciones.join('\n');
 
   const resultado = await runAssistant({
     negocioId: cuenta.negocioId,
     phone: from,
     message: texto,
-    messageId: mensaje.id,
+    messageId: lote[lote.length - 1].id,
     branch: cuenta.branch,
-    // Click to WhatsApp (anuncios de Facebook/Instagram): Meta y YCloud lo
-    // mandan en el primer mensaje del cliente.
-    referral: mensaje.referral || null,
-    media,
+    referral: lote.find((m) => m.referral)?.referral || null,
+    media: fotos.length ? fotos : null,
+    unsupportedCount: noSoportados,
   });
   try {
-    await enviarRespuesta(from, resultado, envio, contarEnvio);
+    await enviarRespuesta(from, resultado, envio, contarEnvio, cuenta.negocioId);
   } finally {
     // Métricas: en qué paso quedó la conversación y si hubo reserva,
     // reprogramación o pase a una persona. Un webhook repetido no cuenta.
-    const reg = await entrante;
-    if (reg?.counted) {
+    const regs = await Promise.all(entrantes);
+    if (regs.some((r) => r?.counted)) {
       await safe(recordConversationEvent({
         negocioId: cuenta.negocioId,
         phone: from,
@@ -165,7 +220,9 @@ async function procesarMensaje(value, mensaje) {
   }
 }
 
-async function enviarRespuesta(from, { replyText, interactive, preMessages = [] } = {}, envio, contarEnvio) {
+registerBatchHandler(procesarLote);
+
+async function enviarRespuesta(from, { replyText, interactive, preMessages = [] } = {}, envio, contarEnvio, negocioId = '') {
   // Mensajes previos (tarjetas con foto), en orden. Si uno falla, se sigue.
   for (const pre of preMessages) {
     try {
@@ -182,8 +239,11 @@ async function enviarRespuesta(from, { replyText, interactive, preMessages = [] 
       await contarEnvio();
       return;
     } catch (err) {
-      // Si Meta rechaza el interactivo, se manda la versión de texto.
-      logger.warn('[whatsappWebhook] Interactivo rechazado, se envía texto:', err.message);
+      // Si se rechaza el interactivo se manda el texto de respaldo (siempre
+      // corto). Se registra con detalle para poder diagnosticarlo.
+      const filas = (interactive.action?.sections || []).reduce((n, sec) => n + (sec.rows || []).length, 0);
+      const botones = (interactive.action?.buttons || []).length;
+      logger.error(`[whatsappWebhook] Interactivo rechazado (negocio ${negocioId}, ${envio?.provider || 'meta'}, tipo ${interactive.type}, filas ${filas}, botones ${botones}); se envía texto:`, err.message);
     }
   }
   if (replyText) {
@@ -192,27 +252,70 @@ async function enviarRespuesta(from, { replyText, interactive, preMessages = [] 
   }
 }
 
-// Mensajes entrantes reales.
+/**
+ * Recibe los mensajes de un webhook: los guarda en la cola, responde 200 y
+ * procesa cada conversación. Con ASSISTANT_INBOX=off, procesamiento directo.
+ * `items` = [{ value, mensaje }] en formato Meta.
+ */
+async function recibir(items, res) {
+  if (!inboxEnabled()) {
+    res.sendStatus(200);
+    for (const { value, mensaje } of items) {
+      try {
+        await procesarLote([normalizarMensaje(mensaje, value)]);
+      } catch (err) {
+        logger.error('[whatsappWebhook] Error procesando mensaje:', err.message);
+      }
+    }
+    return;
+  }
+
+  const conversaciones = new Map();
+  try {
+    for (const { value, mensaje } of items) {
+      const norm = normalizarMensaje(mensaje, value);
+      if (!norm.id || !norm.from) continue;
+      const cuenta = await whatsappProvider.resolveAccount(norm.phoneNumberId);
+      if (!cuenta) {
+        logger.warn('[whatsappWebhook] Sin negocio para phoneNumberId:', norm.phoneNumberId);
+        continue;
+      }
+      const { duplicate } = await enqueue({ negocioId: cuenta.negocioId, phone: norm.from, mensaje: norm });
+      if (duplicate) continue;
+      conversaciones.set(`${cuenta.negocioId}__${norm.from}`, { negocioId: cuenta.negocioId, phone: norm.from });
+    }
+  } catch (err) {
+    // Sin guardar no se confirma: el proveedor reintenta (lo ya guardado no se duplica).
+    logger.error('[whatsappWebhook] No se pudo guardar el mensaje entrante:', err.message);
+    return res.sendStatus(500);
+  }
+  res.sendStatus(200);
+
+  for (const { negocioId, phone } of conversaciones.values()) {
+    try {
+      await drain(negocioId, phone);
+    } catch (err) {
+      logger.error('[whatsappWebhook] Error procesando la conversación:', err.message);
+    }
+  }
+}
+
+// Mensajes entrantes reales (Meta Cloud API).
 router.post('/whatsapp/webhook', async (req, res) => {
   if (!(await firmaValida(req))) {
     logger.warn('[whatsappWebhook] Firma inválida, se ignora la petición.');
     return res.sendStatus(401);
   }
-  res.sendStatus(200); // Meta espera respuesta rápida; procesamos después.
-
   // Un mismo webhook puede traer varios mensajes (entries/changes/messages).
+  const items = [];
   for (const entry of req.body?.entry || []) {
     for (const change of entry?.changes || []) {
       const value = change?.value;
-      for (const mensaje of value?.messages || []) {
-        try {
-          await procesarMensaje(value, mensaje);
-        } catch (err) {
-          logger.error('[whatsappWebhook] Error procesando mensaje:', err.message);
-        }
-      }
+      for (const mensaje of value?.messages || []) items.push({ value, mensaje });
     }
   }
+  if (items.length === 0) return res.sendStatus(200); // estados de entrega, etc.
+  return recibir(items, res);
 });
 
 // ───────────────────────── YCloud (coexistencia) ─────────────────────────
@@ -274,18 +377,19 @@ router.post('/whatsapp/ycloud/webhook', async (req, res) => {
     logger.warn('[ycloudWebhook] Firma inválida, se ignora la petición.');
     return res.sendStatus(401);
   }
+  const evento = req.body || {};
+  if (evento.type === 'whatsapp.inbound_message.received') {
+    const m = evento.whatsappInboundMessage || {};
+    // Se adapta al formato de Meta (mismo camino que los mensajes de Meta).
+    return recibir([{
+      value: { metadata: { phone_number_id: `ycloud_${soloDigitos(m.to)}`, display_phone_number: m.to || null } },
+      mensaje: { ...m, id: m.wamid || m.id, from: soloDigitos(m.from), referral: m.referral || null },
+    }], res);
+  }
   res.sendStatus(200);
 
-  const evento = req.body || {};
   try {
-    if (evento.type === 'whatsapp.inbound_message.received') {
-      const m = evento.whatsappInboundMessage || {};
-      // Se adapta al formato de Meta para reutilizar procesarMensaje.
-      await procesarMensaje(
-        { metadata: { phone_number_id: `ycloud_${soloDigitos(m.to)}`, display_phone_number: m.to } },
-        { id: m.wamid || m.id, from: soloDigitos(m.from), type: m.type, text: m.text, interactive: m.interactive, image: m.image || null, referral: m.referral || null },
-      );
-    } else if (evento.type === 'whatsapp.smb.message.echoes') {
+    if (evento.type === 'whatsapp.smb.message.echoes') {
       await pausarBotPorRespuestaHumana(evento.whatsappMessage || {});
     }
   } catch (err) {

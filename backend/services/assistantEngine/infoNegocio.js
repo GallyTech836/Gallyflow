@@ -111,6 +111,113 @@ export function textoUbicacion({ sucursales = [], businessSettings = {}, branch 
   return bloques.length ? bloques.join('\n\n') : null;
 }
 
+// ───────────── «Servicios y precios» paginado (lista interactiva) ─────────────
+
+export const SERVICIOS_POR_PAGINA = 5;
+
+const recortarTexto = (str, max) => {
+  const t = String(str ?? '');
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
+
+/** Página `page` (desde 0) de la lista; si la lista se achicó, la última que exista. */
+export function paginaServicios(servicios = [], page = 0, porPagina = SERVICIOS_POR_PAGINA) {
+  const paginas = Math.max(1, Math.ceil(servicios.length / porPagina));
+  const p = Math.min(Math.max(0, Number.parseInt(page, 10) || 0), paginas - 1);
+  return { visibles: servicios.slice(p * porPagina, (p + 1) * porPagina), page: p, paginas, hayMas: p < paginas - 1 };
+}
+
+/** "Bs 80 · 30 min", solo con los datos que existen ('' si no hay ninguno). */
+export function datosServicio({ precio = '', duracion = '' } = {}) {
+  return [precio, duracion].filter(Boolean).join(' · ');
+}
+
+/**
+ * Fila de lista para un servicio. El id es el del servicio (estable aunque la
+ * lista cambie). Si el nombre no cabe en el título (24), va completo en la
+ * descripción (72) antes del precio y la duración.
+ */
+export function filaServicio(servicio, datos = '') {
+  const nombre = String(servicio?.name || '').trim();
+  const cabeNombre = nombre.length <= 24;
+  const descripcion = cabeNombre ? datos : [nombre, datos].filter(Boolean).join(' · ');
+  return {
+    id: `info_svc|${servicio.id}`,
+    title: recortarTexto(nombre, 24),
+    ...(descripcion ? { description: recortarTexto(descripcion, 72) } : {}),
+  };
+}
+
+// ───────────── Preguntas escritas sobre servicios ─────────────
+
+// Minúsculas y sin tildes; la ñ se conserva ("uñas" no es "unas").
+export function normalizarTexto(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i')
+    .replace(/[óòö]/g, 'o')
+    .replace(/[úùü]/g, 'u')
+    .replace(/[^a-z0-9ñ]+/g, ' ')
+    .trim();
+}
+
+const PALABRAS_VACIAS = new Set(`
+  a al algo algun alguna alguno ahi aqui asi buen buena buenas bueno buenos con cual cuales cuando cuanto cuanta cuantas cuantos
+  como cuesta cuestan costo costos cobran dame de del demora demoran dias disculpa disculpe donde dura duran duracion el ella ellos
+  en es esa ese eso esta estan este esto favor gracias hace hacen hay hola holi info informacion la las le les lista
+  catalogo lo los mas me mi mis muy necesito noches o ofrecen ofrece para pasar pasas pasen per pero por porfa porfavor
+  precio precios puede pueden puedo q que quería queria quiero quisiera saber sale salen se ser seria servicio servicios si
+  son su sus tal tambien tarde tardes tarifa tarifas te tendran tendras tiempo tiene tienen tienes tipo todo todos
+  tu un una uno unos usted ustedes vale valen y ya ver
+  alguien nadie atencion atienden abierto abiertos abren cierran hoy manana mañana horario horarios hora horas
+  turno turnos cita citas reserva reservas lugar espacio disponible disponibles disponibilidad local sucursal
+`.split(/\s+/).filter(Boolean));
+
+// "cortes" -> "corte", "alisados" -> "alisado"
+const raiz = (p) => (p.length > 4 && p.endsWith('s') ? p.slice(0, -1) : p);
+
+function coincide(palabraCliente, palabraServicio) {
+  const a = raiz(palabraCliente);
+  const b = raiz(palabraServicio);
+  if (a === b) return true;
+  // Prefijo, solo con palabras de 4+ letras ("trata" -> "tratamiento").
+  return a.length >= 4 && b.length >= 4 && (b.startsWith(a) || a.startsWith(b));
+}
+
+const PREGUNTA_POR_SERVICIO = /\b(tienen|tiene|hacen|hace|ofrecen|ofrece|hay|cuanto|cuesta|cuestan|precio|precios|costo|cobran|dura|duran|duracion|demora)\b/;
+
+/**
+ * Busca lo que el cliente escribió entre los servicios del negocio.
+ *   { tipo: 'general' }                         -> "¿qué servicios tienen?", "precios"
+ *   { tipo: 'coincidencias', servicios }        -> uno o más servicios que coinciden
+ *   { tipo: 'sin_resultado', consulta }         -> pregunta por un servicio que no existe
+ *   null                                        -> no es una pregunta sobre servicios
+ * `pideLista`: el texto ya pide servicios/precios (pideServicios).
+ */
+export function buscarServicios(texto, servicios = [], { pideLista = false } = {}) {
+  const limpio = normalizarTexto(texto);
+  if (!limpio) return null;
+  const palabras = [...new Set(limpio.split(' '))]
+    .filter((p) => p.length >= 3 && !/^\d+$/.test(p) && !PALABRAS_VACIAS.has(p));
+
+  if (palabras.length === 0) return pideLista ? { tipo: 'general' } : null;
+
+  const puntuados = servicios.map((s) => {
+    const nombre = normalizarTexto(s?.name).split(' ').filter((p) => p.length >= 3);
+    const puntos = palabras.filter((p) => nombre.some((n) => coincide(p, n))).length;
+    return { s, puntos };
+  });
+  const mejor = Math.max(0, ...puntuados.map((x) => x.puntos));
+  if (mejor > 0) {
+    return { tipo: 'coincidencias', servicios: puntuados.filter((x) => x.puntos === mejor).map((x) => x.s) };
+  }
+  // Frases largas sin coincidencias casi nunca son una pregunta por un servicio.
+  if (palabras.length <= 3 && (pideLista || PREGUNTA_POR_SERVICIO.test(limpio))) {
+    return { tipo: 'sin_resultado', consulta: palabras.join(' ') };
+  }
+  return null;
+}
+
 /**
  * Lista de servicios con precio para el cuerpo de un mensaje (máx. `max`
  * caracteres; el resto se resume en "y N más").

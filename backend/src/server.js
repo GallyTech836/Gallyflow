@@ -2,6 +2,7 @@ import app from './app.js';
 import { logger } from '../utils/logger.js';
 import { startReminderScheduler } from '../services/reminders/reminderScheduler.js';
 import { maybeRunLegacyPasswordMigration } from '../services/staff/legacyPasswordMigration.js';
+import { startInboxSweeper } from '../services/whatsapp/inboundQueue.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -15,4 +16,6 @@ app.listen(PORT, () => {
   startReminderScheduler();
   // Solo si existe MIGRATE_LEGACY_PASSWORDS en Railway (dry / apply).
   maybeRunLegacyPasswordMigration();
+  // Cola de WhatsApp: retoma mensajes pendientes (reinicio, otra instancia).
+  startInboxSweeper();
 });

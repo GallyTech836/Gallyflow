@@ -25,7 +25,10 @@ import { canUse } from '../capabilities/capabilityModel.js';
 import { GENERIC_TERMS } from '../businessProfiles/businessProfileModel.js';
 import { getServicePriceRange, buildCitaServices, formatPriceRange, summarizeCitaServices } from '../pricing/professionalPricing.js';
 import { applyPromotions, resolveBranchId } from '../pricing/promotionPricing.js';
-import { esMensajeDeAnuncio, pideServicios, pideUbicacion, textoServicios, textoUbicacion } from './infoNegocio.js';
+import {
+  esMensajeDeAnuncio, pideServicios, pideUbicacion, textoUbicacion,
+  paginaServicios, filaServicio, datosServicio, buscarServicios, SERVICIOS_POR_PAGINA,
+} from './infoNegocio.js';
 import { crearVoz, aplicarVoz } from './personalidad.js';
 import { findClosure, findSpecialHours, isClosedOn } from '../appointments/closedDays.js';
 import { activeFields, askFor, cleanFieldValue, validateIntake, formatIntakeValue } from '../bookingForms/bookingFormModel.js';
@@ -136,18 +139,6 @@ function sufijoPromo(ctx, s, branchName = '') {
   const cuanto = p.discountKind === 'amount' ? `Bs ${v} menos` : `${v}% menos`;
   const cuando = cuandoPromo(p);
   return ` · ${cuanto}${cuando ? ` ${cuando}` : ''}`;
-}
-
-/** Líneas "• Combo X — Bs 70 (antes Bs 90)" de los combos que se pueden reservar. */
-function textoCombos(ctx, servicios = []) {
-  const ids = new Set(servicios.map((s) => String(s.id)));
-  const combos = promosVigentes(ctx).filter((p) => p.type === 'combo' && (p.serviceIds || []).length > 1 && p.serviceIds.every((id) => ids.has(String(id))));
-  return combos.map((c) => {
-    const items = c.serviceIds.map((id) => ctx.servicios.find((s) => String(s.id) === String(id))).filter(Boolean);
-    const normal = items.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
-    const cuando = cuandoPromo(c);
-    return `• ${c.name}: ${items.map((s) => s.name).join(' + ')} — Bs ${c.comboPrice}${normal > c.comboPrice ? ` (antes Bs ${normal})` : ''}${cuando ? ` · ${cuando}` : ''}`;
-  });
 }
 
 // Precio total de los servicios elegidos: exacto con UN profesional, rango con
@@ -479,7 +470,11 @@ function contextoDeSucursal(ctx, branch) {
 // Personalidad (assistantConfig.personalidad): el motor arma la respuesta y
 // aquí se ajusta cómo habla (usted / sin emojis). Sin configurar = como siempre.
 export async function assistantEngine(args) {
-  let resultado = await motor(args);
+  // `extra.aviso`: el motor lo llena cuando el cliente mandó fotos/archivos
+  // junto con un texto ("Recibí tus fotos 📷"); va delante de la respuesta.
+  const extra = { aviso: '' };
+  let resultado = await motor(args, extra);
+  if (extra.aviso) resultado = conAvisoDelante(resultado, extra.aviso);
   try {
     const ctx = await getBusinessContext(args.negocioId);
     if (cierreDeHoy(ctx, args.branch || null)) resultado = sinHablarConAlguien(resultado);
@@ -493,7 +488,29 @@ function vozDe(ctx) {
   return crearVoz(ctx?.assistantConfig?.personalidad, { negocio: ctx?.businessName || '', hora: ahoraNegocio().getHours() });
 }
 
-async function motor({ negocioId, phone, message, messageId, branch = null, referral = null, media = null }) {
+// Antepone un aviso a una respuesta ya armada (texto e interactivo).
+function conAvisoDelante(resultado, aviso) {
+  if (!resultado || (!resultado.replyText && !resultado.interactive)) return resultado;
+  return {
+    ...resultado,
+    replyText: resultado.replyText ? `${aviso}\n\n${resultado.replyText}` : resultado.replyText,
+    interactive: resultado.interactive?.body?.text
+      ? { ...resultado.interactive, body: { ...resultado.interactive.body, text: recortar(`${aviso}\n\n${resultado.interactive.body.text}`, 1024) } }
+      : resultado.interactive,
+  };
+}
+
+// "Recibí tus 3 fotos 📷" / aviso de audios y archivos que no se pueden abrir.
+function textoArchivosRecibidos(fotos, otros) {
+  const foto = fotos === 1 ? 'Recibí tu foto 📷' : `Recibí tus ${fotos} fotos 📷`;
+  if (fotos > 0 && otros > 0) return `${foto} Los audios y archivos todavía no los puedo abrir.`;
+  if (fotos > 0) return foto;
+  return 'Por ahora no puedo escuchar audios ni abrir archivos 🙂 Escríbeme tu consulta.';
+}
+
+// `media`: lista de fotos del lote (o una sola foto, formato anterior).
+// `unsupportedCount`: audios/videos/documentos del lote.
+async function motor({ negocioId, phone, message, messageId, branch = null, referral = null, media = null, unsupportedCount = 0 }, extra = { aviso: '' }) {
   const context = contextoDeSucursal(await getBusinessContext(negocioId), branch);
   const voz = vozDe(context);
 
@@ -567,9 +584,23 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, await bienvenida()), conversation);
   }
 
-  // Imagen: solo se acepta cuando el formulario pide la foto de la mascota.
-  if (media && !(conversation.currentFlow === 'collecting_intake' && campoActual()?.type === 'image')) {
-    return responder(prefijo('Por ahora solo recibo fotos cuando te las pido 🙂', await menuActual()), conversation);
+  // Fotos y archivos (el lote completo llega en un solo llamado).
+  const fotos = (Array.isArray(media) ? media : [media]).filter(Boolean);
+  const otrosArchivos = Number(unsupportedCount) || 0;
+  const esperaFoto = conversation.currentFlow === 'collecting_intake' && campoActual()?.type === 'image';
+  if (esperaFoto) {
+    // El formulario pide una foto: se usa la primera; el formulario avanza una sola vez.
+    media = fotos[0] || null;
+    if (fotos.length > 1) extra.aviso = `Recibí ${fotos.length} fotos, usé la primera 📷`;
+  } else {
+    media = null; // fuera del formulario no se guardan fotos
+    if (fotos.length > 0 || otrosArchivos > 0) {
+      const aviso = textoArchivosRecibidos(fotos.length, otrosArchivos);
+      // Solo fotos/archivos: una respuesta corta con opciones (sin repetir el saludo).
+      if (!texto) return responder(await menuTrasArchivos(aviso), conversation);
+      // Con texto (o descripción de la foto): se responde al texto con el aviso delante.
+      extra.aviso = aviso;
+    }
   }
 
     // Los botones/listas llevan el paso en que se enviaron ("choosing_time|3").
@@ -590,7 +621,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
 
   // "cancelar", "quiero cancelar"... cancela la operación en curso, nunca una
   // cita ya agendada (eso lo ve el equipo con «Hablar con alguien»).
-  if (INTENCION_CANCELAR.test(texto)) {
+  if (!/^(svc:|info_)/i.test(texto) && INTENCION_CANCELAR.test(texto)) {
     const { tl, g } = context.terms;
     const flujo = conversation.currentFlow;
     const reprogramando = Boolean(conversation.rescheduleCitaId);
@@ -621,7 +652,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     // Frases libres ("quiero cancelar mi cita", "necesito reprogramar", "cambiar la
   // hora de mi cita"...) en cualquier paso: si tiene citas próximas, va directo
   // a cancelar o reprogramar. No aplica mientras confirma algo o da su nombre.
-  const esBoton = /^(cita_|si_|no_)/i.test(texto); // ids de botones, no frases
+  const esBoton = /^(cita_|si_|no_|svc:|info_)/i.test(texto); // ids de botones, no frases
   const intencion = !esBoton && !FLUJOS_SIN_INTENCION.has(conversation.currentFlow) && INTENCION_REPROGRAMAR.test(texto);
   if (intencion) {
     const citas = (await findUpcomingCitas(negocioId, phone, ahoraNegocio())).map(resumenCita);
@@ -657,7 +688,12 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         if (cierre) return responder(mensajeCerrado(await nombreDelCliente(), cierre, conversation.citaOptions || []), conversation);
         return responder(mensajeBienvenida(context, await nombreDelCliente(), conversation.repeatOption), conversation);
       }
-      if (/^info_servicios$/i.test(texto)) return responder(mensajeServiciosYPrecios(), conversation);
+      if (/^info_servicios$/i.test(texto)) return responder(mensajeServiciosYPrecios(0), conversation);
+      // Filas de «Servicios y precios»: un servicio (entra a agendar) o la página siguiente.
+      const infoSvc = texto.match(/^info_svc\|(.+)$/);
+      if (infoSvc) return agendarServicioInfo(infoSvc[1]);
+      const infoMas = texto.match(/^info_mas\|(\d+)$/);
+      if (infoMas) return responder(mensajeServiciosYPrecios(Number(infoMas[1])), conversation);
       if (/^info_ubicacion$/i.test(texto)) return responder(mensajeUbicacion(), conversation);
       if (/^2$|hablar|persona|humano|asesor|ayuda/i.test(texto)) {
         return hablarConAlguien();
@@ -671,8 +707,10 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null, ...SIN_PREFERENCIA });
         return responder(mensajeServicios(context), conversation);
       }
-      // Preguntas escritas: "¿cuánto cuesta?", "¿dónde están?", "horario"...
-      if (pideServicios(texto)) return responder(mensajeServiciosYPrecios(), conversation);
+      // Preguntas escritas: "¿cuánto cuesta un corte?", "¿tienen alisado?",
+      // "precios", "¿dónde están?", "horario"...
+      const consulta = respuestaConsultaServicios(texto);
+      if (consulta) return responder(consulta, conversation);
       if (pideUbicacion(texto)) return responder(mensajeUbicacion(), conversation);
       // "¿Se encuentra Martín?" / "cita con Martín": agendar con ese profesional.
       if (nombrado) return agendarCon(nombrado);
@@ -706,10 +744,18 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
 
     case 'choosing_service': {
       const servicios = serviciosDelPaso();
-      const indices = parsearIndices(texto, servicios.length);
-      if (!indices) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeServicios(context)), conversation);
-
-      const elegidos = indices.map((i) => servicios[i]);
+      // Toque en la lista: id estable del servicio ("svc:<id>"). Escrito a mano: número(s) de la lista.
+      const porId = texto.match(/^svc:(.+)$/);
+      let elegidos;
+      if (porId) {
+        const s = servicios.find((x) => String(x.id) === porId[1]);
+        if (!s) return responder(prefijo(`Esa opción ya no está disponible.`, mensajeServicios(context)), conversation);
+        elegidos = [s];
+      } else {
+        const indices = parsearIndices(texto, servicios.length);
+        if (!indices) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeServicios(context)), conversation);
+        elegidos = indices.map((i) => servicios[i]);
+      }
       if (profesionalesPara(context, elegidos.map((s) => s.id)).length === 0) {
         const { tl, g } = context.terms;
         return responder(prefijo(`${g('professional', 'Ningún', 'Ninguna')} ${tl('professional')} realiza ${g('service', 'todos esos', 'todas esas')} ${tl('services')} ${g('service', 'juntos', 'juntas')}. Elige de nuevo.\n\n`, mensajeServicios(context)), conversation);
@@ -720,8 +766,10 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
 
     case 'choosing_extra_service': {
       const servicios = serviciosOfrecidos(context);
+      const porId = texto.match(/^svc:(.+)$/);
       const idx = parseInt(texto, 10) - 1;
-      const extra = serviciosExtraCompatibles().find((s) => s.id === servicios[idx]?.id);
+      const buscado = porId ? porId[1] : servicios[idx]?.id;
+      const extra = serviciosExtraCompatibles().find((s) => String(s.id) === String(buscado));
       if (!extra) return responder(prefijo(voz.noEntendi(), mensajeServiciosExtra()), conversation);
 
       conversation = await updateConversation(negocioId, phone, {
@@ -1400,45 +1448,124 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
     });
   }
 
-  function mensajeServiciosYPrecios() {
+  // «Servicios y precios»: lista interactiva de 5 en 5 con precio y duración
+  // a la vista. Cada fila lleva el id del servicio y tocarla entra a agendar.
+  // «Ver más» lleva la página en su id (no se guarda nada en la conversación).
+  function mensajeServiciosYPrecios(page = 0) {
     const { tl, g } = context.terms;
-    const cita = tl('appointment');
     const servicios = serviciosOfrecidos(context);
-    const botones = [
-      { id: '1', title: cabe(`Agendar ${cita}`, 20, 'Agendar') },
-      { id: 'info_ubicacion', title: 'Ubicación y horarios' },
-      { id: '2', title: 'Hablar con alguien' },
-    ];
     if (servicios.length === 0) {
       const aviso = `Por ahora no hay ${tl('services')} disponibles para reservar. Toca «Hablar con alguien» y el equipo te ayuda.`;
-      return menuBotones({ texto: aviso, cuerpo: aviso, botones: botones.slice(1) });
+      return menuBotones({
+        texto: aviso,
+        cuerpo: aviso,
+        botones: [{ id: 'info_ubicacion', title: 'Ubicación y horarios' }, { id: '2', title: 'Hablar con alguien' }],
+      });
     }
-    const combos = textoCombos(context, servicios);
-    const bloqueCombos = combos.length ? `\n\nCombos:\n${combos.join('\n')}`.slice(0, 400) : '';
-    // El cuerpo de los botones de WhatsApp admite ~1024 caracteres: los combos restan espacio a la lista.
-    const { completo: lista, corto: listaCorta } = textoServicios(servicios, {
-      precioDe: (s) => `${precioServicio(s, context.profesionales)}${sufijoPromo(context, s, branch)}`,
-      duracionDe: duracionServicio,
-      max: 900 - bloqueCombos.length,
-    });
-    const completo = `${lista}${bloqueCombos}`;
-    const corto = `${listaCorta}${bloqueCombos}`;
-    const titulo = `Nuestros ${tl('services')}:`;
-    const cierre = `¿Te gustaría agendar ${g('appointment', 'un', 'una')} ${cita}?`;
-    return menuBotones({
-      texto: `${titulo}
-${completo}
+    const { visibles, page: p, paginas, hayMas } = paginaServicios(servicios, page);
+    const rows = visibles.map((s) => filaServicio(s, datosDeServicio(s)));
+    if (hayMas) {
+      rows.push({ id: `info_mas|${p + 1}`, title: cabe(`Ver más ${tl('services')} →`, 24, 'Ver más →'), description: `Página ${p + 2} de ${paginas}` });
+    }
+    rows.push({ id: 'info_ubicacion', title: '📍 Ubicación y horarios' });
+    rows.push({ id: '2', title: '💬 Hablar con alguien' });
 
-${cierre}
-1. Agendar
-2. Hablar con alguien
-(Escribe "ubicación" para ver dónde estamos)`,
-      cuerpo: `${titulo}
-${corto}
+    const tocar = `Toca ${g('service', 'el', 'la')} que te interese para agendar${g('service', 'lo', 'la')}.`;
+    const cuerpo = p === 0
+      ? `¡Claro! 😊 Aquí tienes nuestros ${tl('services')} con su precio y duración. ${tocar}${resumenCombos(servicios)}`
+      : `Más ${tl('services')} (página ${p + 1} de ${paginas}). ${tocar}`;
+    // Respaldo corto: si el interactivo falla, nunca se manda la lista completa en texto.
+    const respaldo = `No pude mostrar el menú de ${tl('services')} 😕 Escríbeme el nombre ${g('service', 'del', 'de la')} ${tl('service')} que buscas y te paso su precio, o escribe "agendar".`;
+    return {
+      text: respaldo,
+      interactive: {
+        type: 'list',
+        body: { text: recortar(cuerpo, 1024) },
+        action: {
+          button: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
+          sections: [{ title: recortar(mayuscula(tl('services')), 24), rows }],
+        },
+      },
+    };
+  }
 
-${cierre}`,
-      botones,
+  // Una línea corta con los combos (máx. 2 nombrados) para no alargar el mensaje.
+  function resumenCombos(servicios) {
+    const ids = new Set(servicios.map((s) => String(s.id)));
+    const combos = promosVigentes(context, branch)
+      .filter((c) => c.type === 'combo' && (c.serviceIds || []).length > 1 && c.serviceIds.every((id) => ids.has(String(id))));
+    if (combos.length === 0) return '';
+    const nombrados = combos.slice(0, 2).map((c) => (Number(c.comboPrice) > 0 ? `${c.name} (Bs ${c.comboPrice})` : c.name));
+    const resto = combos.length > 2 ? ` y ${combos.length - 2} más` : '';
+    return `\n\n🎁 Combos: ${nombrados.join(', ')}${resto}.`;
+  }
+
+  // Precio y duración que se muestran al cliente: solo lo que está cargado
+  // (sin precio no se muestra "Bs 0"; sin duración no se inventan 30 min).
+  function datosDeServicio(s) {
+    const r = getServicePriceRange(s, context.profesionales);
+    const precio = Number(r.max) > 0
+      ? `${formatPriceRange(r.min, r.max, { variable: r.priceVariable })}${sufijoPromo(context, s, branch)}`
+      : '';
+    const minutos = Number(s?.duration) || Number(s?.durationMin) || 0;
+    return datosServicio({ precio, duracion: minutos > 0 ? `${minutos} min` : '' });
+  }
+
+  // El cliente tocó un servicio de «Servicios y precios» (o de una búsqueda):
+  // entra a la reserva igual que si lo hubiera elegido en `choosing_service`.
+  async function agendarServicioInfo(serviceId) {
+    const s = serviciosOfrecidos(context).find((x) => String(x.id) === String(serviceId));
+    if (!s) {
+      const { tl, g } = context.terms;
+      return responder(prefijo(`${g('service', 'Ese', 'Esa')} ${tl('service')} ya no está disponible.`, mensajeServiciosYPrecios(0)), conversation);
+    }
+    conversation = await updateConversation(negocioId, phone, {
+      currentFlow: 'choosing_service', selectedServices: [aServicioCita(s)], ...SIN_PREFERENCIA,
     });
+    return irAProfesionales();
+  }
+
+  // Preguntas escritas: "¿tienen alisado?", "¿cuánto cuesta un corte?".
+  // Devuelve null si el texto no es una pregunta sobre servicios.
+  function respuestaConsultaServicios(texto) {
+    const servicios = serviciosOfrecidos(context);
+    const r = buscarServicios(texto, servicios, { pideLista: pideServicios(texto) });
+    if (!r) return null;
+    const { tl, g } = context.terms;
+    const verTodos = { id: 'info_servicios', title: cabe(`Ver ${tl('services')}`, 20, 'Ver todos') };
+    const hablar = { id: '2', title: 'Hablar con alguien' };
+
+    if (r.tipo === 'general') return mensajeServiciosYPrecios(0);
+
+    if (r.tipo === 'sin_resultado') {
+      const cuerpo = `No encontré «${r.consulta}» entre nuestros ${tl('services')}.`;
+      return menuBotones({ texto: `${cuerpo}\n\nEscribe "precios" para ver ${g('service', 'todos los', 'todas las')} ${tl('services')}.`, cuerpo, botones: [verTodos, hablar] });
+    }
+
+    const encontrados = r.servicios;
+    if (encontrados.length === 1) {
+      const s = encontrados[0];
+      const datos = datosDeServicio(s);
+      const cuerpo = `Sí, tenemos *${s.name}*${datos ? `: ${datos}` : ''}.`;
+      return menuBotones({
+        texto: `${cuerpo}\n\nEscribe "agendar" para reservar.`,
+        cuerpo,
+        botones: [{ id: `info_svc|${s.id}`, title: 'Agendar' }, verTodos, hablar],
+      });
+    }
+    const rows = encontrados.slice(0, SERVICIOS_POR_PAGINA).map((s) => filaServicio(s, datosDeServicio(s)));
+    if (encontrados.length > SERVICIOS_POR_PAGINA || encontrados.length < servicios.length) {
+      rows.push({ id: 'info_servicios', title: cabe(`Ver todos ${g('service', 'los', 'las')} ${tl('services')}`, 24, 'Ver todos') });
+    }
+    const cuerpo = `Encontré ${encontrados.length} ${tl('services')}. Toca ${g('service', 'el', 'la')} que te interese para agendar${g('service', 'lo', 'la')}.`;
+    return {
+      text: `${cuerpo}\n\n${encontrados.map((s) => `• ${s.name}${datosDeServicio(s) ? ` — ${datosDeServicio(s)}` : ''}`).join('\n')}`.slice(0, 1500),
+      interactive: {
+        type: 'list',
+        body: { text: recortar(cuerpo, 1024) },
+        action: { button: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'), sections: [{ title: recortar(mayuscula(tl('services')), 24), rows }] },
+      },
+    };
   }
 
   function mensajeUbicacion() {
@@ -1684,6 +1811,23 @@ ${cierre}`,
     return conv.listPageFlow === conv.currentFlow ? Number(conv.listPage) || 0 : 0;
   }
 
+    // Respuesta a fotos/archivos sin texto: en el inicio, opciones para seguir;
+    // a mitad de una reserva, el menú del paso en curso.
+    async function menuTrasArchivos(aviso) {
+      if (conversation.currentFlow !== 'welcome') return prefijo(aviso, await menuActual());
+      const { tl } = context.terms;
+      const cuerpo = `${aviso}\n\n${voz.ayuda()}`;
+      return menuBotones({
+        texto: `${cuerpo}\n\n1. Agendar\n2. Hablar con alguien\n(Escribe "precios" para ver ${tl('services')} y precios)`,
+        cuerpo,
+        botones: [
+          { id: '1', title: cabe(`Agendar ${tl('appointment')}`, 20, 'Agendar') },
+          { id: 'info_servicios', title: cabe(`${mayuscula(tl('services'))} y precios`, 20, 'Precios') },
+          { id: '2', title: 'Hablar con alguien' },
+        ],
+      });
+    }
+
     // Menú del paso actual, también para pasos de confirmación (mensaje viejo tocado).
     async function menuActual() {
       switch (conversation.currentFlow) {
@@ -1780,7 +1924,7 @@ ${cierre}`,
       texto: `${pregunta}\n\n${lista}`,
       cuerpo: pregunta,
       boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
-      items: servicios.map((s, i) => ({ id: String(i + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min${sufijoPromo(context, s, branch)}`.slice(0, 72) })),
+      items: servicios.map((s) => ({ id: `svc:${s.id}`, title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min${sufijoPromo(context, s, branch)}`.slice(0, 72) })),
       page: paginaActual(),
     });
   }
@@ -1793,7 +1937,7 @@ ${cierre}`,
       texto: `¿Qué ${tl('service')} agregas?\n\n${extras.map((s) => `${todos.indexOf(s) + 1}. ${s.name} - ${precioServicio(s, context.profesionales)}${sufijoPromo(context, s, branch)}`).join('\n')}`,
       cuerpo: `Elegiste: ${nombresServicios(conversation)}.\n¿Qué ${tl('service')} agregas?`,
       boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
-      items: extras.map((s) => ({ id: String(todos.indexOf(s) + 1), title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min${sufijoPromo(context, s, branch)}`.slice(0, 72) })),
+      items: extras.map((s) => ({ id: `svc:${s.id}`, title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min${sufijoPromo(context, s, branch)}`.slice(0, 72) })),
       page: paginaActual(),
     });
   }
