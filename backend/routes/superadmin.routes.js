@@ -3,13 +3,15 @@ import { getAuth } from 'firebase-admin/auth';
 import { db } from '../config/firebase.js';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { logger } from '../utils/logger.js';
-import { isReservedSlug } from '../utils/reservedSlugs.js';
 import { getNegocioAccess, getUsage, currentPeriod } from '../services/capabilities/capabilityService.js';
 import { getCapability, usageStatus } from '../services/capabilities/capabilityModel.js';
 import { hashPin } from '../services/finance/pin.js';
 import { setPinHash } from '../services/finance/pinStore.js';
 import { buildLockPatch } from '../services/finance/pinLockModules.js';
-import { isValidBusinessType, DEFAULT_BUSINESS_TYPE } from '../services/businessProfiles/businessProfileModel.js';
+import { createNegocio, CreateNegocioError, resolvePassword } from '../services/negocios/createNegocio.js';
+import {
+  RegistroError, listSolicitudes, updateSolicitud, createFromSolicitud,
+} from '../services/registro/registroService.js';
 import {
   NoticeError, getSoporteWhatsapp, setSoporteWhatsapp, listNoticePeriods,
 } from '../services/subscription/subscriptionNoticeService.js';
@@ -32,137 +34,22 @@ function requireSuperAdmin(req, res, next) {
   next();
 }
 
-// Idéntico a src/utils/negocio.js (getNegocioSlug) del frontend de
-// GallyFlow — mismo criterio de siempre, todo antes del @, sin símbolos.
-function getNegocioSlug(email) {
-  if (!email) return null;
-  return email.split('@')[0].trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function generateTempPassword() {
-  return Math.random().toString(36).slice(-10) + 'A1!';
-}
-
-// Contraseña elegida por el Super Admin, o una generada si viene vacía.
-// Firebase Auth exige mínimo 6 caracteres.
-function resolvePassword(raw) {
-  const p = typeof raw === 'string' ? raw.trim() : '';
-  if (!p) return { password: generateTempPassword() };
-  if (p.length < 6) return { error: 'La contraseña debe tener al menos 6 caracteres.' };
-  return { password: p };
-}
-
-const DEFAULT_HERO_CONFIG = {
-  businessName: 'GALLYFLOW',
-  slogan: 'Agenda citas de forma rápida y segura desde cualquier dispositivo en nuestra plataforma premium.',
-  logo: '',
-  cover: '',
-  showRating: false,
-  rating: 4.9,
-  highlightText: '',
-};
-
 // POST /api/superadmin/negocios
-// Crea la cuenta de Auth + el documento del negocio con la MISMA
-// estructura base que useNegocio.js genera en el auto-registro orgánico
-// (slug basado en el correo, mismos 4 campos raíz), agregando además
-// el nombre del negocio dentro de heroConfig (igual que lo hace
-// businessHeroService.js) y los campos de gestión propios del panel
-// (plan, status, etc.) que no existen en el flujo orgánico.
+// Crea la cuenta de Auth + el documento del negocio. La lógica vive en
+// services/negocios/createNegocio.js (la reutilizan las solicitudes del
+// formulario público /registro).
 router.post('/negocios', identifyRequester, requireSuperAdmin, async (req, res) => {
   const { name, businessType, ownerName, ownerEmail, phone, country, city, plan, status, trialDays, password } = req.body;
-
-  if (!ownerEmail) {
-    return res.status(400).json({ error: 'Falta el correo del propietario.' });
-  }
-
-  const slug = getNegocioSlug(ownerEmail);
-  if (!slug) {
-    return res.status(400).json({ error: 'Correo inválido.' });
-  }
-  if (isReservedSlug(slug)) {
-    return res.status(400).json({
-      error: `"${slug}" es una ruta reservada de la app y no puede usarse como negocio. Usa otro correo.`,
-    });
-  }
-
-  // Tipo de negocio (businessProfileModel). Vacío = 'otro' (terminología genérica).
-  if (businessType && !isValidBusinessType(businessType)) {
-    return res.status(400).json({ error: 'Tipo de negocio inválido.' });
-  }
-  const finalBusinessType = businessType || DEFAULT_BUSINESS_TYPE;
-
-  const pw = resolvePassword(password);
-  if (pw.error) return res.status(400).json({ error: pw.error });
-  const tempPassword = pw.password;
-  let createdUid = null;
-
-  // `plan` es el ID de un documento de `planes` (ya no 'trial'/'basic'/'pro').
-  // Si viene vacío, el negocio queda sin plan y usa los valores por defecto
-  // del catálogo de capacidades.
-  const planId = plan && plan !== 'trial' ? String(plan) : null;
-  const finalStatus = status === 'active' ? 'active' : 'trial';
-  const today = new Date().toISOString().slice(0, 10);
-  let trialFields = {};
-  if (finalStatus === 'trial') {
-    const days = Math.max(1, Math.min(365, Number(trialDays) || 14));
-    const end = new Date();
-    end.setDate(end.getDate() + days);
-    trialFields = { trialStart: today, trialEnd: end.toISOString().slice(0, 10), trialDays: days };
-  }
-
   try {
-    const negocioRef = db.collection('negocios').doc(slug);
-    const existing = await negocioRef.get();
-    if (existing.exists) {
-      return res.status(409).json({ error: 'Ya existe un negocio con ese correo.' });
-    }
-    if (planId) {
-      const planSnap = await db.collection('planes').doc(planId).get();
-      if (!planSnap.exists) return res.status(400).json({ error: 'El plan elegido no existe.' });
-    }
-
-    const userRecord = await getAuth().createUser({
-      email: ownerEmail,
-      password: tempPassword,
-      displayName: ownerName || undefined,
-    });
-    createdUid = userRecord.uid;
-
-    await negocioRef.set({
-      // --- mismos campos raíz que el auto-registro orgánico ---
-      slug,
-      adminUid: createdUid,
-      email: ownerEmail,
-      createdAt: new Date().toISOString(),
-      // --- nombre del negocio, en el mismo lugar donde ya lo lee la app ---
-      heroConfig: { ...DEFAULT_HERO_CONFIG, businessName: name || DEFAULT_HERO_CONFIG.businessName },
-      // --- tipo de negocio: terminología/módulos de Nexus (businessProfileModel) ---
-      businessType: finalBusinessType,
-      // --- campos de gestión, exclusivos del panel Super Admin ---
-      ownerName: ownerName || '',
-      phone: phone || '',
-      country: country || '',
-      city: city || '',
-      plan: planId,
-      status: finalStatus,
-      subscriptionEnd: null,
-      ...trialFields,
-      capabilityOverrides: {},
-    });
-
-    logger.info(`[superadmin] Negocio creado: ${slug} (${ownerEmail})`);
-
-    return res.status(201).json({ id: slug, tempPassword });
+    const { id, tempPassword } = await createNegocio({ name, businessType, ownerName, ownerEmail, phone, country, city, plan, status, trialDays, password });
+    logger.info(`[superadmin] Negocio creado: ${id} (${ownerEmail})`);
+    return res.status(201).json({ id, tempPassword });
   } catch (err) {
-    if (createdUid) {
-      await getAuth().deleteUser(createdUid).catch(() => {});
+    if (err instanceof CreateNegocioError) {
+      if (err.status >= 500 || err.message === 'Ya existe una cuenta con ese correo.') logger.error('[superadmin] Error creando negocio:', err.cause?.message || err.message);
+      return res.status(err.status).json({ error: err.message });
     }
     logger.error('[superadmin] Error creando negocio:', err.message);
-
-    if (err.code === 'auth/email-already-exists') {
-      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
-    }
     return res.status(500).json({ error: 'No se pudo crear el negocio.' });
   }
 });
@@ -337,6 +224,48 @@ router.get('/negocios/:negocioId/avisos-vencimiento', identifyRequester, require
     return res.status(200).json(await listNoticePeriods(req.params.negocioId));
   } catch (err) {
     return noticeError(res, err, 'Error leyendo avisos de vencimiento');
+  }
+});
+
+// ───────────── Solicitudes del formulario público /registro ─────────────
+
+function sendRegistroError(res, err, where) {
+  if (err instanceof RegistroError) {
+    if (err.status >= 500) logger.error(`[superadmin] ${where}:`, err.cause?.message || err.message);
+    return res.status(err.status).json({ error: err.message, errors: err.errors || [] });
+  }
+  logger.error(`[superadmin] ${where}:`, err.message);
+  return res.status(500).json({ error: 'Error interno.' });
+}
+
+// GET /api/superadmin/solicitudes?status=pendiente|creada|descartada|todas
+router.get('/solicitudes', identifyRequester, requireSuperAdmin, async (req, res) => {
+  const status = ['pendiente', 'creada', 'descartada', 'todas'].includes(req.query.status) ? req.query.status : 'pendiente';
+  try {
+    return res.status(200).json({ solicitudes: await listSolicitudes(status) });
+  } catch (err) {
+    return sendRegistroError(res, err, 'listar solicitudes');
+  }
+});
+
+// PATCH /api/superadmin/solicitudes/:id  { status: 'pendiente' | 'descartada', note? }
+router.patch('/solicitudes/:id', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    return res.status(200).json(await updateSolicitud(req.params.id, req.body || {}));
+  } catch (err) {
+    return sendRegistroError(res, err, 'actualizar solicitud');
+  }
+});
+
+// POST /api/superadmin/solicitudes/:id/crear  { planId, trialDays }
+// -> { id, email, tempPassword, creados, cupos }
+router.post('/solicitudes/:id/crear', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await createFromSolicitud(req.params.id, req.body || {});
+    logger.info(`[superadmin] Negocio creado desde solicitud ${req.params.id}: ${result.id} (${result.email})`);
+    return res.status(201).json(result);
+  } catch (err) {
+    return sendRegistroError(res, err, 'crear negocio desde solicitud');
   }
 });
 

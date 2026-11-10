@@ -15,6 +15,7 @@ import negocioResourcesRoutes from '../routes/negocioResources.routes.js';
 import cashRoutes from '../routes/cash.routes.js';
 import serviciosRegistradosRoutes from '../routes/serviciosRegistrados.routes.js';
 import subscriptionNoticeRoutes from '../routes/subscriptionNotice.routes.js';
+import registroRoutes from '../routes/registro.routes.js';
 
 
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api', negocioResourcesRoutes);
 app.use('/api', cashRoutes);
 app.use('/api', serviciosRegistradosRoutes);
 app.use('/api', subscriptionNoticeRoutes);
+app.use('/api', registroRoutes);
 
 
 app.get('/health', (req, res) => {

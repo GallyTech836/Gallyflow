@@ -83,3 +83,11 @@ export const sessionRateLimit = rateLimit({
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.' },
 });
+// Formulario público de registro de negocios: máximo 5 envíos por hora por IP.
+export const registroRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Enviaste demasiados registros seguidos. Intenta de nuevo en una hora.' },
+});
