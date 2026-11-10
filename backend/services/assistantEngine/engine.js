@@ -57,6 +57,18 @@ const mayuscula = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 // "otro día" / "otra hora" NO cuentan como reprogramar (son opciones del paso de horarios).
 const INTENCION_CANCELAR = /cancel|anul/i;
 const INTENCION_REPROGRAMAR = /reprogram|posterg|adelant|(cambi|mov)\w*\s+(de\s+)?(la\s+|mi\s+|el\s+)?(cita|turno|reserva|hora|horario|fecha|d[ií]a)/i;
+// Pedir una persona desde cualquier paso. Frases claras (también el botón «hablar_persona»)
+// para no confundir un nombre o una respuesta con un pedido de atención humana.
+const PIDE_PERSONA = /^(hablar_persona|persona|humano|asesor|asesora)$|hablar con (alguien|una persona|un humano|el due[ñn]o|la due[ñn]a|el encargado|la encargada|un asesor|una asesora|el barbero|la estilista)|atenci[oó]n (humana|personalizada)|persona real|\bun humano\b|no quiero (hablar con |que me (atienda|responda) )?(el |un |una )?(bot|boot|robot|asistente|m[aá]quina)|no quiero que (me )?(responda|conteste)|quiero que (me )?(responda|atienda|conteste) (alguien|una persona)/i;
+// Volver atrás a mitad de la reserva.
+const OTRO_PROFESIONAL = /otr[oa]s? (barber[oa]s?|profesional(es)?|persona|estilista|disponible)|cambiar (de |el |la )?(barber[oa]|profesional|estilista)|\bcon otr[oa]\b/i;
+const OTRO_SERVICIO = /otro servicio|cambiar (de |el )?servicio/i;
+const OTRA_FECHA = /otro d[ií]a|otra fecha|ma[ñn]ana/i;
+// Pasos en que el cliente puede preguntar algo sin perder la reserva.
+const PASOS_CON_CONSULTA = new Set([...FLUJOS_CON_LISTA, 'pro_unavailable_today', 'confirming', 'confirming_reschedule']);
+// Botones que valen aunque vengan de un mensaje anterior.
+const BOTON_GLOBAL = /^(hablar_persona|menu|ver_opciones)$/;
+
 const FLUJOS_SIN_INTENCION = new Set(['confirming_reschedule', 'confirming', 'awaiting_name', 'human', 'collecting_intake', 'confirming_pet']);
 
 // ───────────────────────── Fecha/hora del negocio ─────────────────────────
@@ -193,6 +205,25 @@ function parsearIndices(texto, total) {
   const unicos = [...new Set(nums)];
   if (unicos.length === 0 || unicos.some((i) => i < 0 || i >= total)) return null;
   return unicos;
+}
+
+// Hora escrita por el cliente ("10:30", "9.30", "a las 3", "3pm", "15 hrs") → "HH:MM"
+// (sin am/pm, "a las 3" se toma como 15:00 si no puede ser de mañana). null si no es una hora.
+function horaEscrita(texto, slots = []) {
+  const t = String(texto || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const m = t.match(/(?:^|\s)(\d{1,2})(?:[:.h](\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?|hrs?|horas)?(?=$|[\s,.!?])/);
+  if (!m) return null;
+  const pareceHora = m[2] || m[3] || /a las|las \d/.test(t);
+  if (!pareceHora) return null;
+  let h = Number(m[1]);
+  const min = m[2] ? Number(m[2]) : 0;
+  if (h > 23 || min > 59) return null;
+  const sufijo = (m[3] || '').replace(/[\s.]/g, '');
+  if (sufijo === 'pm' && h < 12) h += 12;
+  if (sufijo === 'am' && h === 12) h = 0;
+  const fmt = (x) => `${String(x).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  if (!['am', 'pm'].includes(sufijo) && h < 12 && !slots.includes(fmt(h)) && slots.includes(fmt(h + 12))) return fmt(h + 12);
+  return fmt(h);
 }
 
 // Conversaciones creadas antes de los servicios múltiples guardaban selectedService.
@@ -609,10 +640,22 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
   // actual (antes un "2" de la lista de profesionales se tomaba como hora 2).
   const marca = texto.match(/^([a-z_]+)\|(.+)$/);
   if (marca) {
-    if (marca[1] !== conversation.currentFlow) {
+    if (marca[1] !== conversation.currentFlow && !BOTON_GLOBAL.test(marca[2])) {
       return responder(prefijo('Esa opción era de un mensaje anterior 🙂 Elige aquí:', await menuActual()), conversation);
     }
     texto = marca[2];
+    // Tocó una opción: se entendió, el contador de "no entendí" vuelve a cero.
+    if (Number(conversation.stepMisses) > 0) {
+      conversation = await updateConversation(negocioId, phone, { stepMisses: 0 });
+    }
+  }
+
+  // «Hablar con alguien» desde cualquier paso, escrito o con botón.
+  if (PIDE_PERSONA.test(texto)) return hablarConAlguien();
+
+  // «Ver opciones» (tras dos mensajes sin entender): el menú del paso actual.
+  if (/^(ver_opciones|opciones|ver opciones)$/i.test(texto)) {
+    return responder(await menuActual(), conversation);
   }
 
   if (/^(salir|reiniciar|menu|menú|0)$/i.test(texto) && conversation.currentFlow !== 'welcome') {
@@ -740,7 +783,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', pickDate: false });
         return responder(mensajeServicios(context), conversation);
       }
-      return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeProNoDisponible(info)), conversation);
+      return sinEntenderEnPaso(mensajeProNoDisponible(info));
     }
 
     case 'choosing_service': {
@@ -754,8 +797,11 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         elegidos = [s];
       } else {
         const indices = parsearIndices(texto, servicios.length);
-        if (!indices) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeServicios(context)), conversation);
-        elegidos = indices.map((i) => servicios[i]);
+        // Nombre escrito ("corte"): si coincide con un solo servicio de la lista, se elige.
+        const porNombre = indices ? null : buscarServicios(texto, servicios);
+        if (indices) elegidos = indices.map((i) => servicios[i]);
+        else if (porNombre?.tipo === 'coincidencias' && porNombre.servicios.length === 1) elegidos = porNombre.servicios;
+        else return sinEntenderEnPaso(mensajeServicios(context));
       }
       if (profesionalesPara(context, elegidos.map((s) => s.id)).length === 0) {
         const { tl, g } = context.terms;
@@ -771,7 +817,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       const idx = parseInt(texto, 10) - 1;
       const buscado = porId ? porId[1] : servicios[idx]?.id;
       const extra = serviciosExtraCompatibles().find((s) => String(s.id) === String(buscado));
-      if (!extra) return responder(prefijo(voz.noEntendi(), mensajeServiciosExtra()), conversation);
+      if (!extra) return sinEntenderEnPaso(mensajeServiciosExtra());
 
       conversation = await updateConversation(negocioId, phone, {
         selectedServices: [...serviciosDe(conversation), aServicioCita(extra)],
@@ -798,9 +844,10 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       }
       const idx = parseInt(texto, 10) - 1;
       const opciones = opcionesCualquiera(pros, context.terms);
-      const profesional = pros[idx];
-      const cualquiera = opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null);
-      if (!profesional && !cualquiera) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeProfesionales(pros)), conversation);
+      // Número de la lista o nombre escrito ("con Ignacio").
+      const profesional = pros[idx] || (/^\d+$/.test(texto) ? null : profesionalNombrado(pros, texto));
+      const cualquiera = profesional ? null : (opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null));
+      if (!profesional && !cualquiera) return sinEntenderEnPaso(mensajeProfesionales(pros));
 
       const selectedStaff = profesional
         ? { id: profesional.id, name: profesional.name, branch: profesional.branch || '' }
@@ -814,7 +861,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       const dias = conversation.dateOptionsCache || [];
       const idx = parseInt(texto, 10) - 1;
       const dia = dias[idx];
-      if (!dia) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeFechas(dias)), conversation);
+      if (!dia) return sinEntenderEnPaso(mensajeFechas(dias));
 
       const slots = await slotsParaFecha(context, prosElegidos(context, conversation), dia.id, totalDuracion(conversation));
       if (slots.length === 0) {
@@ -830,15 +877,20 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     }
 
     case 'choosing_time': {
-      if (/^otrodia$|otro d[ií]a/i.test(texto)) {
+      if (/^otrodia$/i.test(texto) || (OTRA_FECHA.test(texto) && !horaEscrita(texto))) {
         const dias = diasParaConversacion(context, conversation);
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias });
         return responder(mensajeFechas(dias), conversation);
       }
       const slots = conversation.availableSlotsCache || [];
-      const idx = parseInt(texto, 10) - 1;
-      const hora = slots[idx];
-      if (!hora) return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeHoras(slots, conversation.selectedDate)), conversation);
+      // Número de la lista (lo que manda la lista) u hora escrita ("10:30", "a las 3").
+      // Antes "10:30" se leía como la opción 10 de la lista.
+      const escrita = /^\d{1,2}$/.test(texto) ? null : horaEscrita(texto, slots);
+      const hora = escrita ? (slots.includes(escrita) ? escrita : null) : (/^\d{1,2}$/.test(texto) ? slots[parseInt(texto, 10) - 1] : null);
+      if (!hora && escrita) {
+        return responder(prefijo('Esa hora no está libre. Estos son los horarios disponibles:', mensajeHoras(slots, conversation.selectedDate)), conversation);
+      }
+      if (!hora) return sinEntenderEnPaso(mensajeHoras(slots, conversation.selectedDate));
 
             // Reprogramando: no se pide nombre, se confirma el cambio.
             if (conversation.rescheduleCitaId) {
@@ -889,7 +941,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         conversation = await resetConversation(negocioId, phone);
         return responder('Reserva cancelada. Escribe cuando quieras volver a empezar.', conversation);
       }
-      return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajeResumen(conversation)), conversation);
+      return sinEntenderEnPaso(mensajeResumen(conversation));
     }
 
         
@@ -951,7 +1003,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
             conversation = await resetConversation(negocioId, phone);
             return responder(`Listo, no cambié nada. Tu ${context.terms.tl('appointment')} sigue como estaba ✅`, conversation);
           }
-          return responder(prefijo(voz.noEntendi(), mensajeResumenReprogramar(conversation)), conversation);
+          return sinEntenderEnPaso(mensajeResumenReprogramar(conversation));
         }
     
     default: {
@@ -1782,6 +1834,107 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       ],
     });
     return responder(cierre, conversation, tarjetas);
+  }
+
+  // ── Texto que el paso no entendió ──
+  // Antes de decir "no entendí": ¿quiere volver atrás o pregunta algo? Si no,
+  // se cuenta el intento; al segundo seguido en el mismo paso se ofrece salida.
+  async function sinEntenderEnPaso(mensajePaso) {
+    const flujo = conversation.currentFlow;
+    const { tl } = context.terms;
+
+    if (['choosing_date', 'choosing_time'].includes(flujo) && OTRO_PROFESIONAL.test(texto)) {
+      return cambiarProfesional(mensajePaso);
+    }
+    if (['choosing_extra_service', 'choosing_staff', 'choosing_date', 'choosing_time'].includes(flujo) && OTRO_SERVICIO.test(texto)) {
+      conversation = await updateConversation(negocioId, phone, {
+        currentFlow: 'choosing_service', selectedServices: null, selectedStaff: null, ...SIN_PREFERENCIA,
+      });
+      return responder(mensajeServicios(context), conversation);
+    }
+
+    if (PASOS_CON_CONSULTA.has(flujo)) {
+      const info = infoEnReserva(texto);
+      if (info) return responder(prefijo(`${info}\n\nSeguimos con tu ${tl('appointment')}:`, mensajePaso), conversation);
+    }
+
+    const fallos = (conversation.stepMissesFlow === flujo ? Number(conversation.stepMisses) || 0 : 0) + 1;
+    if (fallos < 2) {
+      conversation = await updateConversation(negocioId, phone, { stepMisses: fallos, stepMissesFlow: flujo });
+      return responder(prefijo(`${voz.noEntendi()} \n\n`, mensajePaso), conversation);
+    }
+
+    conversation = await updateConversation(negocioId, phone, { stepMisses: 0, stepMissesFlow: flujo });
+    const conEquipo = !cierreDeHoy(context, branch);
+    const cuerpo = conEquipo
+      ? `${voz.noEntendi()} Puedes ver las opciones otra vez, hablar con una persona o empezar de nuevo.`
+      : `${voz.noEntendi()} Puedes ver las opciones otra vez o empezar de nuevo.`;
+    return responder(menuBotones({
+      texto: `${cuerpo}\n\nEscribe "opciones", ${conEquipo ? '"persona" o ' : ''}"menu".`,
+      cuerpo,
+      botones: [
+        { id: 'ver_opciones', title: 'Ver opciones' },
+        ...(conEquipo ? [{ id: 'hablar_persona', title: 'Hablar con alguien' }] : []),
+        { id: 'menu', title: 'Empezar de nuevo' },
+      ],
+    }), conversation);
+  }
+
+  // "Otro barbero" mientras elige día u hora: vuelve a la lista de profesionales sin el actual.
+  async function cambiarProfesional(mensajePaso) {
+    const actual = conversation.selectedStaff?.id;
+    const todos = profesionalesPara(context, serviciosDe(conversation).map((s) => s.serviceId));
+    const otros = todos.filter((p) => p.id !== actual);
+    if (actual && actual !== PENDING_ID && otros.length === 0) {
+      const { tl } = context.terms;
+      return responder(prefijo(`Por ahora solo ${conversation.selectedStaff.name} realiza ${tl(serviciosDe(conversation).length > 1 ? 'services' : 'service')} así.\n\n`, mensajePaso), conversation);
+    }
+    conversation = await updateConversation(negocioId, phone, {
+      selectedStaff: null,
+      ...SIN_PREFERENCIA,
+      excludeStaffId: actual && actual !== PENDING_ID ? actual : null,
+    });
+    return irAProfesionales();
+  }
+
+  // Respuesta corta a una pregunta hecha a mitad de la reserva (ubicación,
+  // horarios de atención, precios, "¿hacen barba?"). null si no es una pregunta.
+  function infoEnReserva(t) {
+    if (pideUbicacion(t) && !/otr[oa]s? hora|m[aá]s hora/i.test(t)) {
+      return textoUbicacion({ sucursales: context.sucursales, businessSettings: context.businessSettings, branch })
+        || 'Todavía no tenemos la ubicación cargada aquí.';
+    }
+    const servicios = serviciosOfrecidos(context);
+    const r = buscarServicios(t, servicios, { pideLista: pideServicios(t) });
+    if (!r) return null;
+    const { tl, g } = context.terms;
+    const linea = (s) => {
+      const d = datosDeServicio(s);
+      return `• ${String(s.name || '').trim()}${d ? ` — ${d}` : ''}`;
+    };
+    if (r.tipo === 'general') {
+      const lineas = servicios.slice(0, 8).map(linea);
+      if (servicios.length > 8) lineas.push(`… y ${servicios.length - 8} más.`);
+      return `${g('service', 'Nuestros', 'Nuestras')} ${tl('services')}:\n${lineas.join('\n')}`;
+    }
+    if (r.tipo === 'sin_resultado') return `No encontré «${r.consulta}» entre ${g('service', 'nuestros', 'nuestras')} ${tl('services')}.`;
+
+    const encontrados = r.servicios;
+    let respuesta;
+    if (encontrados.length === 1) {
+      const d = datosDeServicio(encontrados[0]);
+      respuesta = `Sí, tenemos *${String(encontrados[0].name || '').trim()}*${d ? `: ${d}` : ''}.`;
+    } else {
+      respuesta = `Esto encontré:\n${encontrados.slice(0, 6).map(linea).join('\n')}`;
+    }
+    // Eligiendo profesional: se puede sumar a la reserva con "agregar".
+    if (conversation.currentFlow === 'choosing_staff') {
+      const extras = new Set(serviciosExtraCompatibles().map((s) => String(s.id)));
+      if (encontrados.some((s) => extras.has(String(s.id)))) {
+        respuesta += `\nSi quieres sumarlo a tu ${tl('appointment')}, escribe "agregar".`;
+      }
+    }
+    return respuesta;
   }
 
   async function hablarConAlguien() {

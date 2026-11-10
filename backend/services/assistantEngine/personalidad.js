@@ -218,6 +218,8 @@ const A_USTED = [
   [/\bte la pasa\b/g, 'se la pasa'],
   [/\bdeseas\b/g, 'desea'],
   [/\bquieres\b/g, 'quiere'],
+  [/\bpuedes\b/g, 'puede'],
+  [/\bPuedes\b/g, 'Puede'],
   [/\bQuieres\b/g, 'Quiere'],
   [/\bagregas\b/g, 'agrega'],
   [/\bagendas\b/g, 'agenda'],
