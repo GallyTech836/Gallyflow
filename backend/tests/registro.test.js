@@ -257,6 +257,16 @@ describe('Super Admin · solicitudes', () => {
     assert.equal(db._get(`solicitudesRegistro/${id}`).status, 'pendiente');
   });
 
+  test('plan sin prueba (trialDays 0): se crea activo', async () => {
+    db._set('planes/profesional', { name: 'Nexus Profesional', price: 350, trialDays: 0 });
+    const { body: { id } } = await enviar();
+    const r = await llamar('POST', `/solicitudes/${id}/crear`, { planId: 'profesional', trialDays: 14 });
+    assert.equal(r.status, 201);
+    const neg = db._get('negocios/jorge');
+    assert.equal(neg.status, 'active');
+    assert.equal(neg.trialEnd, undefined);
+  });
+
   test('plan inexistente: 400', async () => {
     const { body: { id } } = await enviar();
     const r = await llamar('POST', `/solicitudes/${id}/crear`, { planId: 'nope' });

@@ -86,7 +86,7 @@ async function rollback({ slug, uid, written }) {
 
 /**
  * Crea el negocio completo a partir de la solicitud, con los mismos
- * documentos que quedan al cargarlo a mano. Siempre en prueba.
+ * documentos que quedan al cargarlo a mano. En prueba, o activo si el plan no tiene prueba.
  * @returns {{ id, email, tempPassword, creados, cupos }}
  */
 export async function createFromSolicitud(id, { planId, trialDays } = {}) {
@@ -102,11 +102,16 @@ export async function createFromSolicitud(id, { planId, trialDays } = {}) {
   if (errors.length) throw new RegistroError(400, `La solicitud tiene datos inválidos: ${errors[0]}`, { errors });
   const n = data.negocio;
 
+  // Plan sin prueba (trialDays: 0, ej. Profesional por el costo del Asistente
+  // de WhatsApp): el negocio se crea activo en vez de en prueba.
+  const planSnap = await db.collection('planes').doc(String(planId)).get();
+  const sinPrueba = planSnap.exists && planSnap.data().trialDays === 0;
+
   let created;
   try {
     created = await createNegocio({
       name: n.name, businessType: n.businessType, ownerName: n.ownerName, ownerEmail: n.ownerEmail,
-      phone: n.phone, country: n.country, city: n.city, plan: planId, status: 'trial', trialDays,
+      phone: n.phone, country: n.country, city: n.city, plan: planId, status: sinPrueba ? 'active' : 'trial', trialDays,
     });
   } catch (err) {
     if (err instanceof CreateNegocioError) throw new RegistroError(err.status, err.message);
