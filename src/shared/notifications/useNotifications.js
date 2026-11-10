@@ -23,7 +23,14 @@ export function useNotifications({ uid, rol, negocioId }) {
 
     async function setup() {
       try {
-        await OneSignal.init({ appId: ONESIGNAL_APP_ID });
+        await OneSignal.init({
+          appId: ONESIGNAL_APP_ID,
+          // Al tocar la notificación: si Nexus ya está abierto (la app
+          // instalada o una pestaña del mismo dominio), se usa esa ventana y
+          // se navega al link, en vez de abrir una pestaña nueva del navegador.
+          notificationClickHandlerMatch: 'origin',
+          notificationClickHandlerAction: 'navigate',
+        });
         await OneSignal.Notifications.requestPermission();
 
         // Si el permiso está dado pero la suscripción quedó desactivada
