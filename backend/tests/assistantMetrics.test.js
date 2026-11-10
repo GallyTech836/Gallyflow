@@ -160,6 +160,7 @@ describe('Entrantes y conversaciones', () => {
 
 const ruta = router.routes.find((r) => r.method === 'POST' && r.path === '/whatsapp/webhook');
 process.env.WHATSAPP_APP_SECRET = 'secreto-prueba';
+process.env.ASSISTANT_TEXT_WINDOW_MS = '0'; // textos al instante en estas pruebas
 
 async function webhook(mensajes) {
   const body = { entry: [{ changes: [{ value: { metadata: { phone_number_id: 'pnA', display_phone_number: '591' }, messages: mensajes } }] }] };

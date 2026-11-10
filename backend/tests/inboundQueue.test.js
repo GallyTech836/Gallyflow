@@ -11,6 +11,7 @@ import { createFakeDb, FieldValue } from './helpers/fakeFirestore.js';
 import { createFakeRouter } from './helpers/fakeExpress.js';
 
 process.env.ASSISTANT_MEDIA_WINDOW_MS = '80'; // ventana corta para las pruebas
+process.env.ASSISTANT_TEXT_WINDOW_MS = '0'; // textos al instante, salvo en sus pruebas
 process.env.WHATSAPP_APP_SECRET = 'secreto-prueba';
 process.env.YCLOUD_WEBHOOK_SECRET = 'whsec_prueba';
 
@@ -110,6 +111,44 @@ beforeEach(() => {
   demoraMotor = 0;
   resolveFalla = false;
   delete process.env.ASSISTANT_INBOX;
+  process.env.ASSISTANT_TEXT_WINDOW_MS = '0';
+});
+
+describe('Textos seguidos (ventana de texto)', () => {
+  const boton = (id, valor, from = CLIENTE) => ({ id, from, type: 'interactive', interactive: { button_reply: { id: valor, title: 'x' } } });
+
+  test('"Hola bro" + "No te olvides porfa": un solo llamado y una sola respuesta', async () => {
+    process.env.ASSISTANT_TEXT_WINDOW_MS = '80';
+    await webhook([texto('s1', 'Hola bro')]);
+    await webhook([texto('s2', 'No te olvides porfa')]);
+    assert.equal(llamados.length, 0, 'espera la ventana');
+    await esperar(250);
+    assert.equal(llamados.length, 1);
+    assert.equal(llamados[0].message, 'Hola bro No te olvides porfa');
+    assert.equal(enviados.length, 1);
+  });
+
+  test('un texto solo se responde al cerrar la ventana', async () => {
+    process.env.ASSISTANT_TEXT_WINDOW_MS = '60';
+    await webhook([texto('u1', 'hola')]);
+    await esperar(200);
+    assert.equal(llamados.length, 1);
+    assert.equal(llamados[0].message, 'hola');
+  });
+
+  test('texto y luego botón: se responde al botón, sin esperar', async () => {
+    process.env.ASSISTANT_TEXT_WINDOW_MS = '5000';
+    await webhook([texto('b1', 'hola')]);
+    await webhook([boton('b2', 'welcome|1')]);
+    assert.equal(llamados.length, 1);
+    assert.equal(llamados[0].message, 'welcome|1');
+  });
+
+  test('botón solo: al instante', async () => {
+    process.env.ASSISTANT_TEXT_WINDOW_MS = '5000';
+    await webhook([boton('b3', 'welcome|2')]);
+    assert.equal(llamados.length, 1);
+  });
 });
 
 describe('Deduplicación y orden', () => {
@@ -307,6 +346,13 @@ describe('armarLote (función pura)', () => {
     assert.equal(r.mensajes.length, 1);
   });
   test('vacío', () => assert.deepEqual(Q.armarLote([], 0), { tipo: 'vacio' }));
+  test('textos dentro de la ventana de texto: esperar', () => {
+    assert.deepEqual(Q.armarLote([m('text', 1000), m('text', 1050)], 1100, 100, 200), { tipo: 'esperar', ms: 150 });
+  });
+  test('textos con la ventana cerrada: un lote; la foto que sigue va aparte', () => {
+    const r = Q.armarLote([m('text', 1000), m('text', 1050), m('media', 1060)], 1070, 100, 200);
+    assert.deepEqual(r.mensajes.map((x) => x.kind), ['text', 'text']);
+  });
 });
 
 describe('normalizarMensaje', () => {

@@ -78,7 +78,7 @@ function registrarActividad(negocioId, displayPhone) {
 //    falla se responde 500 y el proveedor reintenta. Un mensaje repetido (mismo
 //    id de WhatsApp) no se guarda dos veces.
 // 3. La cola procesa cada conversación de a un lote por vez (inboundQueue.js):
-//    varias fotos seguidas = una sola respuesta.
+//    varias fotos seguidas o varios textos seguidos = una sola respuesta.
 // No se marca como leído: el cliente ve "leído" solo cuando alguien del
 // negocio abre el chat (en YCloud, marcar leído y "escribiendo…" son la
 // misma llamada, así que tampoco se muestra "escribiendo…").
@@ -166,7 +166,11 @@ async function procesarLote(lote) {
   const entrantes = lote.map((m) => safe(recordInbound({ negocioId: cuenta.negocioId, phone: from, messageId: m.id }), 'entrante'));
 
   // Reacciones y stickers: se registran como entrantes, sin respuesta.
-  const principal = [...lote].reverse().find((m) => m.kind === 'text' || m.kind === 'interactive') || null;
+  // Si tocó un botón, manda el botón; si no, los textos seguidos se leen
+  // como un solo mensaje ("Hola" + "quiero un corte" = una sola respuesta).
+  const interactivo = [...lote].reverse().find((m) => m.kind === 'interactive') || null;
+  const textos = lote.filter((m) => m.kind === 'text' && String(m.text || '').trim());
+  const principal = interactivo || textos[textos.length - 1] || null;
   const fotos = lote.filter((m) => m.kind === 'media' && m.media).map((m) => m.media);
   const noSoportados = lote.filter((m) => m.kind === 'unsupported').length;
   if (!principal && fotos.length === 0 && noSoportados === 0) {
@@ -196,8 +200,10 @@ async function procesarLote(lote) {
 
   // Texto del lote: lo que escribió o tocó; si solo mandó fotos/archivos,
   // la descripción que les puso (si la hay).
-  const descripciones = lote.filter((m) => m !== principal && m.kind !== 'text' && m.kind !== 'interactive' && m.text).map((m) => m.text);
-  const texto = principal ? principal.text : descripciones.join('\n');
+  const descripciones = lote.filter((m) => m.kind !== 'text' && m.kind !== 'interactive' && m.text).map((m) => m.text);
+  const texto = interactivo
+    ? interactivo.text
+    : textos.length ? textos.map((m) => String(m.text).trim()).join(' ') : descripciones.join('\n');
 
   const resultado = await runAssistant({
     negocioId: cuenta.negocioId,

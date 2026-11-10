@@ -10,7 +10,9 @@
 //  3. Fotos, audios y archivos se juntan durante MEDIA_WINDOW_MS desde el
 //     último: varias fotos seguidas = un solo lote = una sola respuesta. Un
 //     texto que llega dentro de la ventana cierra el lote y va con las fotos.
-//     El texto solo (sin multimedia pendiente) se procesa al instante.
+//     Los textos seguidos ("Hola" + "quiero un corte") también se juntan
+//     durante la ventana de texto (textWindowMs) y se responden una sola vez.
+//     Un toque de botón/lista se procesa al instante (descarta esos textos).
 //  4. Un barrido periódico retoma lo que quedó pendiente (reinicio de
 //     Railway, timer perdido, otra instancia caída).
 //
@@ -23,6 +25,16 @@ import { db } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
 
 export const MEDIA_WINDOW_MS = Number(process.env.ASSISTANT_MEDIA_WINDOW_MS) || 3500;
+/**
+ * Espera tras el último texto del cliente antes de responder, para juntar los
+ * mensajes que manda seguidos. ASSISTANT_TEXT_WINDOW_MS=0 lo desactiva
+ * (cada texto se responde al instante, como antes).
+ */
+export function textWindowMs() {
+  const crudo = process.env.ASSISTANT_TEXT_WINDOW_MS;
+  const v = Number(crudo);
+  return crudo !== undefined && crudo !== '' && Number.isFinite(v) && v >= 0 ? v : 2500;
+}
 const LOCK_MS = 120 * 1000; // vencimiento del turno si el proceso se cae
 const STALE_MS = 10 * 1000; // pendientes con más de esto los retoma el barrido
 const SWEEP_MS = 30 * 1000;
@@ -95,10 +107,27 @@ export async function enqueue({ negocioId, phone, mensaje, now = Date.now() }) {
  *   { tipo: 'vacio' } | { tipo: 'esperar', ms } | { tipo: 'lote', mensajes }
  * Un lote solo junta mensajes del mismo número del negocio.
  */
-export function armarLote(pendientes, now = Date.now(), ventanaMs = MEDIA_WINDOW_MS) {
+export function armarLote(pendientes, now = Date.now(), ventanaMs = MEDIA_WINDOW_MS, ventanaTextoMs = textWindowMs()) {
   if (!pendientes.length) return { tipo: 'vacio' };
   const primero = pendientes[0];
   const mismoNumero = (m) => m.phoneNumberId === primero.phoneNumberId;
+
+  // Textos seguidos: se juntan hasta que pase la ventana sin uno nuevo.
+  if (primero.kind === 'text' && ventanaTextoMs > 0) {
+    const lote = [];
+    for (const m of pendientes) {
+      if (!mismoNumero(m)) break;
+      if (m.kind === 'text' || m.kind === 'ignored') { lote.push(m); continue; }
+      // Tocó un botón: se responde ya, con el botón como mensaje principal.
+      if (m.kind === 'interactive') { lote.push(m); return { tipo: 'lote', mensajes: lote }; }
+      break; // fotos/archivos: van en el lote siguiente
+    }
+    if (lote.length < pendientes.length) return { tipo: 'lote', mensajes: lote };
+    const ultimo = Math.max(...lote.map((m) => Number(m.receivedAt) || 0));
+    const falta = ultimo + ventanaTextoMs - now;
+    if (falta > 0) return { tipo: 'esperar', ms: falta };
+    return { tipo: 'lote', mensajes: lote };
+  }
 
   if (!AGRUPABLES.has(primero.kind)) return { tipo: 'lote', mensajes: [primero] };
 
