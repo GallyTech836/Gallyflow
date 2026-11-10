@@ -62,7 +62,14 @@ const INTENCION_REPROGRAMAR = /reprogram|posterg|adelant|(cambi|mov)\w*\s+(de\s+
 const PIDE_PERSONA = /^(hablar_persona|persona|humano|asesor|asesora)$|hablar con (alguien|una persona|un humano|el due[ñn]o|la due[ñn]a|el encargado|la encargada|un asesor|una asesora|el barbero|la estilista)|atenci[oó]n (humana|personalizada)|persona real|\bun humano\b|no quiero (hablar con |que me (atienda|responda) )?(el |un |una )?(bot|boot|robot|asistente|m[aá]quina)|no quiero que (me )?(responda|conteste)|quiero que (me )?(responda|atienda|conteste) (alguien|una persona)/i;
 // Volver atrás a mitad de la reserva.
 const OTRO_PROFESIONAL = /otr[oa]s? (barber[oa]s?|profesional(es)?|persona|estilista|disponible)|cambiar (de |el |la )?(barber[oa]|profesional|estilista)|\bcon otr[oa]\b/i;
-const OTRO_SERVICIO = /otro servicio|cambiar (de |el )?servicio/i;
+const OTRO_SERVICIO = /otro servicio|cambiar (de |el )?servicio|me equivoqu|no era eso/i;
+const ATRAS = /^(atr[aá]s|volver|regresar|retroceder|anterior|paso anterior|volver atr[aá]s|ir atr[aá]s)[.!]*$/i;
+const CUALQUIERA = /cualquier|(el|la) que sea|quien sea|(me )?da igual|(el|la) que est[eé] (libre|disponible)|(el|la) primer[oa]? (libre|disponible)|(el|la) que tenga (tiempo|espacio|lugar)|no importa|indistinto/i;
+// Parece una pregunta (se responde o se deriva; no se toma como elección).
+const ES_PREGUNTA = /\?|^(cu[aá]nto|cu[aá]l|qu[eé]|d[oó]nde|c[oó]mo|cu[aá]ndo|tienen|hacen|hay|aceptan|puedo|se puede|atienden)\b|\b(cu[aá]nto|demora|duraci[oó]n|cuesta|precio)\b/i;
+// Habla de día u hora (eligiendo profesional todavía no hay horarios).
+const HABLA_DE_HORA = /\b(hoy|ma[ñn]ana|tarde|noche|temprano|hora|horario|ahorita|ahora)\b|\d/i;
+const ASIENTE = /^(ok+|okey|oki|s[ií]|dale|listo|bueno|ya|aja|ajá|perfecto|de acuerdo|👍|👌)[\s!.]*$/i;
 const OTRA_FECHA = /otro d[ií]a|otra fecha|ma[ñn]ana/i;
 // Pasos en que el cliente puede preguntar algo sin perder la reserva.
 const PASOS_CON_CONSULTA = new Set([...FLUJOS_CON_LISTA, 'pro_unavailable_today', 'confirming', 'confirming_reschedule']);
@@ -205,6 +212,35 @@ function parsearIndices(texto, total) {
   const unicos = [...new Set(nums)];
   if (unicos.length === 0 || unicos.some((i) => i < 0 || i >= total)) return null;
   return unicos;
+}
+
+// Parte del día escrita por el cliente (para filtrar horarios).
+function franjaDelDia(texto) {
+  const t = sinAcentos(texto);
+  if (/\b(en|por|de|a) la manana\b|\btemprano\b|\bantes de mediodia\b/.test(t)) return { desde: '00:00', hasta: '12:00', nombre: 'en la mañana' };
+  if (/\b(en|por|de|a) la tarde\b|\btardecita\b|\bdespues de almuerzo\b/.test(t)) return { desde: '12:00', hasta: '19:00', nombre: 'en la tarde' };
+  if (/\b(en|por|de|a) la noche\b|\bnochecita\b/.test(t)) return { desde: '19:00', hasta: '24:00', nombre: 'en la noche' };
+  return null;
+}
+
+// Servicio cuyo nombre está completo en lo que escribió el cliente: "barba" → Barba
+// (no "Corte + Barba"), "corte y barba" → Corte + Barba. Si varios calzan, gana el
+// de nombre más largo; empate o ninguno => null.
+const PALABRAS_SUELTAS = new Set(['con', 'del', 'los', 'las', 'para', 'por', 'una', 'uno']);
+function palabrasSignificativas(t) {
+  return sinAcentos(t).replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/)
+    .filter((w) => w.length >= 3 && !PALABRAS_SUELTAS.has(w))
+    .map((w) => (w.length > 4 && w.endsWith('s') ? w.slice(0, -1) : w));
+}
+function servicioExacto(texto, servicios = []) {
+  const delCliente = new Set(palabrasSignificativas(texto));
+  const completos = servicios
+    .map((s) => ({ s, ws: [...new Set(palabrasSignificativas(s?.name))] }))
+    .filter(({ ws }) => ws.length > 0 && ws.every((w) => delCliente.has(w)));
+  if (completos.length === 0) return null;
+  const max = Math.max(...completos.map((x) => x.ws.length));
+  const mejores = completos.filter((x) => x.ws.length === max);
+  return mejores.length === 1 ? mejores[0].s : null;
 }
 
 // Hora escrita por el cliente ("10:30", "9.30", "a las 3", "3pm", "15 hrs") → "HH:MM"
@@ -715,6 +751,12 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     return responder(prefijo(`¿Qué ${tl('appointment')} quieres reprogramar?`, mensajeConCitas(await nombreDelCliente(), citas)), conversation);
   }
   
+  // "Atrás" / "volver": un paso atrás en la reserva.
+  if (ATRAS.test(texto) && conversation.currentFlow !== 'welcome') {
+    const atras = await pasoAtras();
+    if (atras) return atras;
+  }
+
   switch (conversation.currentFlow) {
     case 'welcome': {
       // ── Citas próximas: elegir, reprogramar, cancelar ──
@@ -746,11 +788,13 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         return repetirUltimaCita();
       }
       const nombrado = profesionalNombrado(context.profesionales, texto);
-      if (/^1$|agendar|reservar|\b(una|otra)\s+(cita|reserva|turno)\b/i.test(texto)) {
+      if (/^1$|agendar|reservar|\b(una|otra)\s+(cita|reserva|turno)\b|\bpa(ra)?\s+(hoy|ma[ñn]ana)\b|\b(hay|tienen|tiene)\s+(lugar|espacio|campo|turno|cupo)/i.test(texto)) {
         if (nombrado) return agendarCon(nombrado);
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_service', selectedServices: null, ...SIN_PREFERENCIA });
         return responder(mensajeServicios(context), conversation);
       }
+      // "Quisiera un corte para hoy con Luis": agendar con Luis.
+      if (nombrado && /\b(quiero|quisiera|kiero|necesito|cita|turno|hoy|ma[ñn]ana)\b/i.test(texto)) return agendarCon(nombrado);
       // Preguntas escritas: "¿cuánto cuesta un corte?", "¿tienen alisado?",
       // "precios", "¿dónde están?", "horario"...
       const consulta = respuestaConsultaServicios(texto);
@@ -797,11 +841,28 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         elegidos = [s];
       } else {
         const indices = parsearIndices(texto, servicios.length);
-        // Nombre escrito ("corte"): si coincide con un solo servicio de la lista, se elige.
-        const porNombre = indices ? null : buscarServicios(texto, servicios);
-        if (indices) elegidos = indices.map((i) => servicios[i]);
-        else if (porNombre?.tipo === 'coincidencias' && porNombre.servicios.length === 1) elegidos = porNombre.servicios;
-        else return sinEntenderEnPaso(mensajeServicios(context));
+        if (indices) {
+          elegidos = indices.map((i) => servicios[i]);
+        } else {
+          // "Cambiar de barbero" cuando venía con uno nombrado: se quita la preferencia.
+          if (conversation.preferredStaffId && OTRO_PROFESIONAL.test(texto)) {
+            conversation = await updateConversation(negocioId, phone, { ...SIN_PREFERENCIA });
+            return responder(prefijo(`Listo, elige primero ${context.terms.g('service', 'el', 'la')} ${context.terms.tl('service')} y después con quién.`, mensajeServicios(context)), conversation);
+          }
+          // "el Luis" / "con Luis": agendar con ese profesional.
+          const nombradoAqui = ES_PREGUNTA.test(texto) ? null : profesionalNombrado(context.profesionales, texto);
+          if (nombradoAqui && !conversation.preferredStaffId) return agendarCon(nombradoAqui);
+          // Una pregunta ("¿cuánto demora el tinte?") se responde, no se toma como elección.
+          if (ES_PREGUNTA.test(texto)) return sinEntenderEnPaso(mensajeServicios(context));
+          // Nombre escrito: "barba" elige Barba (no "Corte + Barba"); "corte" con dos
+          // servicios posibles pregunta cuál, solo con esos.
+          const exacto = servicioExacto(texto, servicios);
+          const porNombre = exacto ? null : buscarServicios(texto, servicios);
+          if (exacto) elegidos = [exacto];
+          else if (porNombre?.tipo === 'coincidencias' && porNombre.servicios.length === 1) elegidos = porNombre.servicios;
+          else if (porNombre?.tipo === 'coincidencias') return responder(mensajeCualServicio(porNombre.servicios), conversation);
+          else return sinEntenderEnPaso(mensajeServicios(context));
+        }
       }
       if (profesionalesPara(context, elegidos.map((s) => s.id)).length === 0) {
         const { tl, g } = context.terms;
@@ -846,7 +907,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       const opciones = opcionesCualquiera(pros, context.terms);
       // Número de la lista o nombre escrito ("con Ignacio").
       const profesional = pros[idx] || (/^\d+$/.test(texto) ? null : profesionalNombrado(pros, texto));
-      const cualquiera = profesional ? null : (opciones[idx - pros.length] || (opciones.length === 1 && /cualquier/i.test(texto) ? opciones[0] : null));
+      const cualquiera = profesional ? null : (opciones[idx - pros.length] || (opciones.length === 1 && CUALQUIERA.test(texto) ? opciones[0] : null));
       if (!profesional && !cualquiera) return sinEntenderEnPaso(mensajeProfesionales(pros));
 
       const selectedStaff = profesional
@@ -877,6 +938,16 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     }
 
     case 'choosing_time': {
+      // "en la tarde", "en la noche", "temprano": solo los horarios de esa parte del día.
+      const franja = franjaDelDia(texto);
+      if (franja && !horaEscrita(texto)) {
+        const todas = conversation.availableSlotsCache || [];
+        const enFranja = todas.filter((h) => franja.desde <= h && h < franja.hasta);
+        if (enFranja.length === 0) {
+          return responder(prefijo(`No quedan horarios ${franja.nombre} ese día. Estos son los disponibles:`, mensajeHoras(todas, conversation.selectedDate)), conversation);
+        }
+        return responder(mensajeHorasDe(todas, enFranja, conversation.selectedDate, franja.nombre), conversation);
+      }
       if (/^otrodia$/i.test(texto) || (OTRA_FECHA.test(texto) && !horaEscrita(texto))) {
         const dias = diasParaConversacion(context, conversation);
         conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_date', dateOptionsCache: dias });
@@ -1846,6 +1917,18 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
     if (['choosing_date', 'choosing_time'].includes(flujo) && OTRO_PROFESIONAL.test(texto)) {
       return cambiarProfesional(mensajePaso);
     }
+    // "Me equivoqué, quiero barba": cambia el servicio directo.
+    if (['choosing_extra_service', 'choosing_staff', 'choosing_date', 'choosing_time'].includes(flujo)
+      && /quiero|quisiera|mejor|prefiero|en vez|era|equivoqu|cambi/i.test(texto)) {
+      const nuevo = servicioExacto(texto, serviciosOfrecidos(context));
+      const yaElegidos = serviciosDe(conversation).map((x) => String(x.serviceId));
+      if (nuevo && !yaElegidos.includes(String(nuevo.id)) && profesionalesPara(context, [nuevo.id]).length > 0) {
+        conversation = await updateConversation(negocioId, phone, {
+          selectedServices: [aServicioCita(nuevo)], selectedStaff: null, ...SIN_PREFERENCIA,
+        });
+        return conAvisoDelante(await irAProfesionales(), `Listo, cambié a ${String(nuevo.name || '').trim()}.`);
+      }
+    }
     if (['choosing_extra_service', 'choosing_staff', 'choosing_date', 'choosing_time'].includes(flujo) && OTRO_SERVICIO.test(texto)) {
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'choosing_service', selectedServices: null, selectedStaff: null, ...SIN_PREFERENCIA,
@@ -1853,9 +1936,25 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       return responder(mensajeServicios(context), conversation);
     }
 
+    // "gracias", "ok": no es un error, se vuelve a mostrar el paso.
+    if (/^(muchas\s+)?(gracias|grax)[\s!.]*$/i.test(texto)) return responder(prefijo(voz.deNada(), mensajePaso), conversation);
+    if (ASIENTE.test(texto)) return responder(mensajePaso, conversation);
+
+    // Eligiendo profesional y habla de la hora: primero el profesional.
+    if (flujo === 'choosing_staff' && HABLA_DE_HORA.test(texto) && !ES_PREGUNTA.test(texto)) {
+      return responder(prefijo(`Primero elige con quién y después aparecen los horarios.`, mensajePaso), conversation);
+    }
+
     if (PASOS_CON_CONSULTA.has(flujo)) {
       const info = infoEnReserva(texto);
       if (info) return responder(prefijo(`${info}\n\nSeguimos con tu ${tl('appointment')}:`, mensajePaso), conversation);
+      // Pregunta que el asistente no sabe responder ("¿aceptan QR?"): se deriva, sin contar como error.
+      if (ES_PREGUNTA.test(texto) || /\b(pagar|pago|qr|tarjeta|transferencia|efectivo|estacionamiento|parqueo)\b/i.test(texto)) {
+        const derivar = cierreDeHoy(context, branch)
+          ? 'Esa consulta la responde el equipo cuando volvamos a atender.'
+          : 'Esa consulta la responde el equipo. Si quieres, escribe "persona" y te paso con alguien.';
+        return responder(prefijo(`${derivar}\n\nSeguimos con tu ${tl('appointment')}:`, mensajePaso), conversation);
+      }
     }
 
     const fallos = (conversation.stepMissesFlow === flujo ? Number(conversation.stepMisses) || 0 : 0) + 1;
@@ -1912,11 +2011,26 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       const d = datosDeServicio(s);
       return `• ${String(s.name || '').trim()}${d ? ` — ${d}` : ''}`;
     };
+    // "¿Cuánto me sale?" ya con servicio elegido: el precio de lo elegido, no la lista.
+    const elegidos = serviciosDe(conversation)
+      .map((x) => servicios.find((s) => String(s.id) === String(x.serviceId)))
+      .filter(Boolean);
+    if (r.tipo === 'general' && elegidos.length && !/servicios|lista|cat[aá]logo|precios|todos/i.test(t)) {
+      const conPro = conversation.selectedStaff?.id
+        ? precioServicios(context, serviciosDe(conversation), prosElegidos(context, conversation), {
+          date: conversation.selectedDate, branch: conversation.selectedStaff?.branch || branch || '',
+        })
+        : '';
+      if (conPro) return `${nombresServicios(conversation)}: ${conPro}.`;
+      return elegidos.map(linea).join('\n');
+    }
     if (r.tipo === 'general') {
       const lineas = servicios.slice(0, 8).map(linea);
       if (servicios.length > 8) lineas.push(`… y ${servicios.length - 8} más.`);
       return `${g('service', 'Nuestros', 'Nuestras')} ${tl('services')}:\n${lineas.join('\n')}`;
     }
+    // A mitad de la reserva solo si pregunta claramente por un servicio ("¿hacen alisado?").
+    if (r.tipo === 'sin_resultado' && !/\b(tienen|hacen|ofrecen|realizan)\b/i.test(t)) return null;
     if (r.tipo === 'sin_resultado') return `No encontré «${r.consulta}» entre ${g('service', 'nuestros', 'nuestras')} ${tl('services')}.`;
 
     const encontrados = r.servicios;
@@ -1935,6 +2049,50 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       }
     }
     return respuesta;
+  }
+
+  // Varios servicios posibles para lo escrito ("corte"): solo esos, para elegir.
+  function mensajeCualServicio(candidatos) {
+    const { tl, g } = context.terms;
+    const pregunta = `¿Cuál de ${g('service', 'estos', 'estas')} ${tl('services')}?`;
+    return menuLista({
+      texto: `${pregunta}\n\n${candidatos.map((s) => `• ${s.name} - ${precioServicio(s, context.profesionales)}`).join('\n')}\n\n(Escribe el nombre completo)`,
+      cuerpo: pregunta,
+      boton: cabe(`Ver ${tl('services')}`, 20, 'Ver opciones'),
+      items: candidatos.map((s) => ({ id: `svc:${s.id}`, title: s.name, description: `${precioServicio(s, context.profesionales)} · ${duracionServicio(s)} min`.slice(0, 72) })),
+    });
+  }
+
+  // "Atrás": vuelve un paso. null si en ese paso no aplica.
+  async function pasoAtras() {
+    const flujo = conversation.currentFlow;
+    if (flujo === 'choosing_service') {
+      conversation = await resetConversation(negocioId, phone);
+      return responder(await bienvenida(), conversation);
+    }
+    if (flujo === 'choosing_staff' || flujo === 'choosing_extra_service' || flujo === 'pro_unavailable_today') {
+      conversation = await updateConversation(negocioId, phone, {
+        currentFlow: 'choosing_service', selectedServices: null, selectedStaff: null, ...SIN_PREFERENCIA,
+      });
+      return responder(mensajeServicios(context), conversation);
+    }
+    if (flujo === 'choosing_date' || flujo === 'choosing_time') {
+      const pros = (conversation.staffOptionsIds || [])
+        .map((id) => context.profesionales.find((p) => p.id === id)).filter(Boolean);
+      if (pros.length > 1) {
+        conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_staff', selectedStaff: null, photoPage: 0 });
+        return responder(mensajeProfesionales(pros), conversation);
+      }
+      conversation = await updateConversation(negocioId, phone, {
+        currentFlow: 'choosing_service', selectedServices: null, selectedStaff: null, ...SIN_PREFERENCIA,
+      });
+      return responder(mensajeServicios(context), conversation);
+    }
+    if ((flujo === 'confirming' || flujo === 'awaiting_name') && (conversation.availableSlotsCache || []).length) {
+      conversation = await updateConversation(negocioId, phone, { currentFlow: 'choosing_time', selectedTime: null });
+      return responder(mensajeHoras(conversation.availableSlotsCache, conversation.selectedDate), conversation);
+    }
+    return null;
   }
 
   async function hablarConAlguien() {
@@ -2161,6 +2319,20 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       boton: 'Ver días',
       items: dias.map((d) => ({ title: d.label })),
       page: paginaActual(),
+    });
+  }
+  // Algunas horas de la lista (ej. solo la tarde); los ids siguen siendo la posición
+  // en la lista completa para que el toque elija la hora correcta.
+  function mensajeHorasDe(todas, visibles, fecha, nombre) {
+    const dia = fecha ? fechaLegible(fecha) : '';
+    const titulo = `Horarios ${nombre} para ${dia}:`;
+    return menuLista({
+      texto: `${titulo}\n\n${visibles.map((h) => `${todas.indexOf(h) + 1}. ${h}`).join('\n')}\n\n(Escribe "otro dia" para elegir otra fecha)`,
+      cuerpo: titulo,
+      boton: 'Ver horarios',
+      items: visibles.map((h) => ({ id: String(todas.indexOf(h) + 1), title: h })),
+      fijas: [{ id: 'otrodia', title: '📅 Otro día' }],
+      etiquetaMas: 'Más horarios →',
     });
   }
   function mensajeHoras(slots, fecha) {

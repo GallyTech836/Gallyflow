@@ -30,6 +30,7 @@ export function nombreValido(n) {
 const PREFIJOS_NOMBRE = [
   /^(a|al)\s+nombre\s+del?\s+/i,
   /^(mi\s+nombre\s+es|me\s+llamo|soy|es\s+para|para)\s+/i,
+  /^(mi|su)\s+(hij[oa]|espos[oa]|novi[oa]|amig[oa]|herman[oa]|pap[aá]|mam[aá]|sobrin[oa]|prim[oa]|t[ií][oa]|abuel[oa]|pareja)\s+/i,
   /^(el\s+)?nombre\s*(es)?\s*:\s*/i,
 ];
 const SUFIJOS_NOMBRE = /(\s*,?\s*(por\s+favor|porfa|gracias))+\s*$/i;

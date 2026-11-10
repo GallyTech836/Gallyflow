@@ -25,12 +25,12 @@ export function esMensajeDeAnuncio(texto, referral = null) {
 
 /** ¿Pregunta por precios / servicios? */
 export function pideServicios(texto) {
-  return /^info_servicios$|precio|servicio|cu[aá]nto\s+(cuesta|sale|cobran|vale)|costo|tarifa|cat[aá]logo|lista/i.test(String(texto || ''));
+  return /^info_servicios$|precio|servicio|cu[aá]nto\s+(me\s+|te\s+|le\s+|nos\s+)?(cuesta|sale|cobran|cobra|vale|es)|costo|tarifa|cat[aá]logo|lista/i.test(String(texto || ''));
 }
 
 /** ¿Pregunta por ubicación / horarios? */
 export function pideUbicacion(texto) {
-  return /^info_ubicacion$|ubicaci|direcci|d[oó]nde\s+(est[aá]n|quedan|es)|c[oó]mo\s+llego|mapa|horario|a\s+qu[eé]\s+hora|abren|cierran|atienden/i.test(String(texto || ''));
+  return /^info_ubicacion$|ubicaci|direcci|d[oó]nde\s+(est[aá]n?|quedan?|es|se encuentran?|los encuentro|atienden)|c[oó]mo\s+llego|mapa|horario|a\s+qu[eé]\s+hora|abren|cierran|atienden/i.test(String(texto || ''));
 }
 
 // Mismo criterio que src/shared/location/mapsLink.js (copia intencional).

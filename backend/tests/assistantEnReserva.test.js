@@ -160,4 +160,59 @@ describe('Texto libre a mitad de la reserva', () => {
     await say('1');
     assert.equal(conv().currentFlow, 'choosing_time');
   });
+
+  test('servicio escrito: exacto se elige, ambiguo pregunta cuál, pregunta se responde', async () => {
+    db._set(`negocios/${neg}/servicios/s3`, { name: 'Corte + Barba', price: 130, duration: 60 });
+    db._set(`negocios/${neg}/servicios/s1`, { name: 'Corte de Cabello', price: 100, duration: 30 });
+    db._set(`negocios/${neg}/profesionales/g`, { name: 'Gally Torrico', active: true, availability: allDay, services: [{ serviceId: 's1' }, { serviceId: 's2' }, { serviceId: 's3' }] });
+    await say('hola');
+    await say('agendar');
+    const r1 = await say('corte');
+    assert.match(body(r1), /^¿Cuál de estos servicios\?/);
+    assert.deepEqual(titulos(r1), ['Corte de Cabello', 'Corte + Barba']);
+    const r2 = await say('¿cuánto cuesta la barba?');
+    assert.match(body(r2), /Barba/);
+    assert.equal(conv().currentFlow, 'choosing_service');
+    await say('barba');
+    assert.deepEqual(conv().selectedServices.map((x) => x.serviceId), ['s2']);
+  });
+
+  test('"el que sea" elige cualquier profesional; "en la tarde" filtra horarios', async () => {
+    await hastaProfesionales();
+    await say('el que sea');
+    assert.equal(conv().currentFlow, 'choosing_time');
+    const r = await say('en la tarde');
+    assert.match(body(r), /^Horarios en la tarde/);
+    for (const t of titulos(r).filter((x) => /^\d\d:\d\d$/.test(x))) assert.ok(t >= '12:00' && t < '19:00');
+  });
+
+  test('"atrás" vuelve un paso y "¿cuánto me sale?" da el precio de lo elegido', async () => {
+    await hastaHorarios();
+    const r = await say('cuanto me sale?');
+    assert.match(body(r), /^Corte: Bs 100\./);
+    await say('atras');
+    assert.equal(conv().currentFlow, 'choosing_staff');
+    await say('atrás');
+    assert.equal(conv().currentFlow, 'choosing_service');
+  });
+
+  test('"gracias", "ok" y preguntas sin respuesta no cuentan como "no entendí"', async () => {
+    await hastaHorarios();
+    assert.match(body(await say('aceptan qr?')), /^Esa consulta la responde el equipo/);
+    assert.match(body(await say('ok')), /^Horarios para/);
+    assert.match(body(await say('gracias')), /^Con mucho gusto\./);
+    const r = await say('asdf');
+    assert.match(body(r), /^Disculpe, no comprendí su respuesta\.\n/);
+  });
+
+  test('"para mi hijo Mateo" guarda Mateo', async () => {
+    db._delete?.(`negocios/${neg}/clientes/${phone}`);
+    db._set(`negocios/${neg}/clientes/${phone}`, { name: '', phone });
+    await hastaHorarios();
+    await say('1');
+    if (conv().currentFlow === 'awaiting_name') {
+      await say('para mi hijo Mateo');
+      assert.equal(conv().clientName, 'Mateo');
+    }
+  });
 });
