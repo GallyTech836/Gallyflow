@@ -10,6 +10,9 @@ import { setPinHash } from '../services/finance/pinStore.js';
 import { buildLockPatch } from '../services/finance/pinLockModules.js';
 import { createNegocio, CreateNegocioError, resolvePassword } from '../services/negocios/createNegocio.js';
 import {
+  DeleteNegocioError, parseDays, scheduleNegocioDeletion, cancelNegocioDeletion, deleteNegocioNow,
+} from '../services/negocios/deleteNegocio.js';
+import {
   RegistroError, listSolicitudes, updateSolicitud, createFromSolicitud,
 } from '../services/registro/registroService.js';
 import {
@@ -266,6 +269,59 @@ router.post('/solicitudes/:id/crear', identifyRequester, requireSuperAdmin, asyn
     return res.status(201).json(result);
   } catch (err) {
     return sendRegistroError(res, err, 'crear negocio desde solicitud');
+  }
+});
+
+// ───────────── Eliminar negocio (ahora o programado) ─────────────
+
+// Para borrar hay que haber ingresado la contraseña hace poco: el panel
+// reautentica al Super Admin y manda un token nuevo (auth_time reciente).
+const REAUTH_MAX_SECONDS = 5 * 60;
+function requireRecentLogin(req, res, next) {
+  const authTime = Number(req.actor?.authTime) || 0;
+  if (!authTime || Date.now() / 1000 - authTime > REAUTH_MAX_SECONDS) {
+    return res.status(401).json({ error: 'Vuelve a ingresar tu contraseña para confirmar.', code: 'REAUTH_REQUIRED' });
+  }
+  next();
+}
+
+function sendDeleteError(res, err, where) {
+  if (err instanceof DeleteNegocioError) return res.status(err.status).json({ error: err.message });
+  logger.error(`[superadmin] ${where}:`, err.message);
+  return res.status(500).json({ error: 'No se pudo completar la eliminación.' });
+}
+
+// POST /api/superadmin/negocios/:negocioId/eliminar  { days, confirm }
+// days = 0 -> borra ya. 1..90 -> suspende y programa el borrado.
+// confirm debe ser exactamente el ID del negocio.
+router.post('/negocios/:negocioId/eliminar', identifyRequester, requireSuperAdmin, requireRecentLogin, async (req, res) => {
+  const { negocioId } = req.params;
+  try {
+    if (String(req.body?.confirm || '').trim() !== negocioId) {
+      return res.status(400).json({ error: `Escribe exactamente "${negocioId}" para confirmar.` });
+    }
+    const days = parseDays(req.body?.days);
+    if (days === 0) {
+      const summary = await deleteNegocioNow(negocioId);
+      logger.info(`[superadmin] Negocio eliminado: ${negocioId}`);
+      return res.status(200).json({ deleted: true, summary });
+    }
+    const deletion = await scheduleNegocioDeletion(negocioId, days, { by: req.actor.email });
+    logger.info(`[superadmin] Borrado programado: ${negocioId} para ${deletion.scheduledFor}`);
+    return res.status(200).json({ deleted: false, deletion });
+  } catch (err) {
+    return sendDeleteError(res, err, 'eliminar negocio');
+  }
+});
+
+// DELETE /api/superadmin/negocios/:negocioId/eliminar -> cancela el borrado programado
+router.delete('/negocios/:negocioId/eliminar', identifyRequester, requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await cancelNegocioDeletion(req.params.negocioId);
+    logger.info(`[superadmin] Borrado cancelado: ${req.params.negocioId}`);
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    return sendDeleteError(res, err, 'cancelar eliminación');
   }
 });
 

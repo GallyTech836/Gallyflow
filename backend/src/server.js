@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import { startReminderScheduler } from '../services/reminders/reminderScheduler.js';
 import { maybeRunLegacyPasswordMigration } from '../services/staff/legacyPasswordMigration.js';
 import { startInboxSweeper } from '../services/whatsapp/inboundQueue.js';
+import { startDeletionSweeper } from '../services/negocios/deleteNegocio.js';
 
 const PORT = process.env.PORT || 3000;
 
@@ -18,4 +19,6 @@ app.listen(PORT, () => {
   maybeRunLegacyPasswordMigration();
   // Cola de WhatsApp: retoma mensajes pendientes (reinicio, otra instancia).
   startInboxSweeper();
+  // Negocios con borrado programado desde Super Admin: revisa cada hora.
+  startDeletionSweeper();
 });

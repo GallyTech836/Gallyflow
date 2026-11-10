@@ -21,7 +21,7 @@ export async function identifyRequester(req, res, next) {
       const decoded = await getAuth().verifyIdToken(token);
             // Profesionales: token con claim rol 'barber'. Todo lo demás es admin.
             const rol = decoded.rol === 'barber' ? 'barber' : 'admin';
-            req.actor = { uid: decoded.uid, email: decoded.email, rol, negocioId: decoded.negocioId || null, sid: decoded.sid || null, verified: true };
+            req.actor = { uid: decoded.uid, email: decoded.email, rol, negocioId: decoded.negocioId || null, sid: decoded.sid || null, verified: true, authTime: decoded.auth_time || null };
       return next();
     } catch (err) {
       // Error temporal al verificar (ej. no se pudieron bajar las claves de
