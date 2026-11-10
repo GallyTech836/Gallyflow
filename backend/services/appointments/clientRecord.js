@@ -26,6 +26,33 @@ export function nombreValido(n) {
   return t.length >= 2 && /\p{L}/u.test(t) && !NO_ES_NOMBRE.test(t);
 }
 
+// Quita lo que no es el nombre: "A nombre de Joel" → "Joel", "soy joel perez" → "Joel Perez".
+const PREFIJOS_NOMBRE = [
+  /^(a|al)\s+nombre\s+del?\s+/i,
+  /^(mi\s+nombre\s+es|me\s+llamo|soy|es\s+para|para)\s+/i,
+  /^(el\s+)?nombre\s*(es)?\s*:\s*/i,
+];
+const SUFIJOS_NOMBRE = /(\s*,?\s*(por\s+favor|porfa|gracias))+\s*$/i;
+
+export function limpiarNombre(texto) {
+  // Espacio final para que "a nombre de" sin nombre también se quite y quede vacío.
+  let n = `${String(texto || '').trim().replace(/\s+/g, ' ')} `;
+  let cambio = true;
+  while (cambio) {
+    cambio = false;
+    for (const re of PREFIJOS_NOMBRE) {
+      const nuevo = n.replace(re, '').trim();
+      if (nuevo !== n) { n = nuevo; cambio = true; }
+    }
+  }
+  n = n.replace(SUFIJOS_NOMBRE, '');
+  n = n.replace(/^[\s"'«»:,.\-]+|[\s"'«»:,.!?\-]+$/g, '');
+  return n
+    .split(' ')
+    .map((p) => (p ? p[0].toLocaleUpperCase('es') + p.slice(1) : p))
+    .join(' ');
+}
+
 // Formatos en que puede estar guardado el teléfono en `clientes`.
 export function variantesTelefono(phoneDigits) {
   const set = new Set([phoneDigits, `+${phoneDigits}`]);

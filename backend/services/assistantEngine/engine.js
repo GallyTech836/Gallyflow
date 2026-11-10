@@ -15,7 +15,7 @@ import { getAvailableSlots } from '../appointments/availability.js';
 import { createAppointment, createPendingAppointment } from '../appointments/createAppointment.js';
 import { getOrCreateConversation, updateConversation, resetConversation } from '../appointments/conversationState.js';
 import { professionalCanDo, PENDING_ID } from '../appointments/pendingModel.js';
-import { upsertClientFromPhone, findClientByPhone, variantesTelefono, nombreValido } from '../appointments/clientRecord.js';
+import { upsertClientFromPhone, findClientByPhone, variantesTelefono, nombreValido, limpiarNombre } from '../appointments/clientRecord.js';
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
 import { findUpcomingCitas, rescheduleAppointment, faltaSuficiente } from '../appointments/manageAppointment.js';
 import { sendNotification } from '../notificationService.js';
@@ -865,13 +865,14 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     }
 
     case 'awaiting_name': {
-      if (!nombreValido(texto)) {
+      const nombre = limpiarNombre(texto);
+      if (!nombreValido(nombre)) {
         return responder('Escribe tu nombre para la reserva (ej: Juan Pérez).', conversation);
       }
 
       conversation = await updateConversation(negocioId, phone, {
         currentFlow: 'confirming',
-        clientName: texto,
+        clientName: nombre,
       });
       return responder(mensajeResumen(conversation), conversation);
     }
