@@ -41,7 +41,7 @@ import ClientProfileModal from '../shared/clients/ClientProfileModal';
 import { checkStaffUsername, setStaffPassword, revokeStaffSessions } from '../shared/staff/staffApi';
 import { createProfessional, createBranch, updateBranch } from '../shared/negocioPlan/quotaApi';
 import Avatar, { hasRealAvatar } from '../shared/avatar/Avatar';
-import { useNotifications, notify, NotificationType } from '../shared/notifications';
+import { useNotifications, notify, NotificationType, NotificationPrompt } from '../shared/notifications';
 import SettingsPage from './settings';
 import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
 import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars';
@@ -156,7 +156,7 @@ const { logout } = useAuth();
   const ServiceIcon = getServiceIcon(businessProfile.type);
   const { isBlocked, status: negocioStatus, statusKey } = useNegocioStatus(negocioId);
   const supportUrl = useSupportContact(isBlocked);
-  useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
+  const notifPrompt = useNotifications({ uid: user?.uid, rol: 'admin', negocioId });
   // Módulos bloqueados con PIN (Super Admin). Un desbloqueo abre todos.
   const pinLock = usePinLock(negocioId);
 console.log('[ADMIN] negocioId:', negocioId);
@@ -2646,6 +2646,7 @@ const { heroConfig } = useHeroConfig(negocioId);
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
+    <NotificationPrompt {...notifPrompt} />
     {negocioId && <SubscriptionNoticeModal refreshKey={statusKey} />}
     {/* h-dvh: alto real visible (100vh en algunos navegadores de tablet/celular
         no coincide con lo visible y dejaba una franja blanca abajo). */}

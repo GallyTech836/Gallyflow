@@ -6,14 +6,46 @@
 // Inicializa OneSignal, pide permiso de notificaciones, obtiene el
 // subscriptionId, y lo registra en el backend vía notificationApi.
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import OneSignal from 'react-onesignal';
 import { registerDevice, unregisterDevice } from './notificationApi';
 
 const ONESIGNAL_APP_ID = 'b9672f3e-256b-4fb9-970d-c016944a94e2';
 
+// iPhone/iPad: Safari solo muestra el aviso de permiso si se pide dentro de
+// un toque del usuario. Pedirlo solo al iniciar sesión se ignora sin error.
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 export function useNotifications({ uid, rol, negocioId }) {
   const initialized = useRef(false);
+  const ready = useRef(false);
+  // true -> mostrar el botón "Activar notificaciones" (solo iOS, permiso sin pedir).
+  const [needsPermission, setNeedsPermission] = useState(false);
+
+  // Registra este dispositivo en el backend (permiso ya concedido).
+  const subscribe = useCallback(async () => {
+    // Si el permiso está dado pero la suscripción quedó desactivada
+    // (opt-out), se reactiva.
+    if (OneSignal.Notifications.permission && !OneSignal.User.PushSubscription.optedIn) {
+      await OneSignal.User.PushSubscription.optIn();
+    }
+
+    // Al aceptar el permiso por primera vez, OneSignal crea la suscripción
+    // unos segundos después: esperamos el ID en vez de rendirnos.
+    const oneSignalId = await waitForSubscriptionId();
+    if (!oneSignalId) {
+      console.warn('[useNotifications] No se obtuvo subscriptionId (¿permiso denegado?).');
+      return;
+    }
+
+    const result = await registerDevice({ uid, rol, negocioId, oneSignalId });
+    if (!result?.ok) {
+      console.warn('[useNotifications] El backend no confirmó el registro:', result);
+    }
+  }, [uid, rol, negocioId]);
 
   useEffect(() => {
     // No hacer nada si falta algún dato del usuario todavía (ej. mientras
@@ -31,33 +63,44 @@ export function useNotifications({ uid, rol, negocioId }) {
           notificationClickHandlerMatch: 'origin',
           notificationClickHandlerAction: 'navigate',
         });
-        await OneSignal.Notifications.requestPermission();
+        ready.current = true;
 
-        // Si el permiso está dado pero la suscripción quedó desactivada
-        // (opt-out), se reactiva.
-        if (OneSignal.Notifications.permission && !OneSignal.User.PushSubscription.optedIn) {
-          await OneSignal.User.PushSubscription.optIn();
-        }
+        // En Safari normal (sin instalar) iOS no permite notificaciones.
+        if (!OneSignal.Notifications.isPushSupported()) return;
 
-        // Al aceptar el permiso por primera vez, OneSignal crea la suscripción
-        // unos segundos después: esperamos el ID en vez de rendirnos.
-        const oneSignalId = await waitForSubscriptionId();
-        if (!oneSignalId) {
-          console.warn('[useNotifications] No se obtuvo subscriptionId (¿permiso denegado?).');
+        const permission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+        if (permission === 'default' && isIOS()) {
+          // Se pide desde el botón (requestPermission).
+          setNeedsPermission(true);
           return;
         }
 
-        const result = await registerDevice({ uid, rol, negocioId, oneSignalId });
-        if (!result?.ok) {
-          console.warn('[useNotifications] El backend no confirmó el registro:', result);
+        if (permission === 'default') {
+          await OneSignal.Notifications.requestPermission();
         }
+        await subscribe();
       } catch (err) {
         console.error('[useNotifications] Error al configurar notificaciones:', err);
       }
     }
 
     setup();
-  }, [uid, rol, negocioId]);
+  }, [uid, rol, negocioId, subscribe]);
+
+  // Llamar directo desde el onClick (sin await antes): iOS exige el toque.
+  const requestPermission = useCallback(() => {
+    if (!ready.current) return;
+    setNeedsPermission(false);
+    OneSignal.Notifications.requestPermission()
+      .then(() => {
+        if (OneSignal.Notifications.permission) return subscribe();
+      })
+      .catch((err) => console.error('[useNotifications] Error al pedir permiso:', err));
+  }, [subscribe]);
+
+  const dismiss = useCallback(() => setNeedsPermission(false), []);
+
+  return { needsPermission, requestPermission, dismiss };
 }
 
 function waitForSubscriptionId(timeoutMs = 15000) {

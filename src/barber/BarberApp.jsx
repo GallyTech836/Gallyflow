@@ -40,7 +40,7 @@ import { buildPersonalBookingUrl } from '../shared/booking/personalLink';
 import { STATUS } from '../shared/appointments/statusModel';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
 import { getServicesFromCita } from '../shared/appointments/serviceSelection';
-import { useNotifications, notify, NotificationType } from '../shared/notifications';
+import { useNotifications, notify, NotificationType, NotificationPrompt } from '../shared/notifications';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
 import { BarberMonthGrid, BarberYearCards } from '../shared/calendar/BarberCalendars';
@@ -291,7 +291,7 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
   const todayLocalStr = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; })();
-  useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
+  const notifPrompt = useNotifications({ uid: barberUser?.id, rol: 'barber', negocioId });
 console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const { servicios: services } = useServicios(negocioId);
 
@@ -1316,6 +1316,7 @@ const fetchByDate = async (subcollection, date) => {
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     {confirmDialog}
+    <NotificationPrompt {...notifPrompt} />
     <div className={`min-h-screen bg-nexus-background text-nexus-text flex flex-col font-sans select-none ${showRegistrarBar ? 'pb-40 md:pb-24 lg:pb-0' : 'pb-24 md:pb-0'}`}>
       
       {/* HEADER SUPERIOR */}

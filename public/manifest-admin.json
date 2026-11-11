@@ -1,8 +1,8 @@
 {
     "name": "Nexus Admin",
     "short_name": "Nexus Admin",
-    "start_url": "/admin",
-    "scope": "/admin",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#07080D",
     "theme_color": "#07080D",
