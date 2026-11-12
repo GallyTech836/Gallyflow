@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Globe, Package, LogOut, ImagePlus, ClipboardList, Filter } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Package, LogOut, ImagePlus, ClipboardList, Filter } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -57,6 +57,7 @@ import { priceWithPromotions, promoInputsChanged } from '../shared/promotions/ci
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
+import ShareLinkMenu from '../shared/qr/ShareLinkMenu';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
 import RegistrosPanel from '../shared/registros/RegistrosPanel';
 import RegistrarServicioBar from '../shared/registros/RegistrarServicioBar';
@@ -3023,16 +3024,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               </label>
 
               {negocioId && (
-                <a
-                  href={buildPublicBookingUrl(negocioId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Abrir página pública"
-                  aria-label="Abrir página pública de reservas"
-                  className="inline-flex h-10 w-10 items-center justify-center bg-nexus-surface border border-nexus-border hover:border-nexus-primary/60 hover:bg-nexus-surface-hover text-nexus-text-secondary hover:text-nexus-text rounded-lg shrink-0 transition-colors cursor-pointer"
-                >
-                  <Globe className="w-[18px] h-[18px]" />
-                </a>
+                <ShareLinkMenu url={buildPublicBookingUrl(negocioId)} name={businessName} />
               )}
 
               {agendaTab && canUseCapability('registroServicios') && (
