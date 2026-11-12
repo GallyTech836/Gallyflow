@@ -96,13 +96,22 @@ export default function AppointmentCreateModal({
   // ── Derivados ──────────────────────────────────────────────────────
   const detectedCountry = useMemo(() => detectPhoneCountry(draft.phone), [draft.phone]);
 
+  // Resultados del buscador: solo después de escribir algo y como máximo
+  // MAX_CLIENT_RESULTS. Dibujar la lista completa (cientos de clientes) al
+  // enfocar el buscador hacía lento el modal en iPhone.
+  const MAX_CLIENT_RESULTS = 20;
+  const clientQuery = clientSearch.trim().toLowerCase();
   const filteredClients = useMemo(() => {
-    if (!clientSearch || !clients.length) return clients;
-    return clients.filter(c =>
-      c?.name?.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      c?.phone?.includes(clientSearch)
-    );
-  }, [clientSearch, clients]);
+    if (!clientQuery || !clients.length) return [];
+    const out = [];
+    for (const c of clients) {
+      if (c?.name?.toLowerCase().includes(clientQuery) || c?.phone?.includes(clientQuery)) {
+        out.push(c);
+        if (out.length >= MAX_CLIENT_RESULTS) break;
+      }
+    }
+    return out;
+  }, [clientQuery, clients]);
 
   // Servicios visibles ese día de la semana. Si un servicio no tiene
   // availableDays configurado (o viene vacío), se considera visible todos
@@ -229,7 +238,7 @@ export default function AppointmentCreateModal({
         <>
           <Button variant="secondary" onClick={onClose} fullWidth className="sm:w-auto">Cancelar</Button>
           <Button type="submit" form={formId} loading={submitting} disabled={noClient} fullWidth className="sm:w-auto">
-            Confirmar reserva
+            {submitting ? 'Guardando…' : 'Confirmar reserva'}
           </Button>
         </>
       )}
@@ -296,7 +305,7 @@ export default function AppointmentCreateModal({
           </div>
 
           {/* Resultados de búsqueda (en el flujo, para que no se corten dentro de la ventana) */}
-          {!isNewClient && showClientList && clients.length > 0 && !selectedClient && (
+          {!isNewClient && showClientList && clientQuery && clients.length > 0 && !selectedClient && (
             <div className="max-h-52 divide-y divide-nexus-border overflow-y-auto rounded-lg border border-nexus-border bg-nexus-surface">
               {filteredClients.map(c => (
                 <button

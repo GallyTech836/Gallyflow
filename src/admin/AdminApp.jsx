@@ -4,7 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContai
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
 import { auth, db } from '../firebase/config';
-import { doc, setDoc, addDoc, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
+import { doc, setDoc, addDoc, writeBatch, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
 import { paymentStampFields } from '../shared/appointments/paymentStamp';
 import CashCard from './cash/CashCard';
@@ -1710,18 +1710,19 @@ const { heroConfig } = useHeroConfig(negocioId);
     if (!check.isValid) { triggerToast(check.message, 'error'); return; }
     if (!(await confirmOutsideHours({ date: draft.date, time: draft.time, duration: totalDuration, professionalId: targetProfessionalId }))) return;
 
+    // Cliente: si se eligió de la lista (draft.clientId) se usa ESE cliente; antes
+    // se buscaba de nuevo por nombre y, con dos clientes del mismo nombre, la cita
+    // podía quedar en la ficha del otro. Sin clientId, se busca por nombre o se crea.
     const phoneId = (draft.phone || 'sin-telefono').replace(/[^0-9]/g, '') || 'sin-telefono';
-    let clientObj = clients.find(c => c.name.toLowerCase() === draft.clientName.toLowerCase());
-    if (clientObj) {
-      clientObj = { ...clientObj, visits: (clientObj.visits || 0) + 1, lastVisit: draft.date };
-    } else {
-      clientObj = {
-        id: phoneId, name: draft.clientName, phone: draft.phone || 'N/A',
-        visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: pricedServices[0]?.serviceName || 'N/A'
-      };
-    }
-    try { await setDoc(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true }); }
-    catch (err) { triggerToast(`Error al guardar ${g('client', 'el', 'la')} ${tl('client')}: ` + err.message, 'error'); }
+    const byId = draft.clientId ? clients.find(c => c.id === draft.clientId) : null;
+    const byName = byId ? null : clients.find(c => (c.name || '').toLowerCase() === (draft.clientName || '').trim().toLowerCase());
+    const existingClient = byId || byName;
+    const clientObj = existingClient
+      ? { ...existingClient, visits: (existingClient.visits || 0) + 1, lastVisit: draft.date }
+      : {
+          id: draft.clientId || phoneId, name: draft.clientName, phone: draft.phone || 'N/A',
+          visits: 1, totalSpent: 0, lastVisit: draft.date, favoriteService: pricedServices[0]?.serviceName || 'N/A'
+        };
 
     const currentBranchObj = branches.find(b => b.name === selectedBranch) || branches[0];
 
@@ -1745,22 +1746,36 @@ const { heroConfig } = useHeroConfig(negocioId);
       notes: draft.notes || '', createdAt: nowIso, updatedAt: nowIso
     };
 
-    try {
-      const citaRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
-      bumpCitasTick();
-      if (targetProfessionalId === 'pending') {
-        // El backend asigna si hay UN solo candidato, o avisa solo a los candidatos.
-        processPendingCita(negocioId, citaRef.id).then((r) => {
-          if (!r) notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, undefined, []);
-        });
-      } else {
-        notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
-        // Ese profesional se ocupó: puede que una Pendiente ya tenga un único candidato.
-        reevaluatePending(negocioId, reservationObj.date);
-      }
-    } catch (err) { triggerToast('Error al guardar: ' + err.message, 'error'); return; }
+    // Cliente y cita en UNA sola escritura (un viaje al servidor en vez de dos, y
+    // nunca queda uno guardado sin el otro). El id de la cita se genera antes
+    // para poder avisar al backend cuando termine.
+    const citaRef = doc(collection(db, 'negocios', negocioId, 'citas'));
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'negocios', negocioId, 'clientes', clientObj.id), clientObj, { merge: true });
+    batch.set(citaRef, reservationObj);
 
+    // El modal se cierra ya: la agenda (onSnapshot) muestra la cita al instante
+    // aunque el servidor todavía no confirme. Los avisos esperan a la confirmación,
+    // porque el backend necesita que la cita exista para procesarla.
+    const commit = batch.commit();
     setActiveModal(null);
+    commit
+      .then(() => {
+        bumpCitasTick();
+        if (targetProfessionalId === 'pending') {
+          // El backend asigna si hay UN solo candidato, o avisa solo a los candidatos.
+          processPendingCita(negocioId, citaRef.id).then((r) => {
+            if (!r) notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, undefined, []);
+          });
+        } else {
+          notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { negocioId, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
+          // Ese profesional se ocupó: puede que una Pendiente ya tenga un único candidato.
+          reevaluatePending(negocioId, reservationObj.date);
+        }
+      })
+      .catch((err) => {
+        triggerToast(`No se pudo guardar ${g('appointment', 'el', 'la')} ${tl('appointment')} de ${reservationObj.clientName}: ` + err.message, 'error');
+      });
   };
 
   // Candidatos para asignar manualmente una Pendiente: activos + hacen el servicio
