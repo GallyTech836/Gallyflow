@@ -96,29 +96,26 @@ export default function AppointmentCreateModal({
   // ── Derivados ──────────────────────────────────────────────────────
   const detectedCountry = useMemo(() => detectPhoneCountry(draft.phone), [draft.phone]);
 
-  // Resultados del buscador, como máximo MAX_CLIENT_RESULTS. Sin escribir nada
-  // se muestran los RECENT_CLIENTS más recientes (por última visita). Dibujar
-  // la lista completa (cientos de clientes) hacía lento el modal en iPhone.
-  const MAX_CLIENT_RESULTS = 20;
-  const RECENT_CLIENTS = 3;
+  // Lista del buscador: clientes más recientes primero (por última visita) y
+  // como máximo MAX_CLIENT_RESULTS, con o sin texto. Dibujar la lista completa
+  // (cientos de clientes) de golpe hacía lento el modal en iPhone.
+  const MAX_CLIENT_RESULTS = 50;
   const clientQuery = clientSearch.trim().toLowerCase();
+  const clientsByRecent = useMemo(
+    () => [...clients].sort((a, b) => String(b?.lastVisit || '').localeCompare(String(a?.lastVisit || ''))),
+    [clients]
+  );
   const filteredClients = useMemo(() => {
-    if (!clients.length) return [];
-    if (!clientQuery) {
-      return clients
-        .filter(c => c?.lastVisit)
-        .sort((a, b) => String(b.lastVisit).localeCompare(String(a.lastVisit)))
-        .slice(0, RECENT_CLIENTS);
-    }
     const out = [];
-    for (const c of clients) {
-      if (c?.name?.toLowerCase().includes(clientQuery) || c?.phone?.includes(clientQuery)) {
+    for (const c of clientsByRecent) {
+      if (!clientQuery || c?.name?.toLowerCase().includes(clientQuery) || c?.phone?.includes(clientQuery)) {
         out.push(c);
         if (out.length >= MAX_CLIENT_RESULTS) break;
       }
     }
     return out;
-  }, [clientQuery, clients]);
+  }, [clientQuery, clientsByRecent]);
+  const hasMoreClients = !clientQuery && clients.length > filteredClients.length;
 
   // Servicios visibles ese día de la semana. Si un servicio no tiene
   // availableDays configurado (o viene vacío), se considera visible todos
@@ -312,11 +309,8 @@ export default function AppointmentCreateModal({
           </div>
 
           {/* Resultados de búsqueda (en el flujo, para que no se corten dentro de la ventana) */}
-          {!isNewClient && showClientList && (clientQuery || filteredClients.length > 0) && clients.length > 0 && !selectedClient && (
+          {!isNewClient && showClientList && clients.length > 0 && !selectedClient && (
             <div className="max-h-52 divide-y divide-nexus-border overflow-y-auto rounded-lg border border-nexus-border bg-nexus-surface">
-              {!clientQuery && (
-                <p className="px-3 pt-2 pb-1 text-xs font-semibold text-nexus-text-muted">Recientes</p>
-              )}
               {filteredClients.map(c => (
                 <button
                   type="button"
@@ -341,6 +335,9 @@ export default function AppointmentCreateModal({
               ))}
               {filteredClients.length === 0 && (
                 <p className="p-3 text-center text-sm text-nexus-text-muted">No se encontraron {terms.tl('clients')}</p>
+              )}
+              {hasMoreClients && (
+                <p className="p-3 text-center text-xs text-nexus-text-muted">Escribe para buscar entre {terms.g('client', 'los', 'las')} {clients.length} {terms.tl('clients')}</p>
               )}
             </div>
           )}
