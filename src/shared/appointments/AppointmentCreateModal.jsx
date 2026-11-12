@@ -96,13 +96,20 @@ export default function AppointmentCreateModal({
   // ── Derivados ──────────────────────────────────────────────────────
   const detectedCountry = useMemo(() => detectPhoneCountry(draft.phone), [draft.phone]);
 
-  // Resultados del buscador: solo después de escribir algo y como máximo
-  // MAX_CLIENT_RESULTS. Dibujar la lista completa (cientos de clientes) al
-  // enfocar el buscador hacía lento el modal en iPhone.
+  // Resultados del buscador, como máximo MAX_CLIENT_RESULTS. Sin escribir nada
+  // se muestran los RECENT_CLIENTS más recientes (por última visita). Dibujar
+  // la lista completa (cientos de clientes) hacía lento el modal en iPhone.
   const MAX_CLIENT_RESULTS = 20;
+  const RECENT_CLIENTS = 3;
   const clientQuery = clientSearch.trim().toLowerCase();
   const filteredClients = useMemo(() => {
-    if (!clientQuery || !clients.length) return [];
+    if (!clients.length) return [];
+    if (!clientQuery) {
+      return clients
+        .filter(c => c?.lastVisit)
+        .sort((a, b) => String(b.lastVisit).localeCompare(String(a.lastVisit)))
+        .slice(0, RECENT_CLIENTS);
+    }
     const out = [];
     for (const c of clients) {
       if (c?.name?.toLowerCase().includes(clientQuery) || c?.phone?.includes(clientQuery)) {
@@ -305,8 +312,11 @@ export default function AppointmentCreateModal({
           </div>
 
           {/* Resultados de búsqueda (en el flujo, para que no se corten dentro de la ventana) */}
-          {!isNewClient && showClientList && clientQuery && clients.length > 0 && !selectedClient && (
+          {!isNewClient && showClientList && (clientQuery || filteredClients.length > 0) && clients.length > 0 && !selectedClient && (
             <div className="max-h-52 divide-y divide-nexus-border overflow-y-auto rounded-lg border border-nexus-border bg-nexus-surface">
+              {!clientQuery && (
+                <p className="px-3 pt-2 pb-1 text-xs font-semibold text-nexus-text-muted">Recientes</p>
+              )}
               {filteredClients.map(c => (
                 <button
                   type="button"
