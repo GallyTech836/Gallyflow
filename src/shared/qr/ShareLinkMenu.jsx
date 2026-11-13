@@ -55,13 +55,33 @@ function slugFile(name) {
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'reservas';
 }
 
-export function QRModal({ open, onClose, url, name, title = 'QR de reservas' }) {
-  const canvasRef = useRef(null);
-  const [copied, setCopied] = useState(false);
+// Celular o tablet (pantalla táctil): ahí se usa el menú de compartir del sistema.
+const isTouchDevice = () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+const isIOS = () => typeof navigator !== 'undefined'
+  && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
+export function QRModal({ open, onClose, url, name, title = 'QR de reservas' }) {
+  const [copied, setCopied] = useState(false);
+  const [image, setImage] = useState(null); // { dataUrl, file }
+  const [showSaveHint, setShowSaveHint] = useState(false);
+
+  // La imagen se prepara al abrir: iOS solo deja compartir si la acción ocurre
+  // justo después del toque, sin esperar a generar el PNG.
   useEffect(() => {
-    if (open && url && canvasRef.current) drawQR(canvasRef.current, url, 560);
-  }, [open, url]);
+    if (!open || !url) return undefined;
+    let cancelled = false;
+    setShowSaveHint(false);
+    const canvas = document.createElement('canvas');
+    drawQR(canvas, url, 1200, name || '');
+    const dataUrl = canvas.toDataURL('image/png');
+    setImage({ dataUrl, file: null });
+    canvas.toBlob((blob) => {
+      if (cancelled || !blob) return;
+      const file = new File([blob], `qr-${slugFile(name)}.png`, { type: 'image/png' });
+      setImage({ dataUrl, file });
+    }, 'image/png');
+    return () => { cancelled = true; };
+  }, [open, url, name]);
 
   const handleCopy = async () => {
     if (await copyText(url)) {
@@ -70,29 +90,62 @@ export function QRModal({ open, onClose, url, name, title = 'QR de reservas' }) 
     }
   };
 
-  const handleDownload = () => {
-    const canvas = document.createElement('canvas');
-    drawQR(canvas, url, 1200, name || '');
+  const downloadWithLink = () => {
     const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
+    a.href = image.dataUrl;
     a.download = `qr-${slugFile(name)}.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
+  const handleDownload = () => {
+    if (!image) return undefined;
+    const file = image.file;
+    // Celular/tablet: hoja de compartir con la imagen (Guardar imagen, WhatsApp, imprimir...).
+    // share() se llama sin esperas antes, para no perder el permiso del toque en iOS.
+    if (isTouchDevice() && file && navigator.canShare?.({ files: [file] })) {
+      return navigator.share({ files: [file], title: name ? `QR de ${name}` : 'QR de reservas' })
+        .catch((err) => {
+          if (err?.name !== 'AbortError') setShowSaveHint(true);
+        });
+    }
+    // iPhone sin compartir archivos (o app instalada): guardar con pulsación larga.
+    if (isIOS()) {
+      setShowSaveHint(true);
+      return undefined;
+    }
+    downloadWithLink();
+    return undefined;
+  };
+
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm">
       <div className="flex flex-col items-center gap-4">
         <div className="rounded-xl border border-nexus-border bg-white p-2">
-          <canvas ref={canvasRef} className="block w-56 h-56" style={{ imageRendering: 'pixelated' }} />
+          {image ? (
+            <img
+              src={image.dataUrl}
+              alt={name ? `QR de reservas de ${name}` : 'QR de reservas'}
+              className="block w-56 h-auto"
+              style={{ imageRendering: 'pixelated', WebkitTouchCallout: 'default' }}
+            />
+          ) : (
+            <div className="w-56 h-56" />
+          )}
         </div>
-        <p className="w-full break-all text-center text-sm text-nexus-text-secondary">{url}</p>
+        {showSaveHint ? (
+          <p className="w-full rounded-lg bg-nexus-surface-hover px-3 py-2 text-center text-sm text-nexus-text">
+            Mantén presionado el QR y elige «Guardar en Fotos».
+          </p>
+        ) : (
+          <p className="w-full break-all text-center text-sm text-nexus-text-secondary">{url}</p>
+        )}
         <div className="grid w-full grid-cols-2 gap-2">
           <Button variant="secondary" icon={copied ? Check : Copy} onClick={handleCopy} fullWidth>
             {copied ? 'Copiado' : 'Copiar enlace'}
           </Button>
-          <Button icon={Download} onClick={handleDownload} fullWidth>
+          <Button icon={Download} onClick={handleDownload} disabled={!image} fullWidth>
             Descargar QR
           </Button>
         </div>
