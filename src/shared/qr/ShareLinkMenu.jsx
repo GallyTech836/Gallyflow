@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Globe, ChevronDown, ExternalLink, Copy, Check, QrCode, Download } from 'lucide-react';
 import { Modal, Button } from '../ui';
 import { encodeQR } from './qrcode';
@@ -100,22 +101,38 @@ export function QRModal({ open, onClose, url, name, title = 'QR de reservas' }) 
   );
 }
 
-// Botón del mundo con menú: Abrir enlace / Copiar enlace / Ver QR.
+// Botón del mundo con menú: Abrir enlace / Ver QR.
+// El menú se dibuja en un portal (encima de todo) para que la agenda no lo tape.
 export default function ShareLinkMenu({ url, name }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null); // null = cerrado
   const [qrOpen, setQrOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const wrapRef = useRef(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const menuOpen = !!menuPos;
+
+  const closeMenu = () => setMenuPos(null);
+  const toggleMenu = () => {
+    if (menuOpen) { closeMenu(); return; }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setMenuPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+  };
 
   useEffect(() => {
     if (!menuOpen) return undefined;
-    const onDown = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setMenuOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    const onDown = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      closeMenu();
+    };
+    const onKey = (e) => { if (e.key === 'Escape') closeMenu(); };
     document.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
     return () => {
       document.removeEventListener('pointerdown', onDown);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
     };
   }, [menuOpen]);
 
@@ -124,10 +141,11 @@ export default function ShareLinkMenu({ url, name }) {
   const itemClass = 'flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-nexus-text hover:bg-nexus-surface-hover transition-colors cursor-pointer';
 
   return (
-    <div ref={wrapRef} className="relative shrink-0">
+    <div className="relative shrink-0">
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setMenuOpen((v) => !v)}
+        onClick={toggleMenu}
         title="Enlace de reservas"
         aria-label="Opciones del enlace de reservas"
         aria-haspopup="menu"
@@ -138,17 +156,19 @@ export default function ShareLinkMenu({ url, name }) {
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {menuOpen && (
+      {menuOpen && createPortal(
         <div
+          ref={menuRef}
           role="menu"
-          className="absolute right-0 top-full z-40 mt-1.5 w-48 overflow-hidden rounded-lg border border-nexus-border bg-nexus-surface py-1 shadow-[var(--nx-shadow-lg)]"
+          style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 55 }}
+          className="w-44 overflow-hidden rounded-lg border border-nexus-border bg-nexus-surface py-1 shadow-[var(--nx-shadow-lg)]"
         >
           <a
             role="menuitem"
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => setMenuOpen(false)}
+            onClick={closeMenu}
             className={itemClass}
           >
             <ExternalLink className="w-4 h-4 text-nexus-text-secondary" />
@@ -157,29 +177,14 @@ export default function ShareLinkMenu({ url, name }) {
           <button
             type="button"
             role="menuitem"
-            onClick={async () => {
-              if (await copyText(url)) {
-                setCopied(true);
-                setTimeout(() => { setCopied(false); setMenuOpen(false); }, 900);
-              }
-            }}
-            className={itemClass}
-          >
-            {copied
-              ? <Check className="w-4 h-4 text-nexus-text-secondary" />
-              : <Copy className="w-4 h-4 text-nexus-text-secondary" />}
-            {copied ? 'Copiado' : 'Copiar enlace'}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setMenuOpen(false); setQrOpen(true); }}
+            onClick={() => { closeMenu(); setQrOpen(true); }}
             className={itemClass}
           >
             <QrCode className="w-4 h-4 text-nexus-text-secondary" />
             Ver QR
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <QRModal open={qrOpen} onClose={() => setQrOpen(false)} url={url} name={name} />
