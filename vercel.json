@@ -5,6 +5,39 @@
         "destination": "/registro.html"
       },
       {
+        "source": "/reservar",
+        "has": [
+          {
+            "type": "header",
+            "key": "user-agent",
+            "value": ".*(WhatsApp|facebookexternalhit|Facebot|meta-externalagent|TelegramBot|Twitterbot|Slackbot|Discordbot|LinkedInBot|Pinterest|SkypeUriPreview).*"
+          }
+        ],
+        "destination": "/api/share"
+      },
+      {
+        "source": "/:slug/p/:pro",
+        "has": [
+          {
+            "type": "header",
+            "key": "user-agent",
+            "value": ".*(WhatsApp|facebookexternalhit|Facebot|meta-externalagent|TelegramBot|Twitterbot|Slackbot|Discordbot|LinkedInBot|Pinterest|SkypeUriPreview).*"
+          }
+        ],
+        "destination": "/api/share?slug=:slug"
+      },
+      {
+        "source": "/:slug",
+        "has": [
+          {
+            "type": "header",
+            "key": "user-agent",
+            "value": ".*(WhatsApp|facebookexternalhit|Facebot|meta-externalagent|TelegramBot|Twitterbot|Slackbot|Discordbot|LinkedInBot|Pinterest|SkypeUriPreview).*"
+          }
+        ],
+        "destination": "/api/share?slug=:slug"
+      },
+      {
         "source": "/(.*)",
         "destination": "/"
       }
