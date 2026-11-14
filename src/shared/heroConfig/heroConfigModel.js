@@ -8,7 +8,7 @@
 // No es una colección propia.
 
 export const DEFAULT_HERO_CONFIG = {
-  businessName: 'GALLYFLOW',
+  businessName: 'Nexus',
   slogan: 'Agenda citas de forma rápida y segura desde cualquier dispositivo en nuestra plataforma premium.',
   logo: '',
   cover: '',

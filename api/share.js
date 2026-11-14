@@ -10,7 +10,7 @@ import { isReservedSlug } from '../src/shared/booking/publicRoutes.js';
 
 const FIREBASE_PROJECT = 'gally-flow';
 const FIREBASE_API_KEY = 'AIzaSyDioxAn9-8TbZsONAQV9XrTX4krbCBbED4';
-const DEFAULT_BUSINESS_NAME = 'GALLYFLOW'; // valor por defecto de heroConfig
+const DEFAULT_BUSINESS_NAMES = ['GALLYFLOW', 'Nexus']; // valores por defecto de heroConfig
 const DEFAULT_SLOGAN_START = 'Agenda citas de forma rápida';
 
 const NEXUS = {
@@ -27,12 +27,16 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-/** Logo de Cloudinary en JPG cuadrado y liviano (WhatsApp no acepta SVG ni imágenes pesadas). */
+/**
+ * Logo recortado en cuadrado, en JPG y liviano. WhatsApp no muestra SVG,
+ * así que un logo SVG fuera de Cloudinary cae al ícono de Nexus.
+ */
 function previewImage(url) {
   if (typeof url !== 'string' || !url.startsWith('http')) return '';
   if (url.includes('res.cloudinary.com') && url.includes('/image/upload/')) {
-    return url.replace('/image/upload/', '/image/upload/c_pad,b_white,w_600,h_600,f_jpg,q_80/');
+    return url.replace('/image/upload/', '/image/upload/c_fill,g_auto,w_600,h_600,f_jpg,q_80/');
   }
+  if (/\.svg(\?|#|$)/i.test(url)) return '';
   return url;
 }
 
@@ -60,7 +64,7 @@ export default async function handler(req, res) {
     try {
       const hero = await getHeroConfig(slug);
       if (hero) {
-        const name = hero.businessName && hero.businessName !== DEFAULT_BUSINESS_NAME
+        const name = hero.businessName && !DEFAULT_BUSINESS_NAMES.includes(hero.businessName)
           ? hero.businessName
           : '';
         const slogan = hero.slogan && !hero.slogan.startsWith(DEFAULT_SLOGAN_START) ? hero.slogan : '';
@@ -81,6 +85,10 @@ export default async function handler(req, res) {
   const d = escapeHtml(meta.description);
   const img = escapeHtml(meta.image);
   const u = escapeHtml(pageUrl);
+  const size = meta.image.includes('res.cloudinary.com') ? 600 : meta.image.endsWith('/icon-512.png') ? 512 : 0;
+  const dims = size
+    ? `<meta property="og:image:width" content="${size}" />\n<meta property="og:image:height" content="${size}" />\n`
+    : '';
 
   const html = `<!doctype html>
 <html lang="es">
@@ -93,9 +101,7 @@ export default async function handler(req, res) {
 <meta property="og:title" content="${t}" />
 <meta property="og:description" content="${d}" />
 <meta property="og:image" content="${img}" />
-<meta property="og:image:width" content="600" />
-<meta property="og:image:height" content="600" />
-<meta property="og:url" content="${u}" />
+${dims}<meta property="og:url" content="${u}" />
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="${t}" />
 <meta name="twitter:description" content="${d}" />
