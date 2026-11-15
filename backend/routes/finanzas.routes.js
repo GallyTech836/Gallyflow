@@ -13,6 +13,7 @@ import { requireCapability } from '../services/capabilities/capabilityService.js
 import { logger } from '../utils/logger.js';
 import {
   FinanzasError, getEstado, setupFinanzas, createAccount, updateAccount, createTransfer, getResumen,
+  listGastos, createGasto, payGasto, deleteGasto, stopFijo, getEquilibrio,
 } from '../services/finanzas/finanzasService.js';
 
 const router = Router();
@@ -54,5 +55,25 @@ router.post('/finanzas/transferencias', ...owner, handle((req) => createTransfer
 })));
 
 router.get('/finanzas/resumen', ...owner, handle((req) => getResumen(req.negocioId, { month: req.query.month })));
+
+// Gastos: registrar (pagado o por pagar, que se repite o no), pagar, eliminar.
+router.get('/finanzas/gastos', ...owner, handle((req) => listGastos(req.negocioId)));
+
+router.post('/finanzas/gastos', ...owner, handle((req) => createGasto(req.negocioId, {
+  title: body(req).title, category: body(req).category, amount: body(req).amount, paidNow: body(req).paidNow === true,
+  accountId: body(req).accountId, due: body(req).due, repeat: body(req).repeat === true, day: body(req).day,
+  requestId: body(req).requestId, actor: req.actor,
+})));
+
+router.post('/finanzas/gastos/:gastoId/pagos', ...owner, handle((req) => payGasto(req.negocioId, req.params.gastoId, {
+  amount: body(req).amount, accountId: body(req).accountId, requestId: body(req).requestId, actor: req.actor,
+})));
+
+router.delete('/finanzas/gastos/:gastoId', ...owner, handle((req) => deleteGasto(req.negocioId, req.params.gastoId, { actor: req.actor })));
+
+router.post('/finanzas/fijos/:fijoId/detener', ...owner, handle((req) => stopFijo(req.negocioId, req.params.fijoId, { actor: req.actor })));
+
+// Punto de equilibrio del mes (lo muestra Analítica).
+router.get('/finanzas/equilibrio', ...owner, handle((req) => getEquilibrio(req.negocioId)));
 
 export default router;

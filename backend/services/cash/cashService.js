@@ -326,7 +326,7 @@ export async function correctCashSession(negocioId, sessionId, { pin, reason, ch
     for (const m of movSnaps) {
       const d = m.exists ? m.data() : null;
       if (!d || d.sessionId !== sessionId) throw new CashError(400, 'Esa salida no pertenece a esta caja.', 'BAD_MOVEMENT');
-      if (d.source !== 'manual') throw new CashError(400, 'Los pagos de comisión no se anulan desde la caja.', 'BAD_MOVEMENT');
+      if (d.source !== 'manual') throw new CashError(400, d.source === 'gasto' ? 'Los gastos se anulan desde Finanzas › Gastos.' : 'Los pagos de comisión no se anulan desde la caja.', 'BAD_MOVEMENT');
       if (d.voided) throw new CashError(409, 'Esa salida ya estaba anulada.', 'ALREADY_VOIDED');
     }
 

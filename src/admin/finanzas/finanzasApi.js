@@ -34,3 +34,11 @@ export const setupFinanzas = (token, body) => call('POST', '/finanzas/setup', to
 export const createCuenta = (token, body) => call('POST', '/finanzas/cuentas', token, body);
 export const updateCuenta = (token, id, body) => call('PATCH', `/finanzas/cuentas/${encodeURIComponent(id)}`, token, body);
 export const createTransferencia = (token, body) => call('POST', '/finanzas/transferencias', token, body);
+
+// Gastos y punto de equilibrio
+export const getGastos = (token) => call('GET', '/finanzas/gastos', token);
+export const createGasto = (token, body) => call('POST', '/finanzas/gastos', token, body);
+export const payGasto = (token, id, body) => call('POST', `/finanzas/gastos/${encodeURIComponent(id)}/pagos`, token, body);
+export const deleteGasto = (token, id) => call('DELETE', `/finanzas/gastos/${encodeURIComponent(id)}`, token);
+export const stopFijo = (token, id) => call('POST', `/finanzas/fijos/${encodeURIComponent(id)}/detener`, token);
+export const getEquilibrio = (token) => call('GET', '/finanzas/equilibrio', token);

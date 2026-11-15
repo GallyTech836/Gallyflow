@@ -188,6 +188,7 @@ const [activeTab, setActiveTab] = useState('agenda');
     syncingDayScrollRef.current = false;
   };
   const [agendaView, setAgendaView] = useState('dia');
+  const [finanzasStartTab, setFinanzasStartTab] = useState('resumen'); // Analítica › "Ir a Gastos" abre Finanzas en Gastos
   const agendaBoxRef = useRef(null);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -285,6 +286,10 @@ useEffect(() => {
   if ((cap && !canUseCapability(cap)) || !hasModule(TAB_MODULE[activeTab] || activeTab)) setActiveTab(homeTab);
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, planFeatures, planLoading, businessProfile]);
+// El Dashboard solo muestra Día o Semana: si venía de Mes/Año (otra pestaña), pasa a Semana.
+useEffect(() => {
+  if (activeTab === 'dashboard' && (agendaView === 'mes' || agendaView === 'año')) setAgendaView('semana');
+}, [activeTab, agendaView]);
 const { businessSettings } = useBusinessSettings(negocioId);
 const { heroConfig } = useHeroConfig(negocioId);
 
@@ -1353,26 +1358,6 @@ const { heroConfig } = useHeroConfig(negocioId);
   // "Próxima cita": operativa y en tiempo real, independiente del selector de período.
   // Se recalcula cada minuto vía currentTimeMinutes (ya existente para otros usos).
   const nextAppointment = nextCita;
-
-  // "Pagos del período": sí respeta el selector Día/Semana/Mes/Año.
-  // Se agrupa por paymentMethod tal cual existe en las citas reales (Efectivo/Tarjeta/Transferencia).
-  const paymentBreakdown = useMemo(() => {
-    const completed = (rangeReservations || []).filter(r => r?.status === 'completed');
-    const totals = {};
-    completed.forEach(r => {
-      const method = r?.paymentMethod || 'Sin especificar';
-      totals[method] = (totals[method] || 0) + Number(r?.price || 0);
-    });
-    const total = Object.values(totals).reduce((sum, v) => sum + v, 0);
-    return { totals, total };
-  }, [rangeReservations]);
-
-  const paymentsLabel = {
-    dia: 'Pagos de Hoy',
-    semana: 'Pagos de la Semana',
-    mes: 'Pagos del Mes',
-    año: 'Pagos del Año'
-  }[agendaView] || 'Pagos del Período';
 
   // "Actividad reciente": operativa, independiente del selector. No existe una
   // colección de eventos/actividad en Firestore, así que se construye a partir
@@ -2826,7 +2811,7 @@ const { heroConfig } = useHeroConfig(negocioId);
               label="Finanzas"
               collapsed={navCollapsed}
               active={activeTab === 'finanzas'}
-              onClick={() => { setActiveTab('finanzas'); setIsMobileSidebarOpen(false); }}
+              onClick={() => { setFinanzasStartTab('resumen'); setActiveTab('finanzas'); setIsMobileSidebarOpen(false); }}
             />
           )}
 
@@ -3003,7 +2988,11 @@ const { heroConfig } = useHeroConfig(negocioId);
                 ariaLabel="Periodo"
                 value={agendaView}
                 onChange={setAgendaView}
-                options={[
+                options={activeTab === 'dashboard' ? [
+                  // Dashboard: solo el día a día. Mes y año están en Finanzas y Analítica.
+                  { value: 'dia', label: 'Día' },
+                  { value: 'semana', label: 'Semana' },
+                ] : [
                   { value: 'dia', label: 'Día' },
                   { value: 'semana', label: 'Semana' },
                   { value: 'mes', label: 'Mes' },
@@ -3092,7 +3081,7 @@ const { heroConfig } = useHeroConfig(negocioId);
           {activeTab === 'dashboard' && (
             <div className="space-y-4 sm:space-y-5">
               {/* Indicadores del periodo (Fase 4: textos de 12px o más, números alineados). */}
-              <div className={`grid grid-cols-2 ${registrosMode ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-3 sm:gap-4`}>
+              <div className={`grid grid-cols-2 ${registrosMode ? '' : 'lg:grid-cols-3'} gap-3 sm:gap-4`}>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">Ventas del periodo</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.totalRevenue)}</p>
@@ -3132,17 +3121,12 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
                 )}
                 {!registrosMode && (
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                <div className="col-span-2 lg:col-span-1 bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">{t('clients')} {g('client', 'atendidos', 'atendidas')}</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-primary nx-num mt-1">{rangeMetrics?.clientsServed}</p>
                   <p className="text-xs text-nexus-text-muted mt-1">En el periodo</p>
                 </div>
                 )}
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
-                  <p className="text-xs font-medium text-nexus-text-secondary">Comisión estimada</p>
-                  <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.pendingCommissions)}</p>
-                  <p className="text-xs text-nexus-text-muted mt-1">A liquidar en el periodo</p>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -3198,27 +3182,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 onToast={triggerToast}
               />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
-                  <h3 className="text-base font-semibold text-nexus-text mb-3">{paymentsLabel}</h3>
-                  {paymentBreakdown.total > 0 ? (
-                    <div className="space-y-2">
-                      {Object.entries(paymentBreakdown.totals).map(([method, amount]) => (
-                        <div key={method} className="flex justify-between items-center gap-3 text-sm">
-                          <span className="text-nexus-text-secondary truncate">{method}</span>
-                          <span className="font-semibold text-nexus-text nx-num shrink-0">{formatBs(amount)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center gap-3 text-sm pt-2 border-t border-nexus-border">
-                        <span className="font-semibold text-nexus-text">Total</span>
-                        <span className="font-bold text-nexus-primary nx-num shrink-0">{formatBs(paymentBreakdown.total)}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-nexus-text-muted py-4 text-center">Sin pagos registrados en este periodo</div>
-                  )}
-                </div>
-
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
                   <h3 className="text-base font-semibold text-nexus-text mb-3">Actividad reciente</h3>
                   {recentActivity.length > 0 ? (
@@ -4066,14 +4030,17 @@ const { heroConfig } = useHeroConfig(negocioId);
            registros={registrosMode}
            financeToken={pinLock.token}
            onFinanceExpired={pinLock.lock}
+           onOpenFinanzas={() => { setFinanzasStartTab('gastos'); setActiveTab('finanzas'); }}
            />
          )}
 
          {activeTab === 'finanzas' && (
            <FinanzasSection
+             key={finanzasStartTab}
+             initialTab={finanzasStartTab}
              financeToken={pinLock.token}
              onFinanceExpired={pinLock.lock}
-             onToast={(msg) => triggerToast(msg)}
+             onToast={(msg, type) => triggerToast(msg, type)}
            />
          )}
 

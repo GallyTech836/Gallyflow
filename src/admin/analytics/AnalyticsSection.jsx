@@ -10,6 +10,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
+import PuntoEquilibrio from '../finanzas/PuntoEquilibrio';
 import { amountOfCita } from '../../shared/cash/cashModel';
 import { isRegistro } from '../../shared/registros/registroModel';
 import { getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
@@ -93,7 +94,7 @@ const ingresoDeCita = (cita) => amountOfCita(cita);
 // `registros` (modo registros: agenda oculta + registro de servicios, Nexus
 // Control): la Analítica normal, pero hablando de servicios registrados en vez
 // de reservas, sin "Canales de reservas" ni las tarjetas de clientes.
-export default function AnalyticsSection({ financeToken = null, onFinanceExpired, reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false }) {
+export default function AnalyticsSection({ financeToken = null, onFinanceExpired, onOpenFinanzas, reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false }) {
   const terms = useBusinessTerms();
   const [financeSummary, setFinanceSummary] = useState(null);
   const [financeCommissions, setFinanceCommissions] = useState([]);
@@ -369,16 +370,9 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
         />
       )}
 
-      {!basic && financeSummary && (
-        <section>
-          <h3 className="text-base font-semibold text-nexus-text mb-3">Rendimiento general</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <BigMetric label="Ingresos Brutos" value={`Bs ${financeSummary.ingresosBrutos.toFixed(0)}`} />
-            <BigMetric label="Comisiones generadas" value={`Bs ${financeSummary.comisionGenerada.toFixed(0)}`} />
-            <BigMetric label="Comisión pendiente" value={`Bs ${financeSummary.comisionPendiente.toFixed(0)}`} />
-            <BigMetric label={registros ? 'Para el negocio (antes de gastos)' : 'Resultado del negocio'} value={`Bs ${financeSummary.resultadoBarberia.toFixed(0)}`} />
-          </div>
-        </section>
+      {/* «Rendimiento general» pasó a Finanzas. Aquí queda el punto de equilibrio. */}
+      {!basic && (
+        <PuntoEquilibrio financeToken={financeToken} onFinanceExpired={onFinanceExpired} onOpenFinanzas={onOpenFinanzas} />
       )}
 
       <section>

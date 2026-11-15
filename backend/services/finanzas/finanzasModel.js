@@ -8,7 +8,7 @@
 //                                    efectivo -> la Caja de su sucursal)
 //   - pagos de comisiones           (commissionPayments, por su método)
 //   - salidas manuales de caja      (cajaMovimientos source 'manual', no anuladas)
-//   ± movimientos de Finanzas       (transferencias entre cuentas y correcciones)
+//   ± movimientos de Finanzas       (transferencias, correcciones y pagos de gastos)
 //   ± diferencia al cerrar caja     (faltante o sobrante contado en el cierre)
 // Así un cobro nunca se cuenta dos veces, y si cambia el método de un pago de
 // comisión el saldo se corrige solo.
@@ -117,6 +117,8 @@ export function buildFlows({ citas = [], ventas = [], pagos = [], salidas = [], 
     if (m.type === 'transferencia') {
       flows.push({ at, amount: -round2(m.amount), account: m.fromAccountId, kind: 'transferencia', ref: `mov:${m.id}`, label: m.note || 'Transferencia', day: localDateKey(at, tz), pair: m.toAccountId });
       flows.push({ at, amount: round2(m.amount), account: m.toAccountId, kind: 'transferencia', ref: `mov:${m.id}`, label: m.note || 'Transferencia', day: localDateKey(at, tz), pair: m.fromAccountId, mirror: true });
+    } else if (m.type === 'gasto') {
+      flows.push({ at, amount: -round2(m.amount), account: m.accountId, kind: 'gasto', ref: `mov:${m.id}`, label: m.title || 'Gasto', category: m.category || 'Otros', day: localDateKey(at, tz) });
     } else if (m.type === 'ajuste') {
       flows.push({ at, amount: round2(m.amount), account: m.accountId, kind: 'ajuste', ref: `mov:${m.id}`, label: 'Corrección de saldo', day: localDateKey(at, tz) });
     }
@@ -192,7 +194,7 @@ export const dayLabel = (day) => `${Number(day.slice(8, 10))} ${MES[Number(day.s
  *  gastos     gastos del mes (por ahora: salidas manuales de caja)
  *  ganancia   ingresos - comisiones - gastos (aproximada, no contable)
  */
-export function monthTotals({ citas = [], ventas = [], pagos = [], salidas = [], comisionesGeneradas = 0, startDay, endDay, tz }) {
+export function monthTotals({ citas = [], ventas = [], pagos = [], salidas = [], gastos: gastosDocs = [], gastoPagos = [], comisionesGeneradas = 0, startDay, endDay, tz }) {
   const enMes = (day) => day >= startDay && day <= endDay;
   let ingresos = 0;
   for (const c of citas) if (citaEsCobro(c) && enMes(c.date || '')) ingresos += amountOfCita(c);
@@ -203,12 +205,24 @@ export function monthTotals({ citas = [], ventas = [], pagos = [], salidas = [],
   for (const s of salidas) {
     if (s.source !== 'manual' || s.voided) continue;
     const ms = toMillis(s.createdAt);
-    if (ms !== null && enMes(localDateKey(ms, tz))) gastos += round2(s.amount);
+    if (ms !== null && enMes(localDateKey(ms, tz))) { gastos += round2(s.amount); pagado += round2(s.amount); }
+  }
+  // Gastos registrados en Finanzas: cuentan en el mes al que pertenecen (pagados o no).
+  let fijos = 0;
+  for (const g of gastosDocs) {
+    if (g.voided || g.month !== startDay.slice(0, 7)) continue;
+    gastos += round2(g.total);
+    if (g.fijoId) fijos += round2(g.total);
+  }
+  // Lo que salió de verdad: pagos de gastos hechos este mes.
+  for (const m of gastoPagos) {
+    const ms = toMillis(m.at);
+    if (m.type === 'gasto' && !m.voided && ms !== null && enMes(localDateKey(ms, tz))) pagado += round2(m.amount);
   }
   ingresos = round2(ingresos);
   const comisiones = round2(comisionesGeneradas);
   gastos = round2(gastos);
-  return { ingresos, salio: round2(pagado + gastos), comisiones, gastos, ganancia: round2(ingresos - comisiones - gastos) };
+  return { ingresos, salio: round2(pagado), comisiones, gastos, fijos: round2(fijos), ganancia: round2(ingresos - comisiones - gastos) };
 }
 
 // ───────────────────────── Historial ─────────────────────────
@@ -239,6 +253,8 @@ export function buildHistory(flows = [], accounts = [], { startDay, endDay, limi
     } else if (f.kind === 'ajuste') {
       const nota = f.ref.startsWith('cierre:') ? 'contado al cerrar la caja' : 'corrección manual';
       items.push({ type: 'adj', day: f.day, at: f.at, amount: f.amount, title: f.label, detail: `${nameOf(f.account)} · ${nota}, no es venta ni gasto` });
+    } else if (f.kind === 'gasto') {
+      items.push({ type: 'out', day: f.day, at: f.at, amount: Math.abs(f.amount), title: f.label, detail: `${f.category} · salió de ${nameOf(f.account)}` });
     } else {
       const origen = f.kind === 'comision' ? `${f.method} · salió de ${nameOf(f.account)}` : `Salida de caja · salió de ${nameOf(f.account)}`;
       items.push({ type: 'out', day: f.day, at: f.at, amount: Math.abs(f.amount), title: f.label, detail: origen });
@@ -250,6 +266,43 @@ export function buildHistory(flows = [], accounts = [], { startDay, endDay, limi
   }
   items.sort((a, b) => (a.day === b.day ? b.at - a.at : (a.day < b.day ? 1 : -1)));
   return items.slice(0, limit).map((i) => ({ ...i, dayLabel: dayLabel(i.day) }));
+}
+
+// ───────────────────────── Gastos ─────────────────────────
+
+export const GASTO_CATEGORIES = ['Alquiler', 'Servicios', 'Sueldos', 'Productos', 'Materiales', 'Publicidad', 'Reparaciones', 'Otros'];
+
+/** Fecha de pago de un gasto fijo en un mes (día 31 en febrero -> 28/29). */
+export function dueFor(ym, day) {
+  const { daysInMonth } = monthDays(ym);
+  return `${ym}-${String(Math.min(Math.max(1, Number(day) || 1), daysInMonth)).padStart(2, '0')}`;
+}
+
+export const fijoGastoId = (fijoId, ym) => `fijo_${fijoId}_${ym}`;
+
+/** Estado de un gasto para la lista. */
+export function gastoStatus(g, today) {
+  const rem = round2(g.total - (g.paid || 0));
+  if (rem <= 0) return 'pagado';
+  if ((g.due || '') < today) return 'vencido';
+  if (g.paid > 0) return 'parcial';
+  const d = (Date.parse(`${g.due}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000;
+  return d <= 7 ? 'pronto' : 'pendiente';
+}
+
+/**
+ * Punto de equilibrio del mes.
+ *  fijos      gastos que se repiten cada mes
+ *  variables  el resto de los gastos
+ *  ratio      de cada Bs 1 vendido, cuánto queda para pagar los fijos
+ *  meta       fijos / ratio
+ */
+export function breakEven({ ingresos, comisiones, gastos, fijos }, fallbackRatio = null) {
+  const variables = round2(Math.max(0, gastos - fijos));
+  let ratio = ingresos > 0 ? (ingresos - comisiones - variables) / ingresos : fallbackRatio;
+  if (ratio !== null) ratio = Math.round(ratio * 10000) / 10000;
+  const meta = ratio && ratio > 0 ? round2(fijos / ratio) : null;
+  return { vendido: round2(ingresos), fijos: round2(fijos), variables, comisiones: round2(comisiones), ratio, meta, cubierto: meta !== null && ingresos >= meta };
 }
 
 // ───────────────────────── Validaciones ─────────────────────────

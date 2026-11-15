@@ -161,7 +161,7 @@ function CashOutModal({ onClose, onDone }) {
         <Field label="Motivo" hint="Por ejemplo: compra de insumos, adelanto a un profesional." error={error}>
           <Input value={reason} maxLength={120} onChange={(e) => setReason(e.target.value)} />
         </Field>
-        <p className="text-xs text-nexus-text-muted">Las comisiones pagadas en efectivo aparecen aquí solas.</p>
+        <p className="text-xs text-nexus-text-muted">Las comisiones y los gastos pagados en efectivo desde Finanzas aparecen aquí solos.</p>
       </div>
     </Modal>
   );

@@ -118,7 +118,7 @@ describe('modelo puro', () => {
       salidas: [{ source: 'manual', amount: 10, createdAt: '2026-02-05T15:00:00Z' }],
       comisionesGeneradas: 50, startDay: '2026-02-01', endDay: '2026-02-28',
     });
-    assert.deepEqual(t, { ingresos: 100, salio: 40, comisiones: 50, gastos: 10, ganancia: 40 });
+    assert.deepEqual(t, { ingresos: 100, salio: 40, comisiones: 50, gastos: 10, fijos: 0, ganancia: 40 });
   });
 
   test('importes y meses', () => {
@@ -266,5 +266,127 @@ describe('resumen del mes', () => {
   test('mes futuro o inválido', async () => {
     assert.equal((await call('GET', '/finanzas/resumen', {}, ADMIN, { month: '2999-01' })).status, 400);
     assert.equal((await call('GET', '/finanzas/resumen', {}, ADMIN, { month: 'abc' })).status, 200);
+  });
+});
+
+describe('gastos', () => {
+  const cur = fecha.slice(0, 7);
+  const enDias = (d) => C.localDateKey(Date.now() + d * 86400000);
+  const estado = async () => (await call('GET', '/finanzas/estado')).body;
+  const saldo = async (pred) => (await estado()).accounts.find(pred).balance;
+  let bnbId;
+  before(async () => { bnbId = (await estado()).accounts.find((a) => a.name === 'Banco BNB').id; });
+
+  test('pagado desde el banco: baja el banco y queda como pagado', async () => {
+    const antes = await saldo((a) => a.id === bnbId);
+    const r = await call('POST', '/finanzas/gastos', { title: 'Luz del local', category: 'Servicios', amount: 100, paidNow: true, accountId: bnbId, requestId: 'gasto000001' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    await call('POST', '/finanzas/gastos', { title: 'Luz del local', category: 'Servicios', amount: 100, paidNow: true, accountId: bnbId, requestId: 'gasto000001' }); // doble clic
+    assert.equal(await saldo((a) => a.id === bnbId), antes - 100);
+    const g = r.body.items.find((i) => i.title === 'Luz del local');
+    assert.equal(g.status, 'pagado');
+    assert.equal(r.body.owe, 0);
+  });
+
+  test('pagado desde la caja: también queda en la caja del día y no se cuenta dos veces', async () => {
+    const antes = await saldo((a) => a.isCaja);
+    const mucho = await call('POST', '/finanzas/gastos', { title: 'Detergente', category: 'Materiales', amount: 9999, paidNow: true, accountId: 'caja_s1', requestId: rid() });
+    assert.equal(mucho.body.code, 'INSUFFICIENT');
+    const r = await call('POST', '/finanzas/gastos', { title: 'Detergente', category: 'Materiales', amount: 20, paidNow: true, accountId: 'caja_s1', requestId: 'gasto000002' });
+    assert.equal(r.body.saved.fromCaja, true);
+    assert.equal(await saldo((a) => a.isCaja), antes - 20);
+    const mov = db._get(`${N}/cajaMovimientos/gasto_gasto000002`);
+    assert.equal(mov.source, 'gasto');
+    assert.equal(mov.amount, 20);
+    assert.equal(mov.sessionId, null); // caja cerrada: se descuenta al abrir la próxima
+  });
+
+  test('por pagar: no toca ninguna cuenta; se paga en partes', async () => {
+    const antes = await saldo((a) => a.id === bnbId);
+    const sinFecha = await call('POST', '/finanzas/gastos', { title: 'Proveedor', amount: 300, paidNow: false, requestId: rid() });
+    assert.equal(sinFecha.body.code, 'DUE_REQUIRED');
+    const r = await call('POST', '/finanzas/gastos', { title: 'Proveedor de productos', category: 'Productos', amount: 300, paidNow: false, due: enDias(10), requestId: rid() });
+    assert.equal(r.body.owe, 300);
+    assert.equal(await saldo((a) => a.id === bnbId), antes);
+    const id = r.body.porPagar[0].id;
+    const p1 = await call('POST', `/finanzas/gastos/${id}/pagos`, { amount: 100, accountId: bnbId, requestId: rid() });
+    assert.equal(p1.body.saved.remaining, 200);
+    assert.equal(p1.body.porPagar[0].status, 'parcial');
+    assert.equal((await call('POST', `/finanzas/gastos/${id}/pagos`, { amount: 300, accountId: bnbId, requestId: rid() })).body.code, 'TOO_MUCH');
+    const p2 = await call('POST', `/finanzas/gastos/${id}/pagos`, { amount: 200, accountId: bnbId, requestId: rid() });
+    assert.equal(p2.body.owe, 0);
+    assert.equal(await saldo((a) => a.id === bnbId), antes - 300);
+  });
+
+  test('se repite cada mes: crea el fijo y el gasto de este mes', async () => {
+    const malDia = await call('POST', '/finanzas/gastos', { title: 'Alquiler', amount: 1000, repeat: true, day: 40, requestId: rid() });
+    assert.equal(malDia.body.code, 'INVALID_DAY');
+    const r = await call('POST', '/finanzas/gastos', { title: 'Alquiler', category: 'Alquiler', amount: 1000, paidNow: false, repeat: true, day: 5, requestId: 'fijo0000001' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual(r.body.fijos.map((f) => [f.title, f.day]), [['Alquiler', 5]]);
+    const g = r.body.porPagar.find((i) => i.title === 'Alquiler');
+    assert.equal(g.id, `fijo_fijo_fijo0000001_${cur}`);
+    assert.equal(g.due, `${cur}-05`);
+    // volver a leer no lo duplica
+    const again = await call('GET', '/finanzas/gastos');
+    assert.equal(again.body.porPagar.filter((i) => i.title === 'Alquiler').length, 1);
+  });
+
+  test('el resumen suma los gastos del mes (pagados o no) y lo que salió', async () => {
+    const r = (await call('GET', '/finanzas/resumen')).body;
+    // salida de caja 15 + luz 100 + detergente 20 + proveedor 300 + alquiler 1000
+    assert.equal(r.gastos, 1435);
+    assert.equal(r.fijos, 1000);
+    // comisión 25 + salida 15 + luz 100 + detergente 20 + proveedor 300
+    assert.equal(r.salio, 460);
+    assert.equal(r.ganancia, r.ingresos - r.comisiones - 1435);
+    const luz = r.history.find((h) => h.title === 'Luz del local');
+    assert.match(luz.detail, /Servicios · salió de Banco BNB/);
+  });
+
+  test('punto de equilibrio: meta = fijos ÷ lo que queda de cada venta', async () => {
+    const r = (await call('GET', '/finanzas/equilibrio')).body;
+    assert.equal(r.fijos, 1000);
+    const ratio = (r.vendido - r.comisiones - r.variables) / r.vendido;
+    assert.ok(Math.abs(r.ratio - ratio) < 0.0001);
+    assert.equal(r.variables, 435);
+    assert.equal(r.meta, null); // con estas ventas no queda nada para los fijos
+    assert.equal(r.cubierto, false);
+  });
+
+  test('eliminar un gasto devuelve la plata a la cuenta; no si salió de una caja ya cerrada', async () => {
+    const antes = await saldo((a) => a.isCaja);
+    const del = await call('DELETE', '/finanzas/gastos/g_gasto000002');
+    assert.equal(del.status, 200);
+    assert.equal(await saldo((a) => a.isCaja), antes + 20);
+    assert.equal(db._get(`${N}/cajaMovimientos/gasto_gasto000002`).voided, true);
+
+    db._set(`${N}/cajaEstado/s1`, { openSessionId: 'ses1', lastNextFund: 200 });
+    db._set(`${N}/cajas/ses1`, { status: 'open', scopeKey: 's1' });
+    await call('POST', '/finanzas/gastos', { title: 'Agua', category: 'Otros', amount: 5, paidNow: true, accountId: 'caja_s1', requestId: 'gasto000003' });
+    assert.equal(db._get(`${N}/cajaMovimientos/gasto_gasto000003`).sessionId, 'ses1');
+    db._set(`${N}/cajas/ses1`, { status: 'closed', scopeKey: 's1' });
+    const bloq = await call('DELETE', '/finanzas/gastos/g_gasto000003');
+    assert.equal(bloq.body.code, 'CASH_CLOSED');
+    db._set(`${N}/cajaEstado/s1`, { openSessionId: null, lastNextFund: 200 });
+  });
+
+  test('dejar de repetir', async () => {
+    const fijo = (await call('GET', '/finanzas/gastos')).body.fijos[0];
+    const r = await call('POST', `/finanzas/fijos/${fijo.id}/detener`);
+    assert.deepEqual(r.body.fijos, []);
+  });
+});
+
+describe('modelo: punto de equilibrio', () => {
+  test('meta y si ya se cubrió', () => {
+    const be = F.breakEven({ ingresos: 10000, comisiones: 4000, gastos: 3000, fijos: 2000 });
+    // quedan 10000 - 4000 - 1000 = 5000 de 10000 -> 0,5 ; meta 2000 / 0,5 = 4000
+    assert.equal(be.ratio, 0.5);
+    assert.equal(be.meta, 4000);
+    assert.equal(be.cubierto, true);
+    assert.equal(F.breakEven({ ingresos: 0, comisiones: 0, gastos: 1000, fijos: 1000 }, 0.4).meta, 2500);
+    assert.equal(F.breakEven({ ingresos: 0, comisiones: 0, gastos: 1000, fijos: 1000 }).meta, null);
+    assert.equal(F.dueFor('2026-02', 31), '2026-02-28');
   });
 });

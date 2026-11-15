@@ -5,7 +5,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Modal, Button, Field, Input, ChoiceChips } from '../../shared/ui';
 import { bs, bs2, parseAmount, TYPE_OPTIONS } from './finanzasFormat';
-import { newRequestId, setupFinanzas, createCuenta, updateCuenta, createTransferencia } from './finanzasApi';
+import { newRequestId, setupFinanzas, createCuenta, updateCuenta, createTransferencia, createGasto, payGasto } from './finanzasApi';
 
 function useRequestId() {
   const ref = useRef(null);
@@ -282,4 +282,163 @@ export function DepositModal({ estado, token, onExpired, onClose, onSaved }) {
       )}
     </Modal>
   );
+}
+
+// ───────────────────────── Gastos ─────────────────────────
+
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** Cuentas de donde puede salir un pago, con su saldo. */
+function accountOptions(estado) {
+  return (estado?.accounts || []).filter((a) => a.active).map((a) => ({ value: a.id, label: `${a.name} · ${bs(a.balance)}` }));
+}
+
+export function GastoModal({ estado, categories, token, onExpired, onClose, onSaved }) {
+  const requestId = useRequestId();
+  const cuentas = accountOptions(estado);
+  const [amount, setAmount] = useState('');
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('Servicios');
+  const [paid, setPaid] = useState('si');
+  const [accountId, setAccountId] = useState(cuentas[0]?.value || '');
+  const [due, setDue] = useState(localToday());
+  const [repeat, setRepeat] = useState(false);
+  const [day, setDay] = useState(String(new Date().getDate()));
+  const [error, setError] = useState('');
+
+  const guardar = async () => {
+    setError('');
+    const monto = parseAmount(amount);
+    if (!(monto > 0)) return setError('Escribe cuánto fue.');
+    if (title.trim().length < 2) return setError('Escribe en qué fue el gasto.');
+    if (paid === 'si' && !accountId) return setError('Elige de dónde salió la plata.');
+    if (paid === 'despues' && !repeat && !due) return setError('Elige hasta cuándo tienes que pagarlo.');
+    const dia = Math.floor(Number(day));
+    if (repeat && !(dia >= 1 && dia <= 31)) return setError('El día de pago va del 1 al 31.');
+    const data = await run(createGasto(token, {
+      requestId, title: title.trim(), category, amount: monto, paidNow: paid === 'si',
+      accountId: paid === 'si' ? accountId : null, due: paid === 'despues' && !repeat ? due : null, repeat, day: repeat ? dia : null,
+    }), { onExpired, setError });
+    if (!data) return;
+    const sv = data.saved || {};
+    const msg = sv.repeat
+      ? `Listo. Cada mes te aparecerá «${title.trim()}» para pagar el día ${dia}.`
+      : sv.paidNow
+        ? (sv.fromCaja ? 'Gasto guardado. También salió de la caja.' : `Gasto guardado: salieron ${bs(monto)} de ${sv.account}.`)
+        : 'Anotado en «Tienes que pagar». No se descontó de ninguna cuenta.';
+    onSaved(data, msg);
+  };
+
+  return (
+    <Modal
+      title="Registrar gasto"
+      onClose={onClose}
+      footer={(
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar}>Guardar</Button>
+        </div>
+      )}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="¿Cuánto? (Bs)">
+          <Input type="number" inputMode="decimal" min="0" step="0.01" className="nx-num text-lg" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+        </Field>
+        <Field label="¿En qué?">
+          <Input value={title} placeholder="Ej.: Luz del local" maxLength={80} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field label="Tipo de gasto">
+          <ChoiceChips label="Tipo de gasto" options={categories} value={category} onChange={setCategory} />
+        </Field>
+        <Field label="¿Ya lo pagaste?">
+          <ChoiceChips label="¿Ya lo pagaste?" options={[{ value: 'si', label: 'Sí, ya pagué' }, { value: 'despues', label: 'Lo pago después' }]} value={paid} onChange={setPaid} />
+        </Field>
+        {paid === 'si' && (
+          <Field label="¿De dónde salió la plata?" hint={cuentas.length ? null : 'Primero configura tus cuentas en el Resumen.'}>
+            <ChoiceChips label="De dónde salió" options={cuentas} value={accountId} onChange={setAccountId} />
+          </Field>
+        )}
+        {paid === 'despues' && !repeat && (
+          <Field label="¿Hasta cuándo tienes que pagarlo?">
+            <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+          </Field>
+        )}
+        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-nexus-border p-3">
+          <span>
+            <span className="block text-sm font-semibold text-nexus-text">Se repite cada mes</span>
+            <span className="block text-xs text-nexus-text-secondary">Alquiler, internet, sueldos… Te lo recordamos cada mes.</span>
+          </span>
+          <input type="checkbox" className="h-5 w-5 accent-[var(--nx-primary)]" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
+        </label>
+        {repeat && (
+          <Field label="Se paga el día" className="max-w-[160px]">
+            <Input type="number" inputMode="numeric" min="1" max="31" value={day} onChange={(e) => setDay(e.target.value)} />
+          </Field>
+        )}
+        <ErrorText>{error}</ErrorText>
+      </div>
+    </Modal>
+  );
+}
+
+export function PayModal({ gasto, estado, token, onExpired, onClose, onSaved }) {
+  const requestId = useRequestId();
+  const cuentas = accountOptions(estado);
+  const sugerida = (estado?.accounts || []).find((a) => a.active && a.name === gasto.lastAccount)?.id;
+  const [amount, setAmount] = useState(String(gasto.remaining));
+  const [accountId, setAccountId] = useState(sugerida || cuentas[0]?.value || '');
+  const [error, setError] = useState('');
+
+  const guardar = async () => {
+    setError('');
+    const monto = parseAmount(amount);
+    if (!(monto > 0)) return setError('Escribe cuánto pagas.');
+    if (monto > gasto.remaining) return setError(`Solo faltan ${bs2(gasto.remaining)}.`);
+    if (!accountId) return setError('Elige de dónde sale.');
+    const data = await run(payGasto(token, gasto.id, { requestId, amount: monto, accountId }), { onExpired, setError });
+    if (!data) return;
+    const resto = data.saved?.remaining ?? 0;
+    onSaved(data, resto > 0 ? `Pagaste una parte. Quedan ${bs(resto)} por pagar.` : 'Pagado. Ya no aparece en «Tienes que pagar».');
+  };
+
+  return (
+    <Modal
+      title="Pagar"
+      description={gasto.title}
+      onClose={onClose}
+      footer={(
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar}>Pagar</Button>
+        </div>
+      )}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="text-center">
+          <p className="text-xs font-medium text-nexus-text-secondary">Falta pagar</p>
+          <p className="nx-num text-3xl font-bold text-nexus-text">{bs(gasto.remaining)}</p>
+          <p className="text-xs text-nexus-text-secondary">{whenLabel(gasto)}</p>
+        </div>
+        <Field label="¿Cuánto pagas ahora? (Bs)" hint="Puedes pagar una parte; el resto queda pendiente.">
+          <Input type="number" inputMode="decimal" min="0" step="0.01" className="nx-num text-lg" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </Field>
+        <Field label="¿De dónde sale?">
+          <ChoiceChips label="De dónde sale" options={cuentas} value={accountId} onChange={setAccountId} />
+        </Field>
+        <ErrorText>{error}</ErrorText>
+      </div>
+    </Modal>
+  );
+}
+
+/** «Vence hoy», «Vence en 5 días (20 nov)», «Venció hace 2 días». */
+export function whenLabel(g) {
+  const d = g.days;
+  if (d === 0) return 'Vence hoy';
+  if (d === 1) return 'Vence mañana';
+  if (d > 0) return `Vence en ${d} días (${g.dueLabel})`;
+  return `Venció hace ${-d} ${d === -1 ? 'día' : 'días'}`;
 }
