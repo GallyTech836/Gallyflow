@@ -5,7 +5,7 @@
 // que confirme) y abre WhatsApp para mandar el comprobante.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { WhatsAppIcon } from '../shared/location/WhatsAppButton';
 import { useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
@@ -59,17 +59,7 @@ export default function DepositStep({ deposit, negocioId, citaId, onReset, selec
         </p>
       </div>
 
-      {/* Cuenta regresiva */}
-      {!reported ? (
-        <div className={`flex w-full items-center justify-center gap-2.5 rounded-2xl border px-4 py-3 ${vencida || urgente ? 'border-nexus-error/30 bg-nexus-error-bg text-nexus-error-text' : 'border-nexus-border bg-nexus-surface text-nexus-text'}`} role="timer" aria-live="off">
-          <Clock size={20} className="shrink-0" aria-hidden="true" />
-          {vencida ? (
-            <p className="text-sm font-semibold">Se acabó el tiempo y el horario se liberó. Si ya pagaste, escríbele al negocio.</p>
-          ) : (
-            <p className="text-sm">Tienes <b className="nx-num text-2xl font-extrabold align-middle">{mmss(restante)}</b> para pagar</p>
-          )}
-        </div>
-      ) : (
+      {reported && (
         <div className="flex w-full items-center gap-2.5 rounded-2xl border border-nexus-success/30 bg-nexus-success-bg px-4 py-3 text-left text-sm text-nexus-success-text">
           <CheckCircle2 size={20} className="shrink-0" aria-hidden="true" />
           <p>Tu horario queda guardado hasta las <b className="nx-num">{hora(expMs)}</b> mientras el negocio confirma.</p>
@@ -87,6 +77,12 @@ export default function DepositStep({ deposit, negocioId, citaId, onReset, selec
           />
         )}
         {!reported && <p className="mt-2 text-xs text-nexus-text-secondary">Toma una captura de pantalla y paga desde la app de tu banco.</p>}
+        {/* Cuenta regresiva del tiempo para pagar: solo los números. */}
+        {!reported && (vencida ? (
+          <p role="alert" className="mt-2 text-sm font-semibold text-nexus-error-text">Se acabó el tiempo y el horario se liberó. Si ya pagaste, escríbele al negocio.</p>
+        ) : (
+          <p role="timer" aria-label={`Tiempo para pagar: ${mmss(restante)}`} className={`nx-num mt-1 text-2xl font-bold ${urgente ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{mmss(restante)}</p>
+        ))}
         {deposit.instructions && <p className="mt-2 whitespace-pre-line text-sm text-nexus-text">{deposit.instructions}</p>}
       </div>
 
