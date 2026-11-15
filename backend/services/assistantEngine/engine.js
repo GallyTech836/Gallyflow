@@ -19,6 +19,7 @@ import { upsertClientFromPhone, findClientByPhone, variantesTelefono, nombreVali
 import { reevaluatePending, processPendingCita } from '../appointments/pendingService.js';
 import { findUpcomingCitas, rescheduleAppointment, faltaSuficiente } from '../appointments/manageAppointment.js';
 import { sendNotification } from '../notificationService.js';
+import { reportPaid, cancelByClient, findAwaitingByPhone, AnticipoError } from '../anticipos/anticipoService.js';
 import { logger } from '../../utils/logger.js';
 import { db } from '../../config/firebase.js';
 import { canUse } from '../capabilities/capabilityModel.js';
@@ -74,7 +75,8 @@ const OTRA_FECHA = /otro d[ií]a|otra fecha|ma[ñn]ana/i;
 // Pasos en que el cliente puede preguntar algo sin perder la reserva.
 const PASOS_CON_CONSULTA = new Set([...FLUJOS_CON_LISTA, 'pro_unavailable_today', 'confirming', 'confirming_reschedule']);
 // Botones que valen aunque vengan de un mensaje anterior.
-const BOTON_GLOBAL = /^(hablar_persona|menu|ver_opciones)$/;
+// anticipo_pague|<citaId> / anticipo_cancelar|<citaId>: botones de la tarjeta del anticipo (sirven en cualquier paso).
+const BOTON_GLOBAL = /^(hablar_persona|menu|ver_opciones|anticipo_(pague|cancelar)\|[A-Za-z0-9_-]+)$/;
 
 const FLUJOS_SIN_INTENCION = new Set(['confirming_reschedule', 'confirming', 'awaiting_name', 'human', 'collecting_intake', 'confirming_pet']);
 
@@ -482,9 +484,10 @@ function sinHablarConAlguien(resultado) {
 // Cita con profesional: push al profesional + reevaluar Pendientes del día.
 function avisarNuevaCita(negocioId, cita) {
   sendNotification({
-    tipo: 'RESERVA_CREADA_CLIENTE',
+    // Con anticipo: "Reserva por confirmar" (el dueño la confirma al ver el pago).
+    tipo: cita.deposit ? 'RESERVA_POR_CONFIRMAR' : 'RESERVA_CREADA_CLIENTE',
     negocioId,
-    data: { clientName: cita.clientName, time: cita.time },
+    data: { clientName: cita.clientName, time: cita.time, date: cita.date, ...(cita.deposit ? { amount: cita.deposit.amount } : {}) },
     targetProfessionalId: cita.professionalId,
   }).catch((err) => logger.warn('[assistantEngine] Push falló:', err.message));
 
@@ -684,6 +687,14 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     if (Number(conversation.stepMisses) > 0) {
       conversation = await updateConversation(negocioId, phone, { stepMisses: 0 });
     }
+  }
+
+  // Anticipos: botones de la tarjeta del QR, o "ya pagué" escrito.
+  const botonAnticipo = texto.match(/^anticipo_(pague|cancelar)\|([A-Za-z0-9_-]+)$/);
+  if (botonAnticipo) return accionAnticipo(botonAnticipo[1], botonAnticipo[2]);
+  if (/^ya\s*pagu[eé]/i.test(texto)) {
+    const esperando = await findAwaitingByPhone(negocioId, phone).catch(() => null);
+    if (esperando) return accionAnticipo('pague', esperando.id);
   }
 
   // «Hablar con alguien» desde cualquier paso, escrito o con botón.
@@ -1110,6 +1121,8 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         paymentMethod: 'Por definir',
         bookedBy: 'assistant',
         intake: intakeParaCita(conv),
+        // Anticipos por QR: la cita queda "por confirmar" hasta que el dueño verifica el pago.
+        anticipo: context.anticipo || null,
       };
       cita = esPendiente
         ? await createPendingAppointment({ ...datos, branch: conv.selectedStaff.branch || '', candidateIds: conv.selectedStaff.candidateIds })
@@ -1129,11 +1142,73 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       conQuien = ` con ${conv.selectedStaff.name}`;
     }
 
+    // Con anticipo: tarjeta con el QR en vez de "confirmada".
+    if (cita.deposit) {
+      conversation = await resetConversation(negocioId, phone);
+      return conEvento('reserva', mensajeAnticipo(cita, conQuien), conversation);
+    }
+
     const { t, tl, g } = context.terms;
     const notaPendiente = esPendiente && !conQuien ? `\nEn breve el negocio te asignará ${g('professional', 'un', 'una')} ${tl('professional')}.` : '';
     conversation = await resetConversation(negocioId, phone);
     // metricEvent: lo usa el webhook para las métricas de Super Admin (no cambia la respuesta).
     return conEvento('reserva', `✅ ${t('appointment')} ${g('appointment', 'confirmado', 'confirmada')} para ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien}. ${voz.gracias()}${notaPendiente}${voz.despedida() ? `\n\n${voz.despedida()}` : ''}`, conversation);
+  }
+
+  // ── Anticipos por QR ──
+
+  // "Se pide un anticipo de Bs 20" / "del 50 % del precio" (si algún servicio lo pide).
+  function lineaAnticipo(conv) {
+    const cfg = context.anticipo;
+    if (!cfg) return '';
+    const excl = new Set(cfg.excludedServiceIds || []);
+    if (!serviciosDe(conv).some((s) => !excl.has(String(s.serviceId)))) return '';
+    const cuanto = cfg.mode === 'fixed' ? `de Bs ${cfg.value}` : `del ${cfg.value} % del precio`;
+    return `\n\nPara confirmarla se pide un anticipo ${cuanto} por ${cfg.method}.`;
+  }
+
+  function mensajeAnticipo(cita, conQuien) {
+    const cfg = context.anticipo || {};
+    const d = cita.deposit;
+    const { tl, g } = context.terms;
+    const cuerpo = `Tu ${tl('appointment')} de ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien} está ${g('appointment', 'guardado', 'guardada')} 🙌\n\nPara confirmarla, paga el anticipo de *Bs ${d.amount}* con este QR (${d.method}). Tienes ${cfg.minutes || 5} minutos.${cfg.instructions ? `\n${cfg.instructions}` : ''}\n\nCuando pagues, toca «Ya pagué».`;
+    return {
+      text: `${cuerpo}\n\nQR: ${cfg.qrImage}\nEscribe "ya pagué" cuando pagues.`,
+      interactive: {
+        type: 'button',
+        header: { type: 'image', image: { link: cfg.qrImage } },
+        body: { text: recortar(cuerpo, 1024) },
+        action: {
+          buttons: [
+            { type: 'reply', reply: { id: `anticipo_pague|${cita.id}`, title: 'Ya pagué' } },
+            { type: 'reply', reply: { id: `anticipo_cancelar|${cita.id}`, title: 'Cancelar reserva' } },
+          ],
+        },
+      },
+    };
+  }
+
+  async function accionAnticipo(tipo, citaId) {
+    const { tl, g } = context.terms;
+    try {
+      if (tipo === 'cancelar') {
+        await cancelByClient(negocioId, citaId, phone);
+        return responder(`Listo, cancelé tu reserva. Escribe «agendar» si quieres elegir otro horario.`, conversation);
+      }
+      const snap = await db.collection('negocios').doc(negocioId).collection('citas').doc(citaId).get();
+      if (!snap.exists || String(snap.data().clientPhone || '') !== String(phone)) return responder('No encontré esa reserva. Escribe «menu» para ver tus opciones.', conversation);
+      await reportPaid(negocioId, citaId);
+      return responder(`¡Gracias! Le avisé al negocio que pagaste 🙌\nApenas confirme el pago, te escribo por aquí.`, conversation);
+    } catch (err) {
+      if (err instanceof AnticipoError) {
+        if (err.code === 'EXPIRED') return responder('Se acabó el tiempo para pagar el anticipo y el horario se liberó. Escribe «agendar» para reservar de nuevo. Si ya pagaste, escribe «hablar con alguien».', conversation);
+        const c = (await db.collection('negocios').doc(negocioId).collection('citas').doc(citaId).get()).data();
+        if (c?.deposit?.status === 'paid') return responder(`Tu anticipo ya está confirmado: tu ${tl('appointment')} está ${g('appointment', 'confirmado', 'confirmada')} ✅`, conversation);
+        return responder(`Esa reserva ya no está activa. Escribe «agendar» para reservar.`, conversation);
+      }
+      logger.warn('[assistantEngine] anticipo:', err.message);
+      return responder('No pude registrar eso ahora. Intenta de nuevo en un momento.', conversation);
+    }
   }
 
   function aServicioCita(s) {
@@ -2357,7 +2432,7 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       date: conv.selectedDate, branch: conv.selectedStaff?.branch || branch || '',
     });
     const lineaPrecio = precio ? `\nPrecio: ${precio}${conv.selectedStaff?.id === PENDING_ID && /–/.test(precio) ? ` (según quién te atienda)` : ''}` : '';
-    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}${lineaMascota(conv)}\nA nombre de: ${conv.clientName}`;
+    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}${lineaMascota(conv)}\nA nombre de: ${conv.clientName}${lineaAnticipo(conv)}`;
     return menuBotones({
       texto: `${resumen}\n\n1. Confirmar\n2. Cancelar\n(Escribe "nombre" para cambiar el nombre)`,
       cuerpo: resumen,

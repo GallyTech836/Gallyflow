@@ -8,6 +8,7 @@ import { db } from '../../config/firebase.js';
 import { computeEffectiveStatus, isBlockedStatus } from '../capabilities/capabilityModel.js';
 import { getNegocioAccess } from '../capabilities/capabilityService.js';
 import { createTerms } from '../businessProfiles/businessProfileModel.js';
+import { normalizeAnticipoConfig, anticipoReady } from '../anticipos/anticipoModel.js';
 
 // Caché en memoria: el asistente lee el negocio en cada mensaje; con esto se
 // lee como máximo una vez por minuto por negocio (más rápido y menos lecturas).
@@ -85,5 +86,14 @@ async function leerContexto(negocioId) {
     profesionales,
     sucursales,
     promociones,
+    // Anticipos por QR (capacidad 'anticipos' + configuración lista) o null.
+    anticipo: anticipoDe(negocio, access),
   };
+}
+
+function anticipoDe(negocio, access) {
+  if (access.capabilities?.anticipos?.enabled !== true) return null;
+  const bs = negocio.businessSettings || {};
+  const cfg = normalizeAnticipoConfig(bs.anticipos, bs.paymentMethods || []);
+  return anticipoReady(cfg) ? cfg : null;
 }

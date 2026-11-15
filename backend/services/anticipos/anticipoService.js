@@ -18,10 +18,64 @@
 // Los campos deposit.* los escribe solo el backend.
 
 import { db } from '../../config/firebase.js';
-import { checkCapability } from '../capabilities/capabilityService.js';
+import * as capabilities from '../capabilities/capabilityService.js';
+import * as whatsappProvider from '../providers/whatsappProvider.js';
 import { normalizeAnticipoConfig, anticipoReady, holdExpired, DEPOSIT_STATUS } from './anticipoModel.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
+
+// ───────────── Mensaje al cliente por WhatsApp (reservas del asistente) ─────────────
+
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function diaLargo(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return '';
+  const f = new Date(`${date}T12:00:00Z`);
+  return `${DIAS[f.getUTCDay()]} ${f.getUTCDate()} ${MESES[f.getUTCMonth()]}`;
+}
+
+export function mensajeCliente(tipo, cita) {
+  const cuando = `${diaLargo(cita.date)} a las ${cita.time}`;
+  const monto = cita.deposit?.amount ? ` de Bs ${cita.deposit.amount}` : '';
+  if (tipo === 'ANTICIPO_CONFIRMADO') return `✅ Recibimos tu anticipo${monto}. Tu cita del ${cuando} quedó confirmada. ¡Te esperamos!`;
+  if (tipo === 'ANTICIPO_RECHAZADO') return `No pudimos confirmar tu anticipo, así que tu reserva del ${cuando} se canceló. Si ya pagaste, escribe «hablar con alguien».`;
+  if (tipo === 'ANTICIPO_VENCIDO') return `Se acabó el tiempo para pagar el anticipo y tu reserva del ${cuando} se liberó. Escribe «agendar» para reservar de nuevo.`;
+  return '';
+}
+
+/** Cuenta de WhatsApp del negocio para escribirle al cliente (la de su sucursal si hay varias). */
+async function cuentaWhatsApp(negocioId, branch) {
+  const snap = await db.collection('whatsappAccounts').where('negocioId', '==', negocioId).get();
+  const cuentas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const c = cuentas.find((x) => branch && x.branch === branch) || cuentas[0];
+  if (c) return { phoneNumberId: c.id, token: c.token || null, provider: c.provider || 'meta', from: c.phone || null };
+  const neg = (await negRef(negocioId).get()).data() || {};
+  return neg.whatsappPhoneNumberId ? { phoneNumberId: neg.whatsappPhoneNumberId, token: null, provider: 'meta', from: null } : null;
+}
+
+/**
+ * Si la reserva se hizo por el asistente, le escribe al cliente cómo quedó.
+ * Dentro de las 24 h desde su último mensaje, WhatsApp permite el mensaje libre.
+ */
+async function avisarCliente(tipo, negocioId, cita) {
+  if (cita.bookedBy !== 'assistant' || !cita.clientPhone || cita.clientPhone === 'No especificado') return;
+  const texto = mensajeCliente(tipo, cita);
+  if (!texto) return;
+  try {
+    const permiso = await capabilities.checkCapability(negocioId, 'asistenteWhatsapp');
+    if (!permiso.allowed) return;
+    const envio = await cuentaWhatsApp(negocioId, cita.branch);
+    if (!envio) return;
+    await whatsappProvider.send(cita.clientPhone, texto, envio);
+    // Cuenta como mensaje enviado (consumo del plan), igual que las respuestas del bot.
+    await Promise.all([
+      capabilities.incrementUsage?.(negocioId, 'whatsappMensajes', 1),
+      capabilities.incrementClientUsage?.(negocioId, cita.clientPhone),
+    ]).catch(() => {});
+  } catch (err) {
+    logger.warn('[anticipos] mensaje al cliente falló:', err.message);
+  }
+}
 
 /**
  * Aviso push del anticipo (best-effort: si falla, la operación ya quedó hecha).
@@ -61,7 +115,7 @@ export async function getAnticipoConfig(negocioId, negocioData = null) {
   const data = negocioData || (await negRef(negocioId).get()).data() || {};
   const bs = data.businessSettings || {};
   if (bs.anticipos?.enabled !== true) return null;
-  const cap = await checkCapability(negocioId, 'anticipos', { checkLimit: false });
+  const cap = await capabilities.checkCapability(negocioId, 'anticipos', { checkLimit: false });
   if (!cap.allowed) return null;
   const cfg = normalizeAnticipoConfig(bs.anticipos, bs.paymentMethods || []);
   return anticipoReady(cfg) ? cfg : null;
@@ -88,7 +142,7 @@ export async function expireHolds(negocioId, nowMs = Date.now()) {
   })));
   const hechas = canceladas.filter(Boolean);
   vencidas.forEach((d) => dropHold(negocioId, d.id));
-  await Promise.all(hechas.map((c) => avisar('ANTICIPO_VENCIDO', negocioId, c)));
+  await Promise.all(hechas.map((c) => Promise.all([avisar('ANTICIPO_VENCIDO', negocioId, c), avisarCliente('ANTICIPO_VENCIDO', negocioId, c)])));
   return hechas.length;
 }
 
@@ -164,7 +218,7 @@ export async function confirmDeposit(negocioId, citaId, { actor }) {
     return { status: 'confirmed', deposit, _cita: { ...c, deposit } };
   }).then(async ({ _cita, ...r }) => {
     dropHold(negocioId, citaId);
-    if (_cita) await avisar('ANTICIPO_CONFIRMADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true });
+    if (_cita) await Promise.all([avisar('ANTICIPO_CONFIRMADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true }), avisarCliente('ANTICIPO_CONFIRMADO', negocioId, _cita)]);
     return r;
   });
 }
@@ -180,7 +234,7 @@ export async function rejectDeposit(negocioId, citaId, { actor }) {
     return { status: 'cancelled', deposit, _cita: { ...c, deposit } };
   }).then(async ({ _cita, ...r }) => {
     dropHold(negocioId, citaId);
-    if (_cita) await avisar('ANTICIPO_RECHAZADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true });
+    if (_cita) await Promise.all([avisar('ANTICIPO_RECHAZADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true }), avisarCliente('ANTICIPO_RECHAZADO', negocioId, _cita)]);
     return r;
   });
 }
@@ -203,4 +257,38 @@ export async function resolveDeposit(negocioId, citaId, { decision, actor }) {
     tx.update(ref, { deposit, updatedAt: at });
     return { status: c.status, deposit };
   });
+}
+
+/**
+ * El cliente cancela por WhatsApp una reserva que espera el anticipo.
+ * Solo si es suya (mismo teléfono). Libera el horario y avisa al dueño.
+ */
+export async function cancelByClient(negocioId, citaId, phone) {
+  const at = new Date().toISOString();
+  const r = await withCita(negocioId, citaId, (tx, ref, c) => {
+    if (String(c.clientPhone || '') !== String(phone || '')) throw new AnticipoError(404, 'Esa reserva no existe.', 'NOT_FOUND');
+    const d = c.deposit;
+    if (!d || d.status !== DEPOSIT_STATUS.AWAITING || c.status !== 'pending') throw new AnticipoError(409, 'Esa reserva ya no espera el anticipo.', 'NOT_AWAITING');
+    const deposit = { ...d, status: DEPOSIT_STATUS.EXPIRED, resolvedAt: at };
+    tx.update(ref, { status: 'cancelled', cancelledBy: 'client', cancelledVia: 'whatsapp', cancelledReason: 'cliente_cancelo', cancelledAt: at, deposit, updatedAt: at });
+    return { ...c, deposit };
+  });
+  dropHold(negocioId, citaId);
+  try {
+    const pro = r.professionalId || r.barberId;
+    await sendNotification({
+      tipo: 'RESERVA_CANCELADA', negocioId, data: { clientName: r.clientName, time: r.time },
+      ...(pro && pro !== 'pending' ? { targetProfessionalId: pro } : {}),
+    });
+  } catch (err) { logger.warn('[anticipos] aviso falló:', err.message); }
+  return r;
+}
+
+/** Reserva de este teléfono que espera el anticipo (la más reciente), o null. */
+export async function findAwaitingByPhone(negocioId, phone) {
+  const snap = await negRef(negocioId).collection('citas').where('deposit.status', '==', DEPOSIT_STATUS.AWAITING).get();
+  const mias = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .filter((c) => c.status === 'pending' && String(c.clientPhone || '') === String(phone || '') && !holdExpired(c))
+    .sort((a, b) => String(b.deposit?.createdAt || '').localeCompare(String(a.deposit?.createdAt || '')));
+  return mias[0] || null;
 }
