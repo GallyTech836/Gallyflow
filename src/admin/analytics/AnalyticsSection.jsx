@@ -10,6 +10,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { getServicesFromCita } from '../../shared/appointments/serviceSelection';
+import { amountOfCita } from '../../shared/cash/cashModel';
 import { isRegistro } from '../../shared/registros/registroModel';
 import { getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 import CommissionPayModal from '../cash/CommissionPayModal';
@@ -80,9 +81,8 @@ function getRangeBounds(selectedDate, agendaView) {
   return { startDate: formatISODate(start), endDate: formatISODate(end) };
 }
 
-function ingresoDeCita(cita) {
-  return getServicesFromCita(cita).reduce((sum, s) => sum + Number(s?.price || 0), 0);
-}
+// Misma fórmula que la caja y Finanzas: precio final de la cita.
+const ingresoDeCita = (cita) => amountOfCita(cita);
 
 // `basic` (plan Nexus Control, capacidad registroServicios): vista sencilla de
 // dinero (bruto, comisiones calculadas/pendientes/pagadas, importe para el

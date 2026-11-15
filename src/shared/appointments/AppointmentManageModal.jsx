@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Trash2, ChevronDown } from 'lucide-react';
 import { canEditField, canHardDelete, getAllowedNextStates, canAdjustDuration } from './permissions';
+import { isInClosedCash, CLOSED_CASH_EDITABLE, CLOSED_CASH_MESSAGE } from '../cash/cashLock';
 import { calculateTotals, getServicesFromCita } from './serviceSelection';
 import { getLabel } from './statusModel';
 import { formatServicePriceFor } from '../servicePricing/servicePricing';
@@ -50,11 +51,13 @@ export default function AppointmentManageModal({
 
   if (!appointment) return null;
 
-  const canEdit = (field) => canEditField(role, field, staffPermissions);
-  const allowDelete = canHardDelete(role, staffPermissions);
-  const nextStates = getAllowedNextStates(role, appointment.status, staffPermissions);
+  // Cita que ya entró en una caja cerrada: solo cliente y notas (ver cashLock.js).
+  const cashLocked = isInClosedCash(appointment);
+  const canEdit = (field) => (cashLocked && !CLOSED_CASH_EDITABLE.includes(field) ? false : canEditField(role, field, staffPermissions));
+  const allowDelete = !cashLocked && canHardDelete(role, staffPermissions);
+  const nextStates = cashLocked ? [] : getAllowedNextStates(role, appointment.status, staffPermissions);
   const anyEditable = ['clientName', 'status', 'notes', 'time', 'serviceId', 'duration'].some(canEdit);
-  const canAdjust = canAdjustDuration(role, staffPermissions);
+  const canAdjust = !cashLocked && canAdjustDuration(role, staffPermissions);
 
   const isRealPhone = (p) => !!p && !['n/a', 'no especificado'].includes(String(p).trim().toLowerCase());
   const linkedClient = (clients || []).find(c => c?.id === appointment.clientId);
@@ -251,6 +254,11 @@ export default function AppointmentManageModal({
       )}
     >
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-4">
+        {cashLocked && (
+          <p role="note" className="rounded-lg border border-nexus-border bg-nexus-background px-3 py-2 text-sm text-nexus-text-secondary">
+            {CLOSED_CASH_MESSAGE}
+          </p>
+        )}
         <Field
           label={terms.t('client')}
           required

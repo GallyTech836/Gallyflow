@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase/config';
 import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { isInClosedCash, CLOSED_CASH_EDITABLE, CLOSED_CASH_DELETE_MESSAGE } from '../shared/cash/cashLock';
 import { getPeriodRange, getMonthGridRange, getPreviousPeriodRange } from '../shared/appointments/dateRanges';
 import { paymentStampFields } from '../shared/appointments/paymentStamp';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
@@ -720,6 +721,7 @@ const fetchByDate = async (subcollection, date) => {
   };
 
   const updateStatus = async (apptId, nextStatus, paymentMethod) => {
+    if (isInClosedCash(appointments.find(a => a.id === apptId))) { triggerToast(CLOSED_CASH_DELETE_MESSAGE, 'error'); return; }
     if (!canEditPart(staffPerms, 'editFinish')) { triggerToast(`No tienes permiso para cambiar el estado de ${g('appointment', 'los', 'las')} ${tl('appointments')}.`, 'error'); return; }
     try {
       const docRef = doc(db, 'negocios', negocioId, 'citas', apptId);
@@ -747,8 +749,10 @@ const fetchByDate = async (subcollection, date) => {
     // de editar según permissions.js — sin hardcodear campo a campo.
     if (!managingPerms.editAppointments) { setManagingAppt(null); return; }
     const allowed = getEffectiveFieldPermissions('barber', managingPerms) || {};
+    // Cita de una caja cerrada: solo cliente y notas (cashLock.js).
+    const cashLocked = isInClosedCash(appointments.find(a => a.id === managingAppt.id));
     const payload = Object.entries(allowed)
-      .filter(([, canEdit]) => canEdit)
+      .filter(([field, canEdit]) => canEdit && (!cashLocked || CLOSED_CASH_EDITABLE.includes(field)))
       .reduce((acc, [field]) => {
         acc[field] = managingAppt[field] ?? '';
         return acc;
@@ -913,6 +917,7 @@ const fetchByDate = async (subcollection, date) => {
   const [collectOpen, setCollectOpen] = useState(false);
 
   const deleteAppointment = async (apptId) => {
+    if (isInClosedCash(appointments.find(a => a.id === apptId))) { triggerToast(CLOSED_CASH_DELETE_MESSAGE, 'error'); return; }
     if (!staffPerms.deleteAppointments) { triggerToast('No tienes permiso para eliminar citas.', 'error'); return; }
     const targetAppt = appointments.find(a => a.id === apptId);
     try {

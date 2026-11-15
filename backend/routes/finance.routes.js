@@ -1,55 +1,17 @@
 import { Router } from 'express';
-import { db } from '../config/firebase.js';
 import { identifyRequester } from '../middlewares/auth.middleware.js';
 import { financePinRateLimit } from '../middlewares/rateLimit.middleware.js';
 import { logger } from '../utils/logger.js';
 import { requireSession } from '../middlewares/session.middleware.js';
 import { hashPin, verifyPin } from '../services/finance/pin.js';
 import { getPinHash, setPinHash } from '../services/finance/pinStore.js';
-import { createSessionToken, verifySessionToken } from '../services/finance/financeSession.js';
+import { createSessionToken } from '../services/finance/financeSession.js';
+import { requireAuth, requireFinanceSession } from '../middlewares/financeAuth.middleware.js';
 import { requireCapability } from '../services/capabilities/capabilityService.js';
 import { getFinanceSummary, getFinanceOverview, getComisionesPorProfesional, getDetalleComisionesBarbero } from '../services/finance/financeData.js';
 import { CashError, registerCommissionPayment } from '../services/cash/cashService.js';
 
 const router = Router();
-
-function getNegocioSlug(email) {
-  if (!email) return null;
-  return email.split('@')[0].trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-// El negocio sale de negocios.adminUid == uid del token, no del correo.
-async function requireAuth(req, res, next) {
-  if (!req.actor?.verified) return res.status(401).json({ error: 'No autenticado.' });
-  try {
-    const snap = await db.collection('negocios').where('adminUid', '==', req.actor.uid).limit(2).get();
-    if (snap.size !== 1) {
-      logger.warn('[finance] uid sin negocio único:', req.actor.uid, snap.size);
-      return res.status(403).json({ error: 'No autorizado.' });
-    }
-    req.negocioId = snap.docs[0].id;
-    next();
-  } catch (err) {
-    logger.error('[finance] requireAuth:', err.message);
-    res.status(500).json({ error: 'Error interno.' });
-  }
-}
-
-async function requireFinanceSession(req, res, next) {
-  try {
-    const negocioSnap = await db.collection('negocios').doc(req.negocioId).get();
-    const analyticsPinEnabled = negocioSnap.data()?.analyticsPinEnabled === true;
-    if (!analyticsPinEnabled) return next();
-
-    const token = req.headers['x-finance-session'];
-    if (!verifySessionToken(token, req.negocioId)) {
-      return res.status(401).json({ error: 'Sesión financiera inválida o expirada. Ingresa el PIN de nuevo.' });
-    }
-    next();
-  } catch (err) {
-    logger.error('[finance]', err.message); res.status(500).json({ error: 'Error interno.' });
-  }
-}
 
 router.use('/finance', identifyRequester, requireSession);
 

@@ -193,6 +193,8 @@ import {
       if (!saleSnap.exists()) throw new Error('La venta ya no existe.');
       const sale = saleSnap.data();
       if (sale.status === 'void') throw new Error('La venta ya estaba anulada.');
+      // Venta que ya entró en una caja cerrada: anularla descuadraría la caja y Finanzas.
+      if (sale.cashSessionId) throw new Error('Esta venta ya está en una caja cerrada: no se puede anular.');
       const items = Array.isArray(sale.items) ? sale.items : [];
       const refs = items.map((i) => doc(productosCol(negocioId), i.productId));
       const snaps = await Promise.all(refs.map((r) => tx.get(r)));

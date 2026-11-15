@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Package, LogOut, ImagePlus, ClipboardList, Filter } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Calendar as CalendarIcon, Users, UserCheck, DollarSign, ChartBar as BarChart3, Clock, Plus, Search, CircleCheck as CheckCircle, Circle as XCircle, TrendingUp, TrendingDown, FileSliders as Sliders, Trash2, Pencil as Edit3, Award, ArrowUpRight, MapPin, CalendarCheck, UserPlus, Info, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Settings, Circle as HelpCircle, CircleAlert as AlertCircle, Check, Building2, Lock, Eye, EyeOff, KeyRound, RefreshCw, Copy, ToggleLeft, ToggleRight, Upload, Package, LogOut, ImagePlus, ClipboardList, Filter, Wallet } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../auth/useAuth';
 import { useServicios } from '../firebase/useServicios';
@@ -7,6 +7,7 @@ import { auth, db } from '../firebase/config';
 import { doc, setDoc, addDoc, writeBatch, collection, onSnapshot, deleteDoc, updateDoc, query, where, orderBy, limit, startAt, getDocs, getCountFromServer, getAggregateFromServer, sum } from 'firebase/firestore';
 import { getPeriodRange, getPreviousPeriodRange, formatYMD } from '../shared/appointments/dateRanges';
 import { paymentStampFields } from '../shared/appointments/paymentStamp';
+import { isInClosedCash, closedCashPatch, CLOSED_CASH_DELETE_MESSAGE } from '../shared/cash/cashLock';
 import CashCard from './cash/CashCard';
 import CommissionPayModal from './cash/CommissionPayModal';
 import CommissionDetail from './cash/CommissionDetail';
@@ -47,6 +48,7 @@ import { SETTINGS_SECTIONS } from './settings/SettingsSidebar';
 import { MonthCalendar, YearCalendar } from '../shared/calendar/AgendaCalendars';
 import AnalyticsSection from './analytics/AnalyticsSection';
 import PinGate from './pinLock/PinGate';
+import FinanzasSection from './finanzas/FinanzasSection';
 import { usePinLock } from './pinLock/usePinLock';
 import { LOCKABLE_MODULES } from '../shared/pinLock/pinLockModel';
 import InventoryPage from './inventory/InventoryPage';
@@ -257,10 +259,10 @@ const { promotions: allPromotions } = usePromotions(negocioId, promosOn);
 const activePromotions = promosOn ? allPromotions : [];
 // Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
 // capacidad mientras la pestaña está abierta, se vuelve a la pestaña de inicio.
-const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', promotions: 'promociones', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', registros: 'registroServicios' };
+const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', promotions: 'promociones', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', finanzas: 'analiticas', registros: 'registroServicios' };
 // Pestañas que no son un módulo propio: "Servicios registrados" es parte de Agenda
-// y Promociones es parte de Servicios.
-const TAB_MODULE = { registros: 'agenda', promotions: 'services' };
+// y Promociones es parte de Servicios. Finanzas va con Analítica (mismo PIN y plan).
+const TAB_MODULE = { registros: 'agenda', promotions: 'services', finanzas: 'reports' };
 // Pestaña de inicio: la Agenda; si está oculta (vistaAgenda, Nexus Control),
 // "Servicios registrados", luego Dashboard y, como último recurso, Servicios.
 const showAgenda = canUseCapability('vistaAgenda');
@@ -1824,6 +1826,20 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const handleUpdateReservation = async (e) => {
     if (e) e.preventDefault();
+    // Cita de una caja cerrada: solo se guardan cliente y notas (cashLock.js).
+    if (isInClosedCash(findCitaById(editingReservation.id))) {
+      try {
+        await updateDoc(doc(db, 'negocios', negocioId, 'citas', editingReservation.id), { ...closedCashPatch(editingReservation), updatedAt: new Date().toISOString() });
+        bumpCitasTick();
+      } catch (err) {
+        triggerToast(`Error al modificar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, 'error');
+        return;
+      }
+      triggerToast(`¡${t('appointment')} ${g('appointment', 'modificado', 'modificada')} con éxito!`);
+      setActiveModal(null);
+      setEditingReservation(null);
+      return;
+    }
     const targetProfessionalId = editingReservation.professionalId || editingReservation.barberId || 'pending';
     const duration = Number(editingReservation.duration) > 0 ? Number(editingReservation.duration) : 30;
     const endTimeStr = minToTime(timeToMin(editingReservation.time) + duration);
@@ -2002,6 +2018,7 @@ const { heroConfig } = useHeroConfig(negocioId);
   };
 
   const handleUpdateStatus = async (id, status, paymentMethod) => {
+    if (isInClosedCash(findCitaById(id))) { triggerToast(CLOSED_CASH_DELETE_MESSAGE, 'error'); return; }
     try {
       const targetReservation = findCitaById(id); // antes de guardar: estado anterior
       const payload = { status, updatedAt: new Date().toISOString(), ...paymentStampFields(targetReservation, status) };
@@ -2029,6 +2046,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const handleDeleteReservation = async (id) => {
     const targetReservation = findCitaById(id);
+    if (isInClosedCash(targetReservation)) { triggerToast(CLOSED_CASH_DELETE_MESSAGE, 'error'); return; }
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'citas', id));
       bumpCitasTick();
@@ -2802,6 +2820,16 @@ const { heroConfig } = useHeroConfig(negocioId);
             <SidebarSection label="Finanzas" collapsed={navCollapsed} />
           )}
 
+          {hasFeature(planFeatures, 'analiticas') && hasModule('reports') && (
+            <SidebarItem
+              icon={Wallet}
+              label="Finanzas"
+              collapsed={navCollapsed}
+              active={activeTab === 'finanzas'}
+              onClick={() => { setActiveTab('finanzas'); setIsMobileSidebarOpen(false); }}
+            />
+          )}
+
           {hasFeature(planFeatures, 'comisiones') && hasModule('commissions') && (
             <SidebarItem
               icon={DollarSign}
@@ -2912,6 +2940,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {activeTab === 'commissions' && 'Liquidación de Comisiones'}
                   {activeTab === 'assistance' && 'Control de Asistencias'}
                   {activeTab === 'reports' && 'Métricas & Informes'}
+                  {activeTab === 'finanzas' && 'Finanzas'}
                   {activeTab === 'settings' && 'Configuración'}
                 </span>
               </h2>
@@ -4037,6 +4066,14 @@ const { heroConfig } = useHeroConfig(negocioId);
            registros={registrosMode}
            financeToken={pinLock.token}
            onFinanceExpired={pinLock.lock}
+           />
+         )}
+
+         {activeTab === 'finanzas' && (
+           <FinanzasSection
+             financeToken={pinLock.token}
+             onFinanceExpired={pinLock.lock}
+             onToast={(msg) => triggerToast(msg)}
            />
          )}
 

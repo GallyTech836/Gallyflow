@@ -1,5 +1,6 @@
 import { db } from '../../config/firebase.js';
 import { calculateCommissionForCita } from './commissionModel.js';
+import { amountOfCita } from '../cash/cashModel.js';
 
 async function getCitasEnRango(negocioId, startDate, endDate, branch) {
   const citasRef = db.collection('negocios').doc(negocioId).collection('citas');
@@ -27,14 +28,11 @@ async function getBarbersYServicios(negocioId) {
   return { barbers, servicios };
 }
 
-function ingresoDeCita(cita) {
-  if (Array.isArray(cita.services) && cita.services.length > 0) {
-    return cita.services.reduce((sum, s) => sum + Number(s?.price || 0), 0);
-  }
-  return Number(cita.price || 0);
-}
+// Una sola fórmula de ingreso en todo Nexus: la de la caja (precio final de
+// la cita; si no tiene, la suma de sus servicios). Ver cashModel.amountOfCita.
+const ingresoDeCita = (cita) => amountOfCita(cita);
 
-function calcularResumen(citas, barbers, servicios) {
+export function calcularResumen(citas, barbers, servicios) {
   let ingresosBrutos = 0;
   let comisionGenerada = 0;
   let comisionPagada = 0;
