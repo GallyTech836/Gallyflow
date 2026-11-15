@@ -61,6 +61,8 @@ import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
 import ShareLinkMenu from '../shared/qr/ShareLinkMenu';
 import { confirmarAnticipo, rechazarAnticipo, resolverAnticipo, vencerAnticipos } from '../shared/anticipos/anticiposApi';
+import { useAwaitingDeposits } from '../shared/anticipos/useAwaitingDeposits';
+import AwaitingDepositsCard from '../shared/anticipos/AwaitingDepositsCard';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
 import RegistrosPanel from '../shared/registros/RegistrosPanel';
 import RegistrarServicioBar from '../shared/registros/RegistrarServicioBar';
@@ -297,6 +299,8 @@ useEffect(() => {
 // Anticipos: al abrir el panel (y cada 5 min) se cancelan las reservas que no
 // pagaron el anticipo a tiempo, así la agenda muestra el horario libre.
 const anticiposOn = canUseCapability('anticipos');
+// Reservas que esperan el anticipo (de cualquier día): tarjeta arriba de la agenda.
+const awaitingDeposits = useAwaitingDeposits(negocioId, anticiposOn);
 useEffect(() => {
   if (!anticiposOn || !negocioId) return undefined;
   vencerAnticipos();
@@ -3299,6 +3303,8 @@ const { heroConfig } = useHeroConfig(negocioId);
           {activeTab === 'agenda' && planLoading && <LoadingState />}
           {agendaTab && (
             <div className="space-y-3 sm:space-y-4">
+
+              {anticiposOn && <AwaitingDepositsCard citas={awaitingDeposits} onOpen={handleOpenEditReservation} />}
 
               {agendaView === 'dia' && (() => {
                 const dayColumns = (branchBarbers || []).filter(b => filterBarberId === 'all' || b?.id === filterBarberId);

@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { QrCode } from 'lucide-react';
 import { db } from '../../firebase/config';
-import { Card, Button, Field, Input, ChoiceChips, ImageUploader } from '../../shared/ui';
+import { Card, Button, Field, Input, ChoiceChips } from '../../shared/ui';
+import QrUploader from '../../shared/anticipos/QrUploader';
 import { normalizeAnticipoConfig, anticipoReady, MIN_MINUTES, MAX_MINUTES } from '../../shared/anticipos/anticipoModel';
 import { DEFAULT_PAYMENT_METHODS } from '../../shared/businessSettings/businessSettingsModel';
 
@@ -93,7 +94,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
       <Card>
         <h3 className="mb-3 text-base font-semibold text-nexus-text">Lo que ve el cliente</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[260px_1fr]">
-          <ImageUploader label="Tu QR de cobro" hint="La imagen del QR de tu banco." value={form.qrImage} onChange={(url) => set({ qrImage: url })} onUploadingChange={setUploading} maxSize={1200} />
+          <QrUploader hint="Puede ser una captura de tu banco: la recortas al subirla." value={form.qrImage} onChange={(url) => set({ qrImage: url })} onUploadingChange={setUploading} />
           <div className="space-y-4">
             <Field label="Instrucciones (opcional)" hint="Ej.: pon tu nombre en la glosa.">
               <textarea
