@@ -14,6 +14,7 @@
 //                            un gasto del mes (pagado o no). Los fijos generan uno por mes: fijo_{fijoId}_{AAAA-MM}
 //   finanzasFijos/{id}       { title, category, amount, day, active, startMonth, endMonth? } gastos que se repiten
 //   finanzasMeses/{AAAA-MM}  totales de meses ya cerrados (caché para el gráfico)
+//   compras/{id}             compras de inventario { supplier, branchKey, items, total, gastoId? }
 //
 // Un gasto pagado desde una caja también se anota en cajaMovimientos
 // (source 'gasto'): así el cierre de caja cuadra. Finanzas no lo cuenta dos
@@ -23,7 +24,10 @@
 // alguien pueda pisar. Escrituras con requestId del navegador como id del
 // documento: un doble clic o un reintento no duplica nada.
 
+import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../../config/firebase.js';
+import { checkCapability } from '../capabilities/capabilityService.js';
+import { branchOptions, stockOf, toInt, dropsLegacyGeneral, GENERAL_KEY } from '../inventory/stockModel.js';
 import { isCashMethod, isRealPaymentMethod, round2, toMillis, localDateKey, localDayStartMillis } from '../cash/cashModel.js';
 import { getCurrentCash } from '../cash/cashService.js';
 import { calcularResumen } from '../finance/financeData.js';
@@ -514,12 +518,12 @@ async function paymentWrites(tx, negocioId, { gasto, gastoRef, account, amount, 
   };
 }
 
-async function requirePayable(negocioId, accountId, amount) {
+async function requirePayable(negocioId, accountId, amount, { hideBalance = false } = {}) {
   const estado = await getEstado(negocioId);
   if (!estado.setupDone) throw new FinanzasError(409, 'Primero responde a dónde llega cada cobro.', 'SETUP_REQUIRED');
   const account = estado.accounts.find((a) => a.id === accountId && a.active);
   if (!account) throw new FinanzasError(400, 'Elige de dónde salió la plata.', 'ACCOUNT_REQUIRED');
-  if (amount > account.balance) throw new FinanzasError(409, `No alcanza: en ${account.name} hay ${fmt(account.balance)}.`, 'INSUFFICIENT');
+  if (amount > account.balance) throw new FinanzasError(409, hideBalance ? `No alcanza el saldo de ${account.name}. Elige otra cuenta o márcalo para pagar después.` : `No alcanza: en ${account.name} hay ${fmt(account.balance)}.`, 'INSUFFICIENT');
   return account;
 }
 
@@ -654,6 +658,114 @@ export async function getEquilibrio(negocioId) {
   const { daysInMonth } = monthDays(cur);
   const hoy = Number(todayKey().slice(8, 10));
   return { month: cur, label: monthLabel(cur), daysLeft: Math.max(0, daysInMonth - hoy), ...be };
+}
+
+// ───────────────────────── Compras de inventario ─────────────────────────
+
+/** ¿Este negocio puede anotar la compra en Finanzas? (plan con Analítica y cuentas configuradas) */
+async function finanzasActivas(negocioId) {
+  const [cap, cfg] = await Promise.all([checkCapability(negocioId, 'analiticas', { checkLimit: false }), configRef(negocioId).get()]);
+  return cap.allowed && cfg.exists && cfg.data()?.setupDone === true;
+}
+
+/**
+ * Lo que necesita la ventana «Registrar compra»: si se anota en Finanzas y
+ * de qué cuentas puede salir la plata (solo nombres: Inventario no ve saldos).
+ */
+export async function getCompraOpciones(negocioId) {
+  if (!(await finanzasActivas(negocioId))) return { finanzas: false, accounts: [] };
+  const snap = await cuentasCol(negocioId).get();
+  const accounts = snap.docs.map((d) => ({ id: d.id, name: d.data().name, isCaja: d.data().type === 'efectivo', active: d.data().active !== false }))
+    .filter((a) => a.active).sort((a, b) => (b.isCaja - a.isCaja) || a.name.localeCompare(b.name));
+  return { finanzas: true, accounts };
+}
+
+/**
+ * Registrar compra: en una sola transacción sube el stock de la sucursal,
+ * deja cada entrada en movimientosInventario, guarda la compra y, si el
+ * negocio usa Finanzas, anota el gasto (pagado desde una cuenta o por pagar).
+ * El costo de cada producto queda como su último costo de compra.
+ */
+export async function createCompra(negocioId, { branchKey, supplier, items, paidNow, accountId, due, requestId, actor }) {
+  const rid = cleanRequestId(requestId);
+  const proveedor = cleanName(supplier, 80);
+  if (!Array.isArray(items) || !items.length || items.length > 50) throw new FinanzasError(400, 'Agrega al menos un producto.', 'ITEMS_REQUIRED');
+
+  // Mismo producto dos veces: se junta en una línea (con el costo promedio).
+  const byId = new Map();
+  for (const it of items) {
+    const id = String(it?.productId || '').trim();
+    const qty = toInt(it?.qty);
+    const cost = parseMoney(it?.cost);
+    if (!id) throw new FinanzasError(400, 'Elige el producto de cada línea.', 'PRODUCT_REQUIRED');
+    if (!(qty > 0)) throw new FinanzasError(400, 'La cantidad tiene que ser mayor a 0.', 'INVALID_QTY');
+    if (cost === null) throw new FinanzasError(400, 'Escribe el costo de cada producto (puede ser 0).', 'INVALID_COST');
+    const prev = byId.get(id);
+    if (prev) { prev.subtotal = round2(prev.subtotal + qty * cost); prev.qty += qty; } else byId.set(id, { productId: id, qty, subtotal: round2(qty * cost) });
+  }
+  const lineas = [...byId.values()].map((l) => ({ ...l, cost: round2(l.subtotal / l.qty) }));
+  const total = round2(lineas.reduce((t, l) => t + l.subtotal, 0));
+
+  const sucSnap = await negRef(negocioId).collection('sucursales').get();
+  const branches = sucSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const opts = branchOptions(branches);
+  const key = opts.some((b) => b.key === branchKey) ? branchKey : (opts.length === 1 ? opts[0].key : null);
+  if (!key) throw new FinanzasError(400, 'Elige a qué sucursal llega la compra.', 'BRANCH_REQUIRED');
+  const branchName = opts.find((b) => b.key === key)?.name || 'General';
+
+  const conFinanzas = await finanzasActivas(negocioId);
+  let account = null;
+  const today = todayKey();
+  if (conFinanzas) {
+    if (paidNow) {
+      if (!(total > 0)) throw new FinanzasError(400, 'El total es 0: no hay nada que pagar.', 'ZERO_TOTAL');
+      account = await requirePayable(negocioId, accountId, total, { hideBalance: true });
+    } else if (!isDay(due)) throw new FinanzasError(400, 'Elige hasta cuándo tienes que pagarlo.', 'DUE_REQUIRED');
+  }
+
+  const compraRef = negRef(negocioId).collection('compras').doc(`compra_${rid}`);
+  const gastoRef = gastosCol(negocioId).doc(`g_compra_${rid}`);
+  const prodRefs = lineas.map((l) => negRef(negocioId).collection('productos').doc(l.productId));
+  const at = nowIso();
+  const conGasto = conFinanzas && total > 0;
+  const vence = paidNow ? today : due;
+  const gasto = conGasto ? {
+    title: proveedor ? `Compra a ${proveedor}` : 'Compra de productos', category: 'Productos', total,
+    paid: paidNow ? total : 0, open: !paidNow, due: vence, month: vence.slice(0, 7), fijoId: null,
+    compraId: compraRef.id, voided: false, createdAt: at, createdBy: actorInfo(actor), lastAccountId: account?.id || null,
+  } : null;
+  let saved = null;
+
+  await db.runTransaction(async (tx) => {
+    const [compraSnap, ...prodSnaps] = await Promise.all([tx.get(compraRef), ...prodRefs.map((r) => tx.get(r))]);
+    if (compraSnap.exists) { saved = compraSnap.data(); return; } // reintento
+    const faltan = prodSnaps.filter((p) => !p.exists);
+    if (faltan.length) throw new FinanzasError(404, 'Uno de los productos ya no existe. Recarga la página.', 'PRODUCT_NOT_FOUND');
+    const pay = account ? await paymentWrites(tx, negocioId, { gasto, gastoRef, account, amount: total, rid, actor, at }) : null;
+
+    const detalle = [];
+    prodSnaps.forEach((snap, i) => {
+      const p = { id: snap.id, ...snap.data() };
+      const l = lineas[i];
+      const before = stockOf(p, key, branches);
+      const after = before + l.qty;
+      // El mapa de stock completo (leído en esta misma transacción) con la sucursal al día.
+      const stock = { ...(p.stock && typeof p.stock === 'object' ? p.stock : {}), [key]: after };
+      if (dropsLegacyGeneral(p, key, branches)) delete stock[GENERAL_KEY];
+      tx.update(prodRefs[i], { stock, cost: l.cost, updatedAt: FieldValue.serverTimestamp() });
+      tx.set(negRef(negocioId).collection('movimientosInventario').doc(`compra_${rid}_${i}`), {
+        type: 'compra', productId: p.id, productName: p.name || '', branchKey: key, branchName,
+        qty: l.qty, before, after, reason: proveedor ? `Compra · ${proveedor}` : 'Compra',
+        purchaseId: compraRef.id, createdBy: actor?.uid || null, createdAt: FieldValue.serverTimestamp(),
+      });
+      detalle.push({ productId: p.id, name: p.name || '', qty: l.qty, cost: l.cost, subtotal: l.subtotal });
+    });
+    saved = { supplier: proveedor, branchKey: key, branchName, items: detalle, total, date: today, gastoId: conGasto ? gastoRef.id : null, paidNow: conGasto ? !!paidNow : null, createdAt: at, createdBy: actorInfo(actor) };
+    tx.set(compraRef, saved);
+    if (conGasto) { tx.set(gastoRef, gasto); pay?.(); }
+  });
+  if (conGasto) await dropCache(negocioId, [gasto.month, today.slice(0, 7)]);
+  return { id: compraRef.id, total: saved.total, finanzas: !!saved.gastoId, paidNow: !!saved.paidNow, account: account?.name || null, fromCaja: !!account?.isCaja };
 }
 
 export { UNASSIGNED };

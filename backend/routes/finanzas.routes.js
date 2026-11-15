@@ -13,7 +13,7 @@ import { requireCapability } from '../services/capabilities/capabilityService.js
 import { logger } from '../utils/logger.js';
 import {
   FinanzasError, getEstado, setupFinanzas, createAccount, updateAccount, createTransfer, getResumen,
-  listGastos, createGasto, payGasto, deleteGasto, stopFijo, getEquilibrio,
+  listGastos, createGasto, payGasto, deleteGasto, stopFijo, getEquilibrio, getCompraOpciones, createCompra,
 } from '../services/finanzas/finanzasService.js';
 
 const router = Router();
@@ -75,5 +75,19 @@ router.post('/finanzas/fijos/:fijoId/detener', ...owner, handle((req) => stopFij
 
 // Punto de equilibrio del mes (lo muestra Analítica).
 router.get('/finanzas/equilibrio', ...owner, handle((req) => getEquilibrio(req.negocioId)));
+
+// Compras de inventario: las usa Inventario › Registrar compra. Piden la
+// capacidad 'inventario' (no 'analiticas' ni el PIN de Analítica): solo
+// muestran nombres de cuentas, nunca saldos. Si el plan no tiene Finanzas,
+// la compra igual sube el stock.
+const ownerInventario = [identifyRequester, requireSession, requireAuth, requireCapability('inventario')];
+
+router.get('/finanzas/compras/opciones', ...ownerInventario, handle((req) => getCompraOpciones(req.negocioId)));
+
+router.post('/finanzas/compras', ...ownerInventario, handle((req) => createCompra(req.negocioId, {
+  branchKey: body(req).branchKey, supplier: body(req).supplier, items: body(req).items,
+  paidNow: body(req).paidNow === true, accountId: body(req).accountId, due: body(req).due,
+  requestId: body(req).requestId, actor: req.actor,
+})));
 
 export default router;

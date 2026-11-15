@@ -16,7 +16,8 @@ mock.module('firebase-admin/firestore', { namedExports: { FieldValue } });
 mock.module('express', { namedExports: { Router: () => router } });
 mock.module('../middlewares/auth.middleware.js', { namedExports: { identifyRequester: pasa } });
 mock.module('../middlewares/session.middleware.js', { namedExports: { requireSession: pasa } });
-mock.module('../services/capabilities/capabilityService.js', { namedExports: { requireCapability: () => pasa } });
+const caps = { analiticas: true };
+mock.module('../services/capabilities/capabilityService.js', { namedExports: { requireCapability: () => pasa, checkCapability: async (id, key) => ({ allowed: caps[key] !== false }) } });
 
 await import('../routes/finanzas.routes.js');
 const F = await import('../services/finanzas/finanzasModel.js');
@@ -388,5 +389,82 @@ describe('modelo: punto de equilibrio', () => {
     assert.equal(F.breakEven({ ingresos: 0, comisiones: 0, gastos: 1000, fijos: 1000 }, 0.4).meta, 2500);
     assert.equal(F.breakEven({ ingresos: 0, comisiones: 0, gastos: 1000, fijos: 1000 }).meta, null);
     assert.equal(F.dueFor('2026-02', 31), '2026-02-28');
+  });
+});
+
+describe('compras de inventario', () => {
+  const estado = async () => (await call('GET', '/finanzas/estado')).body;
+  let bnbId;
+  before(async () => {
+    bnbId = (await estado()).accounts.find((a) => a.name === 'Banco BNB').id;
+    db._set(`${N}/productos/cera`, { name: 'Cera mate', cost: 20, stock: { s1: 3 } });
+    db._set(`${N}/productos/gel`, { name: 'Gel', stock: { general: 4 } }); // stock viejo de antes de tener sucursal
+  });
+
+  test('opciones: nombres de cuentas, sin saldos', async () => {
+    const r = await call('GET', '/finanzas/compras/opciones');
+    assert.equal(r.body.finanzas, true);
+    assert.ok(r.body.accounts.every((a) => !('balance' in a)));
+    assert.ok(r.body.accounts.some((a) => a.id === bnbId));
+  });
+
+  test('pagada: sube el stock, deja el movimiento y anota el gasto pagado', async () => {
+    const antes = (await estado()).accounts.find((a) => a.id === bnbId).balance;
+    const req = { supplier: 'Distribuidora Sur', items: [{ productId: 'cera', qty: 10, cost: 18 }, { productId: 'gel', qty: 2, cost: 15 }, { productId: 'cera', qty: 2, cost: 24 }], paidNow: true, accountId: bnbId, requestId: 'compra00001' };
+    const r = await call('POST', '/finanzas/compras', req);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    await call('POST', '/finanzas/compras', req); // doble clic
+    assert.equal(r.body.total, 258); // 180 + 30 + 48
+    const cera = db._get(`${N}/productos/cera`);
+    assert.equal(cera.stock.s1, 15);
+    assert.equal(cera.cost, 19); // (180 + 48) / 12
+    const gel = db._get(`${N}/productos/gel`);
+    assert.equal(gel.stock.s1, 6); // juntó el stock viejo de 'general'
+    assert.equal('general' in gel.stock, false);
+    const mov = db._get(`${N}/movimientosInventario/compra_compra00001_0`);
+    assert.equal(mov.type, 'compra');
+    assert.equal(mov.before, 3);
+    assert.equal(mov.after, 15);
+    const g = db._get(`${N}/finanzasGastos/g_compra_compra00001`);
+    assert.equal(g.title, 'Compra a Distribuidora Sur');
+    assert.equal(g.category, 'Productos');
+    assert.equal(g.paid, 258);
+    assert.equal((await estado()).accounts.find((a) => a.id === bnbId).balance, antes - 258);
+  });
+
+  test('a pagar después: queda la deuda en «Tienes que pagar»', async () => {
+    const due = C.localDateKey(Date.now() + 5 * 86400000);
+    const sinFecha = await call('POST', '/finanzas/compras', { items: [{ productId: 'cera', qty: 1, cost: 20 }], paidNow: false, requestId: rid() });
+    assert.equal(sinFecha.body.code, 'DUE_REQUIRED');
+    const r = await call('POST', '/finanzas/compras', { items: [{ productId: 'cera', qty: 5, cost: 20 }], paidNow: false, due, requestId: 'compra00002' });
+    assert.equal(r.body.paidNow, false);
+    const g = (await call('GET', '/finanzas/gastos')).body.porPagar.find((x) => x.id === 'g_compra_compra00002');
+    assert.equal(g.remaining, 100);
+    assert.equal(db._get(`${N}/productos/cera`).stock.s1, 20);
+  });
+
+  test('no alcanza: no guarda nada y no muestra el saldo', async () => {
+    const r = await call('POST', '/finanzas/compras', { items: [{ productId: 'cera', qty: 1, cost: 99999 }], paidNow: true, accountId: bnbId, requestId: 'compra00003' });
+    assert.equal(r.body.code, 'INSUFFICIENT');
+    assert.doesNotMatch(r.body.error, /Bs/);
+    assert.equal(db._get(`${N}/productos/cera`).stock.s1, 20);
+    assert.equal(db._get(`${N}/compras/compra_compra00003`), undefined);
+  });
+
+  test('validaciones', async () => {
+    assert.equal((await call('POST', '/finanzas/compras', { items: [], requestId: rid() })).body.code, 'ITEMS_REQUIRED');
+    assert.equal((await call('POST', '/finanzas/compras', { items: [{ productId: 'cera', qty: 0, cost: 1 }], requestId: rid() })).body.code, 'INVALID_QTY');
+    assert.equal((await call('POST', '/finanzas/compras', { items: [{ productId: 'nada', qty: 1, cost: 1 }], paidNow: false, due: fecha, requestId: rid() })).body.code, 'PRODUCT_NOT_FOUND');
+  });
+
+  test('sin Finanzas en el plan: solo sube el stock', async () => {
+    caps.analiticas = false;
+    const o = await call('GET', '/finanzas/compras/opciones');
+    assert.deepEqual(o.body, { finanzas: false, accounts: [] });
+    const r = await call('POST', '/finanzas/compras', { items: [{ productId: 'cera', qty: 1, cost: 20 }], requestId: 'compra00004' });
+    assert.equal(r.body.finanzas, false);
+    assert.equal(db._get(`${N}/productos/cera`).stock.s1, 21);
+    assert.equal(db._get(`${N}/finanzasGastos/g_compra_compra00004`), undefined);
+    caps.analiticas = true;
   });
 });

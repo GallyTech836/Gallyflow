@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Package, Boxes, AlertCircle, XCircle, Plus, Search, Pencil, Trash2, SlidersHorizontal,
-  ArrowLeftRight, TrendingUp, CheckCircle2, Ban, History, DollarSign, Clock,
+  ArrowLeftRight, TrendingUp, CheckCircle2, Ban, History, DollarSign, Clock, ShoppingCart,
 } from 'lucide-react';
 import {
   Button, IconButton, Input, Select, Badge, EmptyState, ResponsiveTable, LoadingState, useConfirm,
@@ -18,6 +18,7 @@ import { useProducts, useSales, useMovements } from './useInventory';
 import ProductModal from './ProductModal';
 import StockModal from './StockModal';
 import SaleModal from './SaleModal';
+import PurchaseModal from './PurchaseModal';
 
 const TABS = [
   { id: 'stock', label: 'Stock' },
@@ -123,6 +124,7 @@ export default function InventoryPage({ negocioId, branches = [], clients = [], 
   const [productModal, setProductModal] = useState(null); // { product|null }
   const [stockModal, setStockModal] = useState(null); // { product, mode }
   const [saleOpen, setSaleOpen] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
   const uid = user?.uid || null;
 
   const handleDelete = async (p) => {
@@ -219,7 +221,10 @@ export default function InventoryPage({ negocioId, branches = [], clients = [], 
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </Select>
             </div>
-            <Button icon={Plus} onClick={() => setProductModal({ product: null })} className="w-full sm:w-auto">Nuevo producto</Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="secondary" icon={ShoppingCart} onClick={() => setPurchaseOpen(true)} disabled={!products.length} className="w-full sm:w-auto">Registrar compra</Button>
+              <Button icon={Plus} onClick={() => setProductModal({ product: null })} className="w-full sm:w-auto">Nuevo producto</Button>
+            </div>
           </div>
 
           {loadingProducts ? (
@@ -371,7 +376,7 @@ export default function InventoryPage({ negocioId, branches = [], clients = [], 
             breakpoint="lg"
             empty={(
               <div className="rounded-xl border border-nexus-border bg-nexus-surface">
-                <EmptyState icon={History} title="Sin movimientos todavía" description="Aquí aparecen entradas, salidas, traspasos y ventas." />
+                <EmptyState icon={History} title="Sin movimientos todavía" description="Aquí aparecen compras, entradas, salidas, traspasos y ventas." />
               </div>
             )}
             columns={[
@@ -429,6 +434,15 @@ export default function InventoryPage({ negocioId, branches = [], clients = [], 
           initialBranch={scope === 'all' ? null : scope}
           uid={uid}
           onClose={() => setSaleOpen(false)}
+          onToast={onToast}
+        />
+      )}
+      {purchaseOpen && (
+        <PurchaseModal
+          products={products}
+          branches={branches}
+          initialBranch={scope === 'all' ? null : scope}
+          onClose={() => setPurchaseOpen(false)}
           onToast={onToast}
         />
       )}

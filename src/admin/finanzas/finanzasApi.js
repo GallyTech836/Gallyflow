@@ -42,3 +42,7 @@ export const payGasto = (token, id, body) => call('POST', `/finanzas/gastos/${en
 export const deleteGasto = (token, id) => call('DELETE', `/finanzas/gastos/${encodeURIComponent(id)}`, token);
 export const stopFijo = (token, id) => call('POST', `/finanzas/fijos/${encodeURIComponent(id)}/detener`, token);
 export const getEquilibrio = (token) => call('GET', '/finanzas/equilibrio', token);
+
+// Compras de inventario (Inventario › Registrar compra). No usan la sesión del PIN.
+export const getCompraOpciones = () => call('GET', '/finanzas/compras/opciones', null);
+export const createCompra = (body) => call('POST', '/finanzas/compras', null, body);

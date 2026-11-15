@@ -12,10 +12,11 @@
 //       total, paymentMethod, status: 'paid'|'pending'|'void', notes,
 //       createdBy, createdAt, paidAt?, voidedAt? }
 //   negocios/{id}/movimientosInventario/{id}
-//     { type: 'entrada'|'salida'|'conteo'|'traspaso'|'venta'|'anulacion',
+//     { type: 'entrada'|'salida'|'conteo'|'traspaso'|'venta'|'anulacion'|'compra',
 //       productId, productName, branchKey, branchName, toBranchKey?, toBranchName?,
 //       qty (cambio con signo; en traspaso, cantidad movida), before, after,
-//       reason, saleId?, createdBy, createdAt }
+//       reason, saleId?, purchaseId?, createdBy, createdAt }
+//   Las compras (type 'compra') las escribe el backend: /api/finanzas/compras.
 //
 // Stock POR SUCURSAL: la clave es el id de la sucursal (estable aunque se
 // renombre). Un negocio sin sucursales usa la clave 'general'.
@@ -41,6 +42,7 @@ export const MOVEMENT_LABELS = {
   traspaso: 'Traspaso',
   venta: 'Venta',
   anulacion: 'Venta anulada',
+  compra: 'Compra',
 };
 
 export const ADJUST_REASONS = {
