@@ -62,7 +62,7 @@ function Kpi({ icon: Icon, label, value, tone = 'primary', active = false, onCli
   );
 }
 
-export default function InventoryPage({ negocioId, branches = [], clients = [], user, onToast }) {
+export default function InventoryPage({ negocioId, branches = [], clients = [], user, onToast, finanzas = false }) {
   const { t } = useBusinessTerms();
   const { businessSettings } = useBusinessSettings(negocioId);
   const [confirm, confirmDialog] = useConfirm();
@@ -222,7 +222,8 @@ export default function InventoryPage({ negocioId, branches = [], clients = [], 
               </Select>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="secondary" icon={ShoppingCart} onClick={() => setPurchaseOpen(true)} disabled={!products.length} className="w-full sm:w-auto">Registrar compra</Button>
+              {/* Registrar compra: solo con Finanzas (anota el gasto en el mismo paso). */}
+              {finanzas && <Button variant="secondary" icon={ShoppingCart} onClick={() => setPurchaseOpen(true)} disabled={!products.length} className="w-full sm:w-auto">Registrar compra</Button>}
               <Button icon={Plus} onClick={() => setProductModal({ product: null })} className="w-full sm:w-auto">Nuevo producto</Button>
             </div>
           </div>

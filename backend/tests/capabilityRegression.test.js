@@ -26,7 +26,7 @@ const OLD_PRESETS = Object.fromEntries(before.LAUNCH_PLAN_PRESETS.map((p) => [p.
 const NEW_PRESETS = Object.fromEntries(now.LAUNCH_PLAN_PRESETS.map((p) => [p.id, p]));
 const EXISTING_PLANS = ['esencial', 'profesional', 'premium'];
 // Capacidades agregadas después del modelo congelado.
-const NEW_KEYS = ['registroServicios', 'vistaAgenda', 'promociones'];
+const NEW_KEYS = ['registroServicios', 'vistaAgenda', 'promociones', 'finanzas'];
 // Promociones (nueva, activa por defecto en todos los planes) se promociona
 // como incluida: se quita al comparar lo que se vendía antes.
 const sinPromociones = (keys) => keys.filter((k) => k !== 'promociones');
@@ -122,7 +122,7 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
       const p = NEW_PRESETS[id];
       const nuevo = now.buildPlanFeatures(p.features, { vertical: p.vertical });
       // Lo único nuevo al guardar: registroServicios apagada, vistaAgenda y promociones activas.
-      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true, promociones: true }, id);
+      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true, promociones: true, finanzas: false }, id);
       assertSameResolution({ planFeatures: nuevo }, `re-guardado ${id}`);
     }
   });
@@ -161,12 +161,21 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
       );
       // Guardar un plan viejo (sin vertical) da lo mismo + las claves nuevas con su default.
       if (planFeatures) {
-        const nuevas = { registroServicios: false, vistaAgenda: true, promociones: true };
+        const nuevas = { registroServicios: false, vistaAgenda: true, promociones: true, finanzas: false };
         assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...expectedBuild(planFeatures), ...nuevas }, `buildPlanFeatures caso ${i}`);
         assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...expectedBuild(planFeatures, { vertical: 'citas' }), ...nuevas }, `buildPlanFeatures citas caso ${i}`);
       }
       if (overrides) assert.deepEqual(now.cleanOverrides(overrides), before.cleanOverrides(overrides));
     }
+  });
+
+  test('finanzas: apagada en todos los planes; se enciende por plan o por negocio, solo con Analítica', () => {
+    for (const id of EXISTING_PLANS) assert.equal(now.resolveCapabilities({ planFeatures: storedFeatures(id) }).finanzas.enabled, false, id);
+    const pro = storedFeatures('profesional');
+    assert.equal(now.resolveCapabilities({ planFeatures: { ...pro, finanzas: true } }).finanzas.enabled, true);
+    assert.equal(now.resolveCapabilities({ planFeatures: pro, overrides: { finanzas: true } }).finanzas.enabled, true);
+    const esencial = storedFeatures('esencial'); // sin Analítica
+    assert.equal(now.resolveCapabilities({ planFeatures: esencial, overrides: { finanzas: true } }).finanzas.enabled, false);
   });
 
   test('solo se enciende si el plan o una excepción la activan', () => {

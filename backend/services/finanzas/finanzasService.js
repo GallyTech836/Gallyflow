@@ -662,9 +662,9 @@ export async function getEquilibrio(negocioId) {
 
 // ───────────────────────── Compras de inventario ─────────────────────────
 
-/** ¿Este negocio puede anotar la compra en Finanzas? (plan con Analítica y cuentas configuradas) */
+/** ¿Este negocio puede anotar la compra en Finanzas? (plan con Finanzas y cuentas configuradas) */
 async function finanzasActivas(negocioId) {
-  const [cap, cfg] = await Promise.all([checkCapability(negocioId, 'analiticas', { checkLimit: false }), configRef(negocioId).get()]);
+  const [cap, cfg] = await Promise.all([checkCapability(negocioId, 'finanzas', { checkLimit: false }), configRef(negocioId).get()]);
   return cap.allowed && cfg.exists && cfg.data()?.setupDone === true;
 }
 

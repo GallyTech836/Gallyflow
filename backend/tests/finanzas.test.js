@@ -16,7 +16,7 @@ mock.module('firebase-admin/firestore', { namedExports: { FieldValue } });
 mock.module('express', { namedExports: { Router: () => router } });
 mock.module('../middlewares/auth.middleware.js', { namedExports: { identifyRequester: pasa } });
 mock.module('../middlewares/session.middleware.js', { namedExports: { requireSession: pasa } });
-const caps = { analiticas: true };
+const caps = { finanzas: true };
 mock.module('../services/capabilities/capabilityService.js', { namedExports: { requireCapability: () => pasa, checkCapability: async (id, key) => ({ allowed: caps[key] !== false }) } });
 
 await import('../routes/finanzas.routes.js');
@@ -458,13 +458,13 @@ describe('compras de inventario', () => {
   });
 
   test('sin Finanzas en el plan: solo sube el stock', async () => {
-    caps.analiticas = false;
+    caps.finanzas = false;
     const o = await call('GET', '/finanzas/compras/opciones');
     assert.deepEqual(o.body, { finanzas: false, accounts: [] });
     const r = await call('POST', '/finanzas/compras', { items: [{ productId: 'cera', qty: 1, cost: 20 }], requestId: 'compra00004' });
     assert.equal(r.body.finanzas, false);
     assert.equal(db._get(`${N}/productos/cera`).stock.s1, 21);
     assert.equal(db._get(`${N}/finanzasGastos/g_compra_compra00004`), undefined);
-    caps.analiticas = true;
+    caps.finanzas = true;
   });
 });

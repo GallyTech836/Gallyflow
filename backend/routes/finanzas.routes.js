@@ -1,7 +1,7 @@
 // finanzas.routes.js — Finanzas: cuentas, saldos y resumen del mes.
 //
 // Solo el dueño (negocios.adminUid == uid del token), con la capacidad
-// 'analiticas' del plan y, si el negocio usa PIN, la sesión financiera.
+// 'finanzas' del plan y, si el negocio usa PIN, la sesión financiera.
 // El negocio sale del token, nunca del body. Rutas nuevas: no cambian nada
 // de /api/finance ni de /api/cash.
 
@@ -17,7 +17,8 @@ import {
 } from '../services/finanzas/finanzasService.js';
 
 const router = Router();
-const owner = [identifyRequester, requireSession, requireAuth, requireCapability('analiticas'), requireFinanceSession];
+// 'finanzas' depende de 'analiticas' (el plan no la puede tener sin Analítica).
+const owner = [identifyRequester, requireSession, requireAuth, requireCapability('finanzas'), requireFinanceSession];
 
 function handle(fn) {
   return async (req, res) => {
@@ -77,7 +78,7 @@ router.post('/finanzas/fijos/:fijoId/detener', ...owner, handle((req) => stopFij
 router.get('/finanzas/equilibrio', ...owner, handle((req) => getEquilibrio(req.negocioId)));
 
 // Compras de inventario: las usa Inventario › Registrar compra. Piden la
-// capacidad 'inventario' (no 'analiticas' ni el PIN de Analítica): solo
+// capacidad 'inventario' (no 'finanzas' ni el PIN de Analítica): solo
 // muestran nombres de cuentas, nunca saldos. Si el plan no tiene Finanzas,
 // la compra igual sube el stock.
 const ownerInventario = [identifyRequester, requireSession, requireAuth, requireCapability('inventario')];

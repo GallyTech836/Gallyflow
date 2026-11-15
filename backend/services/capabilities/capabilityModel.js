@@ -163,6 +163,8 @@ export const CAPABILITIES = [
     description: 'Panel general con métricas del día.', enforcedIn: ['ui'] },
   { key: 'analiticas', module: 'reports', label: 'Analítica financiera', status: 'implemented', kind: 'toggle', default: false,
     description: 'Ingresos, comisiones por profesional y PIN financiero.', enforcedIn: ['ui', 'backend'] },
+  { key: 'finanzas', module: 'reports', label: 'Finanzas', status: 'implemented', kind: 'toggle', default: false, requires: 'analiticas',
+    description: 'Cuentas y saldos, gastos y por pagar, punto de equilibrio y compras de inventario. Simplifica el Dashboard y la Analítica.', enforcedIn: ['ui', 'backend'] },
 
   // ── RESTAURANTE ──
   // Solo existen para negocios del vertical 'restaurante': en los demás tipos

@@ -260,7 +260,7 @@ const { promotions: allPromotions } = usePromotions(negocioId, promosOn);
 const activePromotions = promosOn ? allPromotions : [];
 // Pestaña -> capacidad que la habilita. Si el Super Admin apaga una
 // capacidad mientras la pestaña está abierta, se vuelve a la pestaña de inicio.
-const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', promotions: 'promociones', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', finanzas: 'analiticas', registros: 'registroServicios' };
+const TAB_CAPABILITY = { agenda: 'vistaAgenda', dashboard: 'dashboard', clients: 'clientes', inventory: 'inventario', promotions: 'promociones', commissions: 'comisiones', assistance: 'asistencia', reports: 'analiticas', finanzas: 'finanzas', registros: 'registroServicios' };
 // Pestañas que no son un módulo propio: "Servicios registrados" es parte de Agenda
 // y Promociones es parte de Servicios. Finanzas va con Analítica (mismo PIN y plan).
 const TAB_MODULE = { registros: 'agenda', promotions: 'services', finanzas: 'reports' };
@@ -286,10 +286,13 @@ useEffect(() => {
   if ((cap && !canUseCapability(cap)) || !hasModule(TAB_MODULE[activeTab] || activeTab)) setActiveTab(homeTab);
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [activeTab, planFeatures, planLoading, businessProfile]);
-// El Dashboard solo muestra Día o Semana: si venía de Mes/Año (otra pestaña), pasa a Semana.
+// Finanzas (capacidad 'finanzas', se activa por plan o por negocio desde Super Admin).
+// Sin ella el negocio ve Dashboard y Analítica como siempre.
+const finanzasOn = canUseCapability('finanzas');
+// Con Finanzas el Dashboard solo muestra Día o Semana: si venía de Mes/Año (otra pestaña), pasa a Semana.
 useEffect(() => {
-  if (activeTab === 'dashboard' && (agendaView === 'mes' || agendaView === 'año')) setAgendaView('semana');
-}, [activeTab, agendaView]);
+  if (finanzasOn && activeTab === 'dashboard' && (agendaView === 'mes' || agendaView === 'año')) setAgendaView('semana');
+}, [finanzasOn, activeTab, agendaView]);
 const { businessSettings } = useBusinessSettings(negocioId);
 const { heroConfig } = useHeroConfig(negocioId);
 
@@ -1358,6 +1361,27 @@ const { heroConfig } = useHeroConfig(negocioId);
   // "Próxima cita": operativa y en tiempo real, independiente del selector de período.
   // Se recalcula cada minuto vía currentTimeMinutes (ya existente para otros usos).
   const nextAppointment = nextCita;
+
+  // "Pagos del período": sí respeta el selector Día/Semana/Mes/Año.
+  // Se agrupa por paymentMethod tal cual existe en las citas reales (Efectivo/Tarjeta/Transferencia).
+  // Con Finanzas no se muestra (esa información está en Finanzas).
+  const paymentBreakdown = useMemo(() => {
+    const completed = (rangeReservations || []).filter(r => r?.status === 'completed');
+    const totals = {};
+    completed.forEach(r => {
+      const method = r?.paymentMethod || 'Sin especificar';
+      totals[method] = (totals[method] || 0) + Number(r?.price || 0);
+    });
+    const total = Object.values(totals).reduce((sum, v) => sum + v, 0);
+    return { totals, total };
+  }, [rangeReservations]);
+
+  const paymentsLabel = {
+    dia: 'Pagos de Hoy',
+    semana: 'Pagos de la Semana',
+    mes: 'Pagos del Mes',
+    año: 'Pagos del Año'
+  }[agendaView] || 'Pagos del Período';
 
   // "Actividad reciente": operativa, independiente del selector. No existe una
   // colección de eventos/actividad en Firestore, así que se construye a partir
@@ -2805,7 +2829,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             <SidebarSection label="Finanzas" collapsed={navCollapsed} />
           )}
 
-          {hasFeature(planFeatures, 'analiticas') && hasModule('reports') && (
+          {hasFeature(planFeatures, 'finanzas') && hasModule('reports') && (
             <SidebarItem
               icon={Wallet}
               label="Finanzas"
@@ -2988,7 +3012,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 ariaLabel="Periodo"
                 value={agendaView}
                 onChange={setAgendaView}
-                options={activeTab === 'dashboard' ? [
+                options={activeTab === 'dashboard' && finanzasOn ? [
                   // Dashboard: solo el día a día. Mes y año están en Finanzas y Analítica.
                   { value: 'dia', label: 'Día' },
                   { value: 'semana', label: 'Semana' },
@@ -3081,7 +3105,7 @@ const { heroConfig } = useHeroConfig(negocioId);
           {activeTab === 'dashboard' && (
             <div className="space-y-4 sm:space-y-5">
               {/* Indicadores del periodo (Fase 4: textos de 12px o más, números alineados). */}
-              <div className={`grid grid-cols-2 ${registrosMode ? '' : 'lg:grid-cols-3'} gap-3 sm:gap-4`}>
+              <div className={`grid grid-cols-2 ${finanzasOn ? (registrosMode ? '' : 'lg:grid-cols-3') : (registrosMode ? 'lg:grid-cols-3' : 'lg:grid-cols-4')} gap-3 sm:gap-4`}>
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
                   <p className="text-xs font-medium text-nexus-text-secondary">Ventas del periodo</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.totalRevenue)}</p>
@@ -3121,10 +3145,17 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </div>
                 )}
                 {!registrosMode && (
-                <div className="col-span-2 lg:col-span-1 bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                <div className={`${finanzasOn ? 'col-span-2 lg:col-span-1 ' : ''}bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0`}>
                   <p className="text-xs font-medium text-nexus-text-secondary">{t('clients')} {g('client', 'atendidos', 'atendidas')}</p>
                   <p className="text-xl sm:text-2xl font-bold text-nexus-primary nx-num mt-1">{rangeMetrics?.clientsServed}</p>
                   <p className="text-xs text-nexus-text-muted mt-1">En el periodo</p>
+                </div>
+                )}
+                {!finanzasOn && (
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-3.5 sm:p-4 shadow-sm min-w-0">
+                  <p className="text-xs font-medium text-nexus-text-secondary">Comisión estimada</p>
+                  <p className="text-xl sm:text-2xl font-bold text-nexus-text nx-num mt-1 truncate">{formatBs(rangeMetrics?.pendingCommissions)}</p>
+                  <p className="text-xs text-nexus-text-muted mt-1">A liquidar en el periodo</p>
                 </div>
                 )}
               </div>
@@ -3182,7 +3213,29 @@ const { heroConfig } = useHeroConfig(negocioId);
                 onToast={triggerToast}
               />
 
-              <div className="grid grid-cols-1 gap-3 sm:gap-4">
+              <div className={`grid grid-cols-1 ${finanzasOn ? '' : 'md:grid-cols-2'} gap-3 sm:gap-4`}>
+                {!finanzasOn && (
+                <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
+                  <h3 className="text-base font-semibold text-nexus-text mb-3">{paymentsLabel}</h3>
+                  {paymentBreakdown.total > 0 ? (
+                    <div className="space-y-2">
+                      {Object.entries(paymentBreakdown.totals).map(([method, amount]) => (
+                        <div key={method} className="flex justify-between items-center gap-3 text-sm">
+                          <span className="text-nexus-text-secondary truncate">{method}</span>
+                          <span className="font-semibold text-nexus-text nx-num shrink-0">{formatBs(amount)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center gap-3 text-sm pt-2 border-t border-nexus-border">
+                        <span className="font-semibold text-nexus-text">Total</span>
+                        <span className="font-bold text-nexus-primary nx-num shrink-0">{formatBs(paymentBreakdown.total)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-nexus-text-muted py-4 text-center">Sin pagos registrados en este periodo</div>
+                  )}
+                </div>
+                )}
+
                 <div className="bg-nexus-surface border border-nexus-border rounded-xl p-4 sm:p-5 shadow-sm min-w-0">
                   <h3 className="text-base font-semibold text-nexus-text mb-3">Actividad reciente</h3>
                   {recentActivity.length > 0 ? (
@@ -3850,6 +3903,7 @@ const { heroConfig } = useHeroConfig(negocioId);
           {activeTab === 'inventory' && (
             <InventoryPage
               negocioId={negocioId}
+              finanzas={finanzasOn}
               branches={branches}
               clients={clients}
               user={user}
@@ -4030,6 +4084,7 @@ const { heroConfig } = useHeroConfig(negocioId);
            registros={registrosMode}
            financeToken={pinLock.token}
            onFinanceExpired={pinLock.lock}
+           finanzas={finanzasOn}
            onOpenFinanzas={() => { setFinanzasStartTab('gastos'); setActiveTab('finanzas'); }}
            />
          )}
