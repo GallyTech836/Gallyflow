@@ -143,7 +143,7 @@ export default function BusinessInfoPage({
                       )}
                     </span>
                     {s.description && (
-                      <span className="mt-0.5 block text-xs text-nexus-text-secondary leading-relaxed line-clamp-2">{s.description}</span>
+                      <span className="mt-0.5 block text-xs text-nexus-text-secondary leading-relaxed whitespace-pre-line">{s.description}</span>
                     )}
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-nexus-text-secondary nx-num">
                       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">

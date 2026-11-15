@@ -60,6 +60,7 @@ import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import { cloudinaryThumb } from '../shared/cloudinary/uploadImage';
 import { buildPublicBookingUrl } from '../shared/booking/publicRoutes';
 import ShareLinkMenu from '../shared/qr/ShareLinkMenu';
+import { confirmarAnticipo, rechazarAnticipo, resolverAnticipo, vencerAnticipos } from '../shared/anticipos/anticiposApi';
 import RegistrarServicioModal from '../shared/registros/RegistrarServicioModal';
 import RegistrosPanel from '../shared/registros/RegistrosPanel';
 import RegistrarServicioBar from '../shared/registros/RegistrarServicioBar';
@@ -293,6 +294,15 @@ const finanzasOn = canUseCapability('finanzas');
 useEffect(() => {
   if (finanzasOn && activeTab === 'dashboard' && (agendaView === 'mes' || agendaView === 'año')) setAgendaView('semana');
 }, [finanzasOn, activeTab, agendaView]);
+// Anticipos: al abrir el panel (y cada 5 min) se cancelan las reservas que no
+// pagaron el anticipo a tiempo, así la agenda muestra el horario libre.
+const anticiposOn = canUseCapability('anticipos');
+useEffect(() => {
+  if (!anticiposOn || !negocioId) return undefined;
+  vencerAnticipos();
+  const timer = setInterval(vencerAnticipos, 5 * 60 * 1000);
+  return () => clearInterval(timer);
+}, [anticiposOn, negocioId]);
 const { businessSettings } = useBusinessSettings(negocioId);
 const { heroConfig } = useHeroConfig(negocioId);
 
@@ -1920,6 +1930,10 @@ const { heroConfig } = useHeroConfig(negocioId);
       updatedRecord.price = conPromo.price;
       updatedRecord.promo = conPromo.promo || null;
     }
+    // Anticipos: el estado de una reserva con anticipo lo cambia el backend
+    // (si se confirmó mientras el modal estaba abierto, no se vuelve atrás).
+    if (before?.deposit?.status === 'awaiting' && before.status === 'pending' && updatedRecord.status !== 'cancelled') updatedRecord.status = 'pending';
+    if (before?.deposit && before.status !== 'pending' && updatedRecord.status === 'pending') updatedRecord.status = before.status;
     Object.assign(updatedRecord, paymentStampFields(before, updatedRecord.status, updatedRecord.updatedAt));
 
     try {
@@ -1957,6 +1971,24 @@ const { heroConfig } = useHeroConfig(negocioId);
 
 
     triggerToast(`¡${t('appointment')} ${g('appointment', 'modificado', 'modificada')} con éxito!`);
+    setActiveModal(null);
+    setEditingReservation(null);
+  };
+
+  // Anticipos (capacidad 'anticipos'): confirmar, rechazar o decidir qué pasa
+  // con el anticipo de una cita cancelada. Lo hace el backend.
+  const handleDepositAction = async (action, decision) => {
+    const id = editingReservation?.id;
+    if (!id) return;
+    const r = action === 'confirm' ? await confirmarAnticipo(id)
+      : action === 'reject' ? await rechazarAnticipo(id)
+      : await resolverAnticipo(id, decision);
+    if (!r.ok) { triggerToast(r.data?.error || 'No se pudo guardar.', 'error'); return; }
+    const msg = action === 'confirm' ? `Anticipo confirmado: ${tl('appointment')} ${g('appointment', 'confirmado', 'confirmada')}.`
+      : action === 'reject' ? `${t('appointment')} ${g('appointment', 'cancelado', 'cancelada')}. El horario quedó libre.`
+      : decision === 'refund' ? 'Anotado: el anticipo se devolvió.' : 'Anotado: el anticipo quedó como ingreso del negocio.';
+    triggerToast(msg);
+    bumpCitasTick();
     setActiveModal(null);
     setEditingReservation(null);
   };
@@ -2168,7 +2200,9 @@ const { heroConfig } = useHeroConfig(negocioId);
         featured: !!newService.featured,
         duration: durationMin,
         availableDays: newService.availableDays || [],
-        image: (newService.image || '').trim()
+        image: (newService.image || '').trim(),
+        // "¿Qué incluye?": se muestra en el link de reservas y lo usa el asistente.
+        description: (newService.description || '').trim().slice(0, 300),
       });
       triggerToast(`${t('service')} ${g('service', 'actualizado', 'actualizada')}.`);
     } else {
@@ -2181,13 +2215,15 @@ const { heroConfig } = useHeroConfig(negocioId);
         duration: durationMin,
         category: 'Tratamiento',
         availableDays: newService.availableDays || [],
-        image: (newService.image || '').trim()
+        image: (newService.image || '').trim(),
+        // "¿Qué incluye?": se muestra en el link de reservas y lo usa el asistente.
+        description: (newService.description || '').trim().slice(0, 300),
       });
       triggerToast(`${t('service')} ${g('service', 'creado', 'creada')} con éxito.`);
     }
     setActiveModal(null);
     setEditingServiceId(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, featured: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, featured: false, image: '', description: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
   };
 
   // Interruptor global: mostrar u ocultar las fotos de servicios en el link público.
@@ -2203,7 +2239,7 @@ const { heroConfig } = useHeroConfig(negocioId);
 
   const openNewServiceModal = () => {
     setEditingServiceId(null);
-    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, featured: false, image: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
+    setNewService({ name: '', price: '', duration: '30', category: 'Tratamiento', promoPrice: '', priceVariable: false, featured: false, image: '', description: '', availableDays: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] });
     setActiveModal('add-service');
   };
 
@@ -2218,6 +2254,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       priceVariable: s.priceVariable === true,
       featured: s.featured === true,
       image: s.image || '',
+      description: s.description || '',
       availableDays: Array.isArray(s.availableDays) && s.availableDays.length > 0
         ? s.availableDays
         : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -2883,6 +2920,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             <div className="ml-4 pl-2 border-l border-nexus-navy-border space-y-0.5 py-1">
               {SETTINGS_SECTIONS
                 .filter(({ id }) => id !== 'automation' || hasFeature(planFeatures, 'asistenteWhatsapp'))
+                .filter(({ id }) => id !== 'anticipos' || canUseCapability('anticipos'))
                 // Sucursales vive en Configuración (se crean una vez y casi no se tocan).
                 .flatMap((sec) => (sec.id === 'business' && hasModule('branches') ? [sec, { id: 'branches', label: 'Sucursales', icon: Building2 }] : [sec]))
                 .map(({ id, label: baseLabel, icon: Icon }) => {
@@ -4108,7 +4146,8 @@ const { heroConfig } = useHeroConfig(negocioId);
             isEditingBusinessName={isEditingBusinessName}
             setIsEditingBusinessName={setIsEditingBusinessName}
             onLogout={logout}
-            activeSection={settingsSection === 'automation' && !hasFeature(planFeatures, 'asistenteWhatsapp') ? 'business' : settingsSection}
+            activeSection={(settingsSection === 'automation' && !hasFeature(planFeatures, 'asistenteWhatsapp')) || (settingsSection === 'anticipos' && !canUseCapability('anticipos')) ? 'business' : settingsSection}
+            services={services}
             onChangeSection={setSettingsSection}
             registrosMode={registrosMode}
           />
@@ -4204,6 +4243,8 @@ const { heroConfig } = useHeroConfig(negocioId);
           onSubmit={handleUpdateReservation}
           onDelete={handleDeleteReservation}
           onTransition={(nextStatus, paymentMethod) => handleUpdateStatus(editingReservation?.id, nextStatus, paymentMethod)}
+          savedStatus={findCitaById(editingReservation?.id)?.status || null}
+          onDepositAction={canUseCapability('anticipos') ? handleDepositAction : null}
         />
       )}
 
@@ -5291,6 +5332,23 @@ const { heroConfig } = useHeroConfig(negocioId);
                   onChange={(e) => setNewService(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 h-10 text-base sm:text-sm"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="svc-description" className="text-xs text-nexus-text-secondary font-bold block mb-1">¿Qué incluye? (opcional)</label>
+                <textarea
+                  id="svc-description"
+                  rows={3}
+                  maxLength={300}
+                  placeholder="Ej.: Corte con máquina y tijera, lavado y peinado."
+                  value={newService.description || ''}
+                  onChange={(e) => setNewService(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full bg-nexus-background border border-nexus-border rounded-lg text-nexus-text outline-none focus:border-nexus-primary px-3 py-2 text-base sm:text-sm resize-none"
+                />
+                <p className="mt-1 flex justify-between gap-3 text-xs text-nexus-text-muted">
+                  <span>Lo ven tus {tl('clients')} antes de reservar.</span>
+                  <span className="nx-num">{(newService.description || '').length}/300</span>
+                </p>
               </div>
 
               <ImageUploader

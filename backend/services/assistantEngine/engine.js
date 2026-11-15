@@ -1671,7 +1671,9 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
     if (encontrados.length === 1) {
       const s = encontrados[0];
       const datos = datosDeServicio(s);
-      const cuerpo = `Sí, tenemos *${String(s.name || '').trim()}*${datos ? `: ${datos}` : ''}.`;
+      // Descripción del servicio ("¿Qué incluye?" en el admin), si la tiene.
+      const incluye = String(s.description || '').trim().slice(0, 300);
+      const cuerpo = `Sí, tenemos *${String(s.name || '').trim()}*${datos ? `: ${datos}` : ''}.${incluye ? `\n\n${incluye}` : ''}`;
       return menuBotones({
         texto: `${cuerpo}\n\nEscribe "agendar" para reservar.`,
         cuerpo,

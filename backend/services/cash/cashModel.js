@@ -14,6 +14,8 @@
 //   - Efectivo esperado = fondo inicial + cobros en efectivo - salidas de efectivo.
 //   - Total de ventas = suma de todos los métodos (sin el fondo).
 
+import { depositPaidAmount } from '../anticipos/anticipoModel.js';
+
 export const CASH_METHOD = 'Efectivo';
 
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -55,6 +57,14 @@ export function toMillis(v) {
   return null;
 }
 
+/**
+ * Lo que se cobra al completar la cita: el precio menos el anticipo que ya se
+ * pagó por QR (ese anticipo entró antes, a su cuenta; ver anticipoModel.js).
+ */
+export function cobroAmountOfCita(cita) {
+  return round2(amountOfCita(cita) - depositPaidAmount(cita));
+}
+
 /** Momento del cobro de una cita: paidAt (nuevo). Citas viejas: updatedAt. */
 export function cobroMillisDeCita(cita) {
   return toMillis(cita?.paidAt) ?? toMillis(cita?.updatedAt);
@@ -82,7 +92,9 @@ export function buildCobros({ citas = [], ventas = [] }) {
     const key = `cita:${c.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ kind: 'cita', id: c.id, method: String(c.paymentMethod).trim(), amount: amountOfCita(c), at: cobroMillisDeCita(c), label: c.clientName || '' });
+    const amount = cobroAmountOfCita(c);
+    if (amount <= 0) continue; // pagada entera con el anticipo
+    out.push({ kind: 'cita', id: c.id, method: String(c.paymentMethod).trim(), amount, at: cobroMillisDeCita(c), label: c.clientName || '' });
   }
   for (const v of ventas) {
     if (!ventaEsCobro(v)) continue;

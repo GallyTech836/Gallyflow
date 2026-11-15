@@ -10,13 +10,15 @@
 //   - salidas manuales de caja      (cajaMovimientos source 'manual', no anuladas)
 //   ± movimientos de Finanzas       (transferencias, correcciones y pagos de gastos)
 //   ± diferencia al cerrar caja     (faltante o sobrante contado en el cierre)
+//   + anticipos por QR              (el día que el dueño los confirma; la cita después cobra solo el saldo)
+//   - anticipos devueltos           (salen de la misma cuenta donde entraron)
 // Así un cobro nunca se cuenta dos veces, y si cambia el método de un pago de
 // comisión el saldo se corrige solo.
 //
 // Cada cuenta tiene un saldo inicial y desde cuándo vale (openingAt): solo
 // cuentan los movimientos desde ese momento.
 
-import { isCashMethod, isRealPaymentMethod, round2, toMillis, amountOfCita, citaEsCobro, ventaEsCobro, cobroMillisDeCita, localDateKey } from '../cash/cashModel.js';
+import { isCashMethod, isRealPaymentMethod, round2, toMillis, amountOfCita, cobroAmountOfCita, citaEsCobro, ventaEsCobro, cobroMillisDeCita, localDateKey } from '../cash/cashModel.js';
 
 export const ACCOUNT_TYPES = ['efectivo', 'banco', 'billetera', 'otra'];
 export const TYPE_LABELS = { efectivo: 'Efectivo', banco: 'Banco', billetera: 'Billetera digital', otra: 'Otra' };
@@ -78,7 +80,7 @@ export function accountForMethod(method, scopeKey, config = {}) {
  * Convierte los documentos en flujos de dinero { at, amount (+ entra / - sale),
  * account, kind, ref, label, method, day }. Solo los que ocurren desde sinceMs.
  */
-export function buildFlows({ citas = [], ventas = [], pagos = [], salidas = [], movs = [], cierres = [], sucursales = [], config = {}, sinceMs = 0, untilMs = Infinity, tz } = {}) {
+export function buildFlows({ citas = [], ventas = [], pagos = [], salidas = [], movs = [], cierres = [], anticipos = [], sucursales = [], config = {}, sinceMs = 0, untilMs = Infinity, tz } = {}) {
   const flows = [];
   const inRange = (ms) => ms !== null && ms >= sinceMs && ms <= untilMs;
   const seen = new Set();
@@ -88,8 +90,23 @@ export function buildFlows({ citas = [], ventas = [], pagos = [], salidas = [], 
     const at = cobroMillisDeCita(c);
     if (!inRange(at)) continue;
     seen.add(`cita:${c.id}`);
+    const amount = cobroAmountOfCita(c); // precio menos el anticipo ya cobrado
+    if (amount <= 0) continue;
     const account = accountForMethod(c.paymentMethod, scopeOfCita(c, sucursales), config);
-    flows.push({ at, amount: amountOfCita(c), account, kind: 'cobro', ref: `cita:${c.id}`, method: String(c.paymentMethod).trim(), day: c.date || localDateKey(at, tz) });
+    flows.push({ at, amount, account, kind: 'cobro', ref: `cita:${c.id}`, method: String(c.paymentMethod).trim(), day: c.date || localDateKey(at, tz) });
+  }
+  // Anticipos: entran cuando el dueño los confirma; si se devuelven, salen.
+  const seenDep = new Set();
+  for (const c of anticipos) {
+    const d = c?.deposit;
+    if (!d || seenDep.has(c.id) || !['paid', 'refunded', 'retained'].includes(d.status)) continue;
+    seenDep.add(c.id);
+    const account = accountForMethod(d.method, scopeOfCita(c, sucursales), config);
+    const amount = round2(d.amount);
+    const paidAt = toMillis(d.paidAt);
+    if (inRange(paidAt)) flows.push({ at: paidAt, amount, account, kind: 'anticipo', ref: `anticipo:${c.id}`, method: d.method, label: c.clientName || 'Cliente', day: localDateKey(paidAt, tz) });
+    const backAt = toMillis(d.resolvedAt);
+    if (d.status === 'refunded' && inRange(backAt)) flows.push({ at: backAt, amount: -amount, account, kind: 'devolucion', ref: `devolucion:${c.id}`, method: d.method, label: c.clientName || 'Cliente', day: localDateKey(backAt, tz) });
   }
   for (const v of ventas) {
     if (!ventaEsCobro(v) || seen.has(`venta:${v.id}`)) continue;
@@ -145,7 +162,7 @@ export function computeBalances(accounts = [], flows = []) {
   const byMethod = {};
   for (const f of flows) {
     if (f.account === UNASSIGNED || !(f.account in balances)) {
-      if (f.kind === 'cobro' || f.kind === 'comision') {
+      if (f.kind === 'cobro' || f.kind === 'comision' || f.kind === 'anticipo' || f.kind === 'devolucion') {
         unassignedTotal = round2(unassignedTotal + f.amount);
         byMethod[f.method || 'Sin método'] = round2((byMethod[f.method || 'Sin método'] || 0) + f.amount);
       }
@@ -194,10 +211,19 @@ export const dayLabel = (day) => `${Number(day.slice(8, 10))} ${MES[Number(day.s
  *  gastos     gastos del mes (por ahora: salidas manuales de caja)
  *  ganancia   ingresos - comisiones - gastos (aproximada, no contable)
  */
-export function monthTotals({ citas = [], ventas = [], pagos = [], salidas = [], gastos: gastosDocs = [], gastoPagos = [], comisionesGeneradas = 0, startDay, endDay, tz }) {
+export function monthTotals({ citas = [], ventas = [], pagos = [], salidas = [], gastos: gastosDocs = [], gastoPagos = [], anticipos = [], comisionesGeneradas = 0, startDay, endDay, tz }) {
   const enMes = (day) => day >= startDay && day <= endDay;
   let ingresos = 0;
   for (const c of citas) if (citaEsCobro(c) && enMes(c.date || '')) ingresos += amountOfCita(c);
+  // Anticipo que el negocio se quedó (cancelada o no vino): ingreso del mes en que se decidió. Sin comisión.
+  const seenRet = new Set();
+  for (const c of anticipos) {
+    const d = c?.deposit;
+    if (d?.status !== 'retained' || seenRet.has(c.id)) continue;
+    seenRet.add(c.id);
+    const ms = toMillis(d.resolvedAt);
+    if (ms !== null && enMes(localDateKey(ms, tz))) ingresos += round2(d.amount);
+  }
   for (const v of ventas) if (ventaEsCobro(v) && enMes(localDateKey(toMillis(v.paidAt) ?? 0, tz))) ingresos += round2(v.total);
   let pagado = 0;
   for (const p of pagos) { const ms = toMillis(p.paidAt); if (ms !== null && enMes(localDateKey(ms, tz))) pagado += round2(p.amount); }
@@ -253,6 +279,10 @@ export function buildHistory(flows = [], accounts = [], { startDay, endDay, limi
     } else if (f.kind === 'ajuste') {
       const nota = f.ref.startsWith('cierre:') ? 'contado al cerrar la caja' : 'corrección manual';
       items.push({ type: 'adj', day: f.day, at: f.at, amount: f.amount, title: f.label, detail: `${nameOf(f.account)} · ${nota}, no es venta ni gasto` });
+    } else if (f.kind === 'anticipo') {
+      items.push({ type: 'in', day: f.day, at: f.at, amount: f.amount, title: `Anticipo · ${f.label}`, detail: `${f.method} · entró a ${nameOf(f.account)}` });
+    } else if (f.kind === 'devolucion') {
+      items.push({ type: 'out', day: f.day, at: f.at, amount: Math.abs(f.amount), title: `Anticipo devuelto · ${f.label}`, detail: `${f.method} · salió de ${nameOf(f.account)}` });
     } else if (f.kind === 'gasto') {
       items.push({ type: 'out', day: f.day, at: f.at, amount: Math.abs(f.amount), title: f.label, detail: `${f.category} · salió de ${nameOf(f.account)}` });
     } else {

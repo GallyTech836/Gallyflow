@@ -15,6 +15,11 @@ import { db } from '../../config/firebase.js';
 import { logger } from '../../utils/logger.js';
 import { sendNotification } from '../notificationService.js';
 import { checkCapability } from '../capabilities/capabilityService.js';
+import { holdExpired } from '../anticipos/anticipoModel.js';
+import { expireHolds } from '../anticipos/anticipoService.js';
+
+// Reserva que todavía espera el anticipo: no se recuerda (puede no confirmarse).
+const esperaAnticipo = (c) => c?.deposit?.status === 'awaiting';
 
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 // "30" = un recordatorio 30 min antes. "60,30" = doble recordatorio.
@@ -88,7 +93,7 @@ async function claimAndSend(ref, minutes, mark) {
     if (!snap.exists) return null;
     const d = snap.data();
     const proId = d.professionalId || d.barberId;
-    if (!REMIND_STATUSES.has(d.status) || !proId || proId === 'pending') return null;
+    if (!REMIND_STATUSES.has(d.status) || !proId || proId === 'pending' || esperaAnticipo(d)) return null;
     if (`${d.date} ${d.time}|${minutes}` !== mark) return null;
     if ((d.remindersSent || []).includes(mark)) return null;
     tx.update(ref, { remindersSent: FieldValue.arrayUnion(mark) });
@@ -115,9 +120,12 @@ async function tick() {
   try {
     subscribe();
     const now = Date.now();
+    // Anticipos vencidos de hoy y mañana: se cancelan solos y liberan el horario.
+    const conVencidas = new Set([...citas.values()].filter(({ data }) => holdExpired(data, now)).map(({ ref }) => ref.parent?.parent?.id).filter(Boolean));
+    for (const negocioId of conVencidas) await expireHolds(negocioId, now).catch((err) => logger.warn('[reminders] anticipos:', err.message));
     for (const { ref, data } of [...citas.values()]) {
       const proId = data.professionalId || data.barberId;
-      if (!REMIND_STATUSES.has(data.status) || !proId || proId === 'pending') continue;
+      if (!REMIND_STATUSES.has(data.status) || !proId || proId === 'pending' || esperaAnticipo(data)) continue;
       if (!data.date || !data.time) continue;
       const start = zonedToEpoch(data.date, data.time);
       if (Date.now() >= start) continue;

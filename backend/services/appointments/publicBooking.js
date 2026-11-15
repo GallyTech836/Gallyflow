@@ -15,6 +15,8 @@ import { createAppointment, createPendingAppointment } from './createAppointment
 import { upsertClientFromPhone } from './clientRecord.js';
 import { PENDING_ID } from './pendingModel.js';
 import { resolveBookingForm, validateIntake } from '../bookingForms/bookingFormModel.js';
+import { getAnticipoConfig, expireHolds } from '../anticipos/anticipoService.js';
+import { holdExpired } from '../anticipos/anticipoModel.js';
 
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
 export const MIN_ANTICIPACION_MIN = 30; // igual que ClienteApp
@@ -111,6 +113,9 @@ export async function listBusyAppointments(negocioId, date) {
     throw new BookingError('Datos inválidos.');
   }
   const negocioRef = db.collection('negocios').doc(negocioId);
+  // Anticipos: las reservas vencidas se cancelan antes de calcular horarios.
+  const negocio = (await negocioRef.get()).data() || {};
+  if (negocio.businessSettings?.anticipos?.enabled === true) await expireHolds(negocioId).catch(() => 0);
   const [snap, bloqSnap] = await Promise.all([
     negocioRef.collection('citas').where('date', '==', date).get(),
     negocioRef.collection('horariosBloqueados').where('date', '==', date).get(),
@@ -125,7 +130,7 @@ export async function listBusyAppointments(negocioId, date) {
   const citas = snap.docs
     .map((d) => d.data())
     // Registros de servicio (Nexus Control): no tienen horario, no ocupan.
-    .filter((c) => c && c.status !== 'cancelled' && c.origin !== 'registro')
+    .filter((c) => c && c.status !== 'cancelled' && c.origin !== 'registro' && !holdExpired(c))
     .map((c) => ({
       date: c.date,
       time: c.time || '00:00',
@@ -195,6 +200,11 @@ export async function createPublicBooking(body, { ahora = new Date() } = {}) {
   };
   if (!datos.clientId) delete datos.clientId;
 
+  // Anticipos por QR (capacidad 'anticipos' + configuración lista).
+  const anticipo = await getAnticipoConfig(r.negocioId, negocioSnap.data() || {});
+  if (anticipo) await expireHolds(r.negocioId).catch(() => 0);
+  if (anticipo) datos.anticipo = anticipo;
+
   let cita;
   try {
     cita = r.professionalId === PENDING_ID
@@ -210,5 +220,18 @@ export async function createPublicBooking(body, { ahora = new Date() } = {}) {
     serviceName,
     price: cita.price,
     priceProvisional: cita.priceProvisional === true,
+    // Anticipo: lo que el cliente necesita para pagar (QR, monto, hasta cuándo).
+    ...(cita.deposit ? {
+      status: cita.status,
+      deposit: {
+        amount: cita.deposit.amount,
+        expiresAt: cita.deposit.expiresAt,
+        minutes: anticipo.minutes,
+        method: anticipo.method,
+        qrImage: anticipo.qrImage,
+        instructions: anticipo.instructions,
+        phone: anticipo.phone, // vacío: la página usa el WhatsApp de la sucursal
+      },
+    } : {}),
   };
 }

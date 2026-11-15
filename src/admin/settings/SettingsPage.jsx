@@ -2,12 +2,14 @@ import BusinessSection from './BusinessSection';
 import BusinessHeroSettings from './business';
 import AutomationSection from './AutomationSection';
 import AccountSection from './AccountSection';
+import AnticiposSection from './AnticiposSection';
 
 const SECTION_COMPONENTS = {
   business: BusinessSection,
   hero: BusinessHeroSettings,
   automation: AutomationSection,
   account: AccountSection,
+  anticipos: AnticiposSection,
 };
 
 export default function SettingsPage({
@@ -21,6 +23,7 @@ export default function SettingsPage({
   onChangeSection,
   activeSection = 'business',
   registrosMode = false,
+  services = [],
 }) {
   const ActiveComponent = SECTION_COMPONENTS[activeSection] || BusinessSection;
 
@@ -35,6 +38,7 @@ export default function SettingsPage({
       onLogout={onLogout}
       onChangeSection={onChangeSection}
       registrosMode={registrosMode}
+      services={services}
     />
   );
 }

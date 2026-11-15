@@ -21,7 +21,10 @@ import * as before from './fixtures/capabilityModel.before.js';
 import * as now from '../services/capabilities/capabilityModel.js';
 import { BUSINESS_PROFILES } from '../services/businessProfiles/businessProfileModel.js';
 
-const OLD_KEYS = before.CAPABILITIES.map((c) => c.key);
+// 'anticipos' existía como "Próximamente" (nunca se guardó en planes ni
+// excepciones) y ahora está implementada: se prueba aparte, abajo.
+const CHANGED_KEYS = ['anticipos'];
+const OLD_KEYS = before.CAPABILITIES.map((c) => c.key).filter((k) => !CHANGED_KEYS.includes(k));
 const OLD_PRESETS = Object.fromEntries(before.LAUNCH_PLAN_PRESETS.map((p) => [p.id, p]));
 const NEW_PRESETS = Object.fromEntries(now.LAUNCH_PLAN_PRESETS.map((p) => [p.id, p]));
 const EXISTING_PLANS = ['esencial', 'profesional', 'premium'];
@@ -97,8 +100,11 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
   test('el catálogo anterior no cambió: mismas capacidades, en el mismo orden, con la misma definición', () => {
     // Solo cambió el texto de la descripción del asistente.
     const sinDescWa = (c) => (c.key === 'asistenteWhatsapp' ? { ...c, description: undefined } : c);
-    const nuevas = now.CAPABILITIES.filter((c) => !NEW_KEYS.includes(c.key));
-    assert.deepEqual(nuevas.map(sinDescWa), before.CAPABILITIES.map(sinDescWa));
+    const nuevas = now.CAPABILITIES.filter((c) => !NEW_KEYS.includes(c.key) && !CHANGED_KEYS.includes(c.key));
+    assert.deepEqual(nuevas.map(sinDescWa), before.CAPABILITIES.filter((c) => !CHANGED_KEYS.includes(c.key)).map(sinDescWa));
+    // anticipos: ahora implementada y apagada por defecto.
+    assert.equal(now.getCapability('anticipos').status, 'implemented');
+    assert.equal(now.getCapability('anticipos').default, false);
     assert.deepEqual(now.CAPABILITY_MODULES, before.CAPABILITY_MODULES);
   });
 
@@ -122,7 +128,7 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
       const p = NEW_PRESETS[id];
       const nuevo = now.buildPlanFeatures(p.features, { vertical: p.vertical });
       // Lo único nuevo al guardar: registroServicios apagada, vistaAgenda y promociones activas.
-      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true, promociones: true, finanzas: false }, id);
+      assert.deepEqual(nuevo, { ...storedFeatures(id), registroServicios: false, vistaAgenda: true, promociones: true, finanzas: false, anticipos: false }, id);
       assertSameResolution({ planFeatures: nuevo }, `re-guardado ${id}`);
     }
   });
@@ -161,7 +167,7 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
       );
       // Guardar un plan viejo (sin vertical) da lo mismo + las claves nuevas con su default.
       if (planFeatures) {
-        const nuevas = { registroServicios: false, vistaAgenda: true, promociones: true, finanzas: false };
+        const nuevas = { registroServicios: false, vistaAgenda: true, promociones: true, finanzas: false, anticipos: false };
         assert.deepEqual(now.buildPlanFeatures(planFeatures), { ...expectedBuild(planFeatures), ...nuevas }, `buildPlanFeatures caso ${i}`);
         assert.deepEqual(now.buildPlanFeatures(planFeatures, { vertical: 'citas' }), { ...expectedBuild(planFeatures, { vertical: 'citas' }), ...nuevas }, `buildPlanFeatures citas caso ${i}`);
       }
@@ -176,6 +182,13 @@ describe('registroServicios: los planes actuales resuelven igual que antes', () 
     assert.equal(now.resolveCapabilities({ planFeatures: pro, overrides: { finanzas: true } }).finanzas.enabled, true);
     const esencial = storedFeatures('esencial'); // sin Analítica
     assert.equal(now.resolveCapabilities({ planFeatures: esencial, overrides: { finanzas: true } }).finanzas.enabled, false);
+  });
+
+  test('anticipos: apagada en todos los planes; se enciende por plan o por negocio', () => {
+    for (const id of EXISTING_PLANS) assert.equal(now.resolveCapabilities({ planFeatures: storedFeatures(id) }).anticipos.enabled, false, id);
+    const pro = storedFeatures('profesional');
+    assert.equal(now.resolveCapabilities({ planFeatures: pro, overrides: { anticipos: true } }).anticipos.enabled, true);
+    assert.equal(now.resolveCapabilities({ planFeatures: pro, overrides: { anticipos: true, reservaPublica: false } }).anticipos.enabled, false);
   });
 
   test('solo se enciende si el plan o una excepción la activan', () => {

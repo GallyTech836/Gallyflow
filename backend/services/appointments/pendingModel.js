@@ -11,6 +11,7 @@
 // Funciones puras, sin React ni Firebase.
 
 import { isClosedOn, findSpecialHours } from './closedDays.js';
+import { holdExpired } from '../anticipos/anticipoModel.js';
 
 export const PENDING_ID = 'pending';
 
@@ -102,6 +103,7 @@ export function isProfessionalFreeAt({
 
   const choca = citas.some((c) => {
     if (!c || c.id === ignoreCitaId || c.date !== fecha || c.status === 'cancelled') return false;
+    if (holdExpired(c)) return false; // esperaba anticipo y venció: no ocupa
     if (c.origin === 'registro') return false; // registros de servicio: no ocupan horario
     if (c.professionalId !== professional.id && c.barberId !== professional.id) return false;
     const cStart = timeToMin(c.time);

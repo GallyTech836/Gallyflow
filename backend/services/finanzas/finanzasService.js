@@ -54,7 +54,7 @@ const movsCol = (id) => negRef(id).collection('finanzasMovimientos');
 const mesesCol = (id) => negRef(id).collection('finanzasMeses');
 const gastosCol = (id) => negRef(id).collection('finanzasGastos');
 const fijosCol = (id) => negRef(id).collection('finanzasFijos');
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3; // 3: anticipos retenidos en los ingresos
 
 const nowIso = () => new Date().toISOString();
 const actorInfo = (actor) => ({ uid: actor?.uid || null, email: actor?.email || null });
@@ -99,7 +99,21 @@ async function readFlowsSince(negocioId, sinceMs) {
     n.collection('cajas').where('closedAt', '>=', sinceIso).get(),
   ]);
   const map = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() }));
-  return { citas: map(citasSnap), ventas: map(ventasSnap), pagos: map(pagosSnap), salidas: map(salidasSnap), movs: map(movsSnap), cierres: map(cierresSnap), sinceDay };
+  const anticipos = await readAnticipos(negocioId, sinceIso, null);
+  return { citas: map(citasSnap), ventas: map(ventasSnap), pagos: map(pagosSnap), salidas: map(salidasSnap), movs: map(movsSnap), cierres: map(cierresSnap), anticipos, sinceDay };
+}
+
+/**
+ * Citas con anticipo cobrado o resuelto en el rango (deposit.paidAt o
+ * deposit.resolvedAt). Índices de un solo campo: los crea Firestore solo.
+ */
+async function readAnticipos(negocioId, fromIso, toIso) {
+  const col = negRef(negocioId).collection('citas');
+  const rango = (field) => { let q = col.where(field, '>=', fromIso); if (toIso) q = q.where(field, '<=', toIso); return q.get(); };
+  const [a, b] = await Promise.all([rango('deposit.paidAt'), rango('deposit.resolvedAt')]);
+  const byId = new Map();
+  for (const d of [...a.docs, ...b.docs]) byId.set(d.id, { id: d.id, ...d.data() });
+  return [...byId.values()];
 }
 
 function publicAccount(a, balances, config) {
@@ -362,7 +376,8 @@ async function readMonth(negocioId, ym) {
   ]);
   const map = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() }));
   const movs = map(movsSnap);
-  return { citas: map(citasSnap), ventas: map(ventasSnap), pagos: map(pagosSnap), salidas: map(salidasSnap), gastos: map(gastosSnap), gastoPagos: movs.filter((m) => m.type === 'gasto'), movs, startDay, endDay, startMs, endMs };
+  const anticipos = await readAnticipos(negocioId, startIso, endIso);
+  return { citas: map(citasSnap), ventas: map(ventasSnap), pagos: map(pagosSnap), salidas: map(salidasSnap), gastos: map(gastosSnap), gastoPagos: movs.filter((m) => m.type === 'gasto'), movs, anticipos, startDay, endDay, startMs, endMs };
 }
 
 async function readStaff(negocioId) {
@@ -416,7 +431,7 @@ export async function getResumen(negocioId, { month } = {}) {
   const movs = data.movs;
   const cierresSnap = await negRef(negocioId).collection('cajas').where('closedAt', '>=', new Date(data.startMs).toISOString()).where('closedAt', '<=', new Date(data.endMs).toISOString()).get();
   const cierres = cierresSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const flows = buildFlows({ citas: data.citas, ventas: data.ventas, pagos: data.pagos, salidas: data.salidas, movs, cierres, sucursales: base.sucursales, config: base.config, sinceMs: 0, tz: TZ });
+  const flows = buildFlows({ citas: data.citas, ventas: data.ventas, pagos: data.pagos, salidas: data.salidas, movs, cierres, anticipos: data.anticipos, sucursales: base.sucursales, config: base.config, sinceMs: 0, tz: TZ });
   const accounts = base.accounts.map((a) => ({ id: a.id, name: a.name }));
   const history = buildHistory(flows, accounts, { startDay: data.startDay, endDay: data.endDay });
 

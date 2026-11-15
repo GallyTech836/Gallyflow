@@ -28,7 +28,7 @@ export default function PublicServiceList({ services = [], priceOf, onSelect = n
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold text-nexus-text leading-snug break-words">{s.name}</span>
               {showDescription && s.description && (
-                <span className="mt-0.5 block text-xs text-nexus-text-secondary leading-relaxed line-clamp-2">{s.description}</span>
+                <span className="mt-0.5 block text-xs text-nexus-text-secondary leading-relaxed whitespace-pre-line">{s.description}</span>
               )}
               {duration && <span className="mt-0.5 block text-xs text-nexus-text-muted nx-num">{duration}</span>}
             </span>

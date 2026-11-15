@@ -144,7 +144,8 @@ export const CAPABILITIES = [
     description: 'Productos con stock por sucursal, ventas que descuentan stock, ajustes, traspasos y movimientos.', enforcedIn: ['ui'] },
   { key: 'caja', module: 'inventory', label: 'Caja', status: 'soon', kind: 'toggle', default: false },
   { key: 'pagos', module: 'agenda', label: 'Pagos en línea', status: 'soon', kind: 'toggle', default: false },
-  { key: 'anticipos', module: 'agenda', label: 'Anticipos', status: 'soon', kind: 'toggle', default: false },
+  { key: 'anticipos', module: 'agenda', label: 'Anticipos por QR', status: 'implemented', kind: 'toggle', default: false, requires: 'reservaPublica',
+    description: 'La reserva del link público queda por confirmar hasta que el dueño verifica el anticipo pagado por QR.', enforcedIn: ['ui', 'backend'] },
 
   // ── CONFIGURACIÓN Y COMUNICACIÓN ──
   { key: 'asistenteWhatsapp', module: 'settings', label: 'Asistente de WhatsApp', status: 'implemented', kind: 'toggle', default: false,

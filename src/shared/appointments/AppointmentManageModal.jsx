@@ -10,6 +10,8 @@ import { professionalCanDo } from './pendingModel';
 import { useBusinessTerms } from '../businessProfiles/useBusinessProfile';
 import { Modal, Button, Field, Input, Select, Textarea, ChoiceChips, useConfirm } from '../ui';
 import AppointmentIntakeDetails from './AppointmentIntakeDetails';
+import DepositPanel from '../anticipos/DepositPanel';
+import { depositPaidAmount } from '../anticipos/anticipoModel';
 
 /**
  * Modal único de gestión de cita — mismo HTML/clases que el modal
@@ -34,6 +36,8 @@ export default function AppointmentManageModal({
   onSubmit,        // (e) => void  — equivalente a handleUpdateReservation
   onDelete,        // () => void  — equivalente a handleDeleteReservation (solo admin)
   onTransition,    // (nextStatus) => void  — equivalente a handleUpdateStatus
+  savedStatus = null,      // estado guardado (el draft puede tenerlo cambiado)
+  onDepositAction = null,  // (action, decision?) => Promise — anticipos, solo el dueño
 }) {
   const terms = useBusinessTerms();
   const [showServicesList, setShowServicesList] = useState(false);
@@ -53,9 +57,16 @@ export default function AppointmentManageModal({
 
   // Cita que ya entró en una caja cerrada: solo cliente y notas (ver cashLock.js).
   const cashLocked = isInClosedCash(appointment);
-  const canEdit = (field) => (cashLocked && !CLOSED_CASH_EDITABLE.includes(field) ? false : canEditField(role, field, staffPermissions));
+  // Reserva que espera el anticipo: el estado solo cambia con Confirmar / Rechazar.
+  const depositLocked = appointment.deposit?.status === 'awaiting' && (savedStatus || appointment.status) === 'pending';
+  const anticipoPagado = depositPaidAmount(appointment);
+  const canEdit = (field) => {
+    if (cashLocked && !CLOSED_CASH_EDITABLE.includes(field)) return false;
+    if (depositLocked && field === 'status') return false;
+    return canEditField(role, field, staffPermissions);
+  };
   const allowDelete = !cashLocked && canHardDelete(role, staffPermissions);
-  const nextStates = cashLocked ? [] : getAllowedNextStates(role, appointment.status, staffPermissions);
+  const nextStates = cashLocked || depositLocked ? [] : getAllowedNextStates(role, appointment.status, staffPermissions);
   const anyEditable = ['clientName', 'status', 'notes', 'time', 'serviceId', 'duration'].some(canEdit);
   const canAdjust = !cashLocked && canAdjustDuration(role, staffPermissions);
 
@@ -254,6 +265,9 @@ export default function AppointmentManageModal({
       )}
     >
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-4">
+        {appointment.deposit && (
+          <DepositPanel appointment={appointment} savedStatus={savedStatus} onAction={onDepositAction} />
+        )}
         {cashLocked && (
           <p role="note" className="rounded-lg border border-nexus-border bg-nexus-background px-3 py-2 text-sm text-nexus-text-secondary">
             {CLOSED_CASH_MESSAGE}
@@ -485,6 +499,11 @@ export default function AppointmentManageModal({
             required
             error={paymentMethodMissing ? `Elige el método de pago para poder guardar ${terms.g('appointment', 'el', 'la')} ${terms.tl('appointment')} como ${terms.g('appointment', 'completado', 'completada')}.` : null}
           >
+            {anticipoPagado > 0 && (
+              <p className="mb-2 text-sm text-nexus-text-secondary">
+                Ya pagó <b className="nx-num text-nexus-text">Bs {anticipoPagado}</b> de anticipo por {appointment.deposit.method}. Elige cómo pagó el resto.
+              </p>
+            )}
             <ChoiceChips
               label="Método de pago"
               options={realPaymentMethods}

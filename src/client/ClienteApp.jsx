@@ -22,6 +22,7 @@ import { useNegocioPlan } from '../shared/negocioPlan/useNegocioPlan';
 import { useBusinessSettings } from '../shared/businessSettings/useBusinessSettings';
 import { findClosure, findSpecialHours, isClosedOn, closureLabel } from '../shared/businessSettings/closedDaysModel';
 import BusinessInfoPage from './BusinessInfoPage';
+import DepositStep from './DepositStep';
 import { getPendingCandidates, professionalCanDo, getProfessionalServiceIds } from '../shared/appointments/pendingModel';
 import { processPendingCita, reevaluatePending } from '../shared/appointments/pendingApi';
 import { fetchBusyAppointments, createPublicBooking } from '../shared/appointments/publicBookingApi';
@@ -77,12 +78,14 @@ export default function App({ negocioSlug, proId } = {}) {
 
     // Precio confirmado al reservar (lo que se guardó), para la pantalla final.
     const [bookedPricing, setBookedPricing] = useState(null);
+    const [bookedDeposit, setBookedDeposit] = useState(null); // anticipo por QR (si el negocio lo pide)
   // Servicio elegido desde «Más información» (botón Reservar de un servicio):
   // en el paso de profesional solo se ofrecen quienes lo realizan.
   const [preselectedServiceId, setPreselectedServiceId] = useState(null);
 
     const resetBooking = () => {
       setBookedPricing(null);
+      setBookedDeposit(null);
     setPreselectedServiceId(null);
     setSelectedBranch(null)
     setSelectedServices([]);
@@ -684,7 +687,10 @@ export default function App({ negocioSlug, proId } = {}) {
       }
       // Sin "await" a propósito: la confirmación visual (SuccessStep) no
       // debe esperar al diálogo de permiso de notificaciones del navegador.
-      confirmBookingToClient({ time: selectedHour, negocioId }); // negocioId: solo para la terminología del push
+      // Con anticipo la reserva no está confirmada todavía: no se manda el push de "confirmada".
+      const deposit = result.cita?.deposit || null;
+      setBookedDeposit(deposit);
+      if (!deposit) confirmBookingToClient({ time: selectedHour, negocioId }); // negocioId: solo para la terminología del push
       setBookedPricing({ min: bookingPricing.priceMin, max: bookingPricing.priceMax, hasVariable: bookingPricing.hasVariable, promo: bookingPricing.promo, normalMin: bookingPricing.normalMin });
       setStep(6); 
     } catch (error) {
@@ -877,7 +883,17 @@ export default function App({ negocioSlug, proId } = {}) {
         loading={loading}
         onBack={() => setStep(4)} 
       />;
-      case 6: return <SuccessStep 
+      case 6: if (bookedDeposit) return <DepositStep
+        deposit={bookedDeposit}
+        onReset={resetBooking}
+        selectedDate={selectedDate}
+        selectedHour={selectedHour}
+        selectedServices={selectedServices}
+        total={bookedPricing && !bookedPricing.hasVariable ? bookedPricing.min : null}
+        branch={selectedBranch || (branches.length === 1 ? branches[0] : null)}
+        clientName={clientName.trim()}
+      />;
+      return <SuccessStep 
         onReset={resetBooking} 
         selectedDate={selectedDate}
         selectedHour={selectedHour}
@@ -1221,7 +1237,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                     )}
                   </span>
                   {s.description && (
-                    <span className="block mt-0.5 text-nexus-text-secondary text-xs leading-relaxed line-clamp-2">{s.description}</span>
+                    <span className="block mt-0.5 text-nexus-text-secondary text-xs leading-relaxed whitespace-pre-line">{s.description}</span>
                   )}
                   <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-nexus-text-secondary nx-num">
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">

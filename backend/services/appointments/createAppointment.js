@@ -9,6 +9,24 @@ import { getPendingCandidates, PENDING_ID } from './pendingModel.js';
 import { repriceCitaServices } from '../pricing/professionalPricing.js';
 import { readServicesInTx } from '../pricing/catalogInTx.js';
 import { promotionsEnabled, readPromotionContextInTx, withPromotions } from '../pricing/promotionsInTx.js';
+import { depositAmountFor, DEPOSIT_STATUS } from '../anticipos/anticipoModel.js';
+
+/**
+ * Anticipo de la reserva (solo link público con anticipos activos): la cita
+ * queda 'pending' y ocupa el horario hasta que vence. Ver anticipoService.js.
+ */
+function depositFields(anticipo, priced, nowMs) {
+  const amount = anticipo ? depositAmountFor(anticipo, priced.services, priced.totalPrice) : 0;
+  if (!(amount > 0)) return { status: 'confirmed' };
+  const at = new Date(nowMs).toISOString();
+  return {
+    status: 'pending',
+    deposit: {
+      amount, method: anticipo.method, status: DEPOSIT_STATUS.AWAITING,
+      expiresAt: new Date(nowMs + anticipo.minutes * 60000).toISOString(), createdAt: at,
+    },
+  };
+}
 
 // Precio por profesional: el precio NUNCA se toma de quien llama (el endpoint
 // es público); se recalcula aquí con el catálogo y el profesional, dentro de
@@ -34,6 +52,7 @@ export async function createAppointment({
   bookedBy = 'client',
   promoActive = false, // promo heredada de la reserva pública (ver publicBooking.js)
   intake = null, // formulario del tipo de negocio, ya validado (ver bookingFormModel.js)
+  anticipo = null, // configuración de anticipos (solo reserva pública), ver depositFields
 }) {
   if (!negocioId || !professionalId || !date || !time || !serviceDuration || !services?.length) {
     throw new Error('Faltan campos requeridos para crear la cita.');
@@ -92,7 +111,7 @@ export async function createAppointment({
       ...(priced.promo ? { promo: priced.promo } : {}),
       date,
       time,
-      status: 'confirmed',
+      ...depositFields(anticipo, priced, Date.now()),
       paymentMethod: paymentMethod || '',
       bookedBy,
       notes: '',
@@ -129,6 +148,7 @@ export async function createPendingAppointment({
   bookedBy = 'client',
   promoActive = false,
   intake = null,
+  anticipo = null,
 }) {
   if (!negocioId || !date || !time || !serviceDuration || !services?.length) {
     throw new Error('Faltan campos requeridos para crear la cita.');
@@ -186,7 +206,7 @@ export async function createPendingAppointment({
       priceProvisional: true,
       date,
       time,
-      status: 'confirmed',
+      ...depositFields(anticipo, priced, Date.now()),
       paymentMethod: paymentMethod || '',
       bookedBy,
       notes: '',

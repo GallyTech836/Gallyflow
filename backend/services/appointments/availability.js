@@ -9,6 +9,7 @@
 // actualiza este archivo Y el de src/shared/ en el mismo cambio.
 
 import { isClosedOn, findSpecialHours } from './closedDays.js';
+import { holdExpired } from '../anticipos/anticipoModel.js';
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const SLOT_STEP = 30; // minutos entre cada horario mostrado (09:00, 09:30, ...)
@@ -73,6 +74,8 @@ export function getAvailableSlots({
       c?.date === fecha &&
       (c?.professionalId === profesional.id || c?.barberId === profesional.id) &&
       c?.status !== 'cancelled' &&
+      // Reserva que esperaba el anticipo y venció: el horario está libre.
+      !holdExpired(c) &&
       // Registros de servicio (Nexus Control): no tienen horario, no ocupan.
       c?.origin !== 'registro'
   );
