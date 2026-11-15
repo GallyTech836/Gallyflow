@@ -227,6 +227,7 @@ export async function createPublicBooking(body, { ahora = new Date() } = {}) {
         amount: cita.deposit.amount,
         expiresAt: cita.deposit.expiresAt,
         minutes: anticipo.minutes,
+        verifyMinutes: anticipo.verifyMinutes,
         method: anticipo.method,
         qrImage: anticipo.qrImage,
         instructions: anticipo.instructions,

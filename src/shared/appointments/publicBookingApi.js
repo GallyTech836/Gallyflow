@@ -41,3 +41,22 @@ export async function createPublicBooking(payload) {
     return { ok: false, error: 'Sin conexión. Revisa tu internet e inténtalo de nuevo.', code: 'NETWORK', status: 0 };
   }
 }
+
+/**
+ * Anticipos: el cliente avisa "Ya pagué". El backend alarga el tiempo para que
+ * el negocio confirme y le avisa. -> { ok, expiresAt?, error? }
+ */
+export async function reportDepositPaid(negocioId, citaId) {
+  try {
+    const res = await fetch(`${BASE_URL}/appointments/public/${encodeURIComponent(citaId)}/anticipo-pagado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ negocioId }),
+      keepalive: true, // sigue aunque el navegador se vaya a WhatsApp
+    });
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error || 'No se pudo avisar.', code: data.code || null };
+  } catch (_) {
+    return { ok: false, error: 'Sin conexión.' };
+  }
+}

@@ -11,6 +11,8 @@ import { readServicesInTx } from '../pricing/catalogInTx.js';
 import { promotionsEnabled, readPromotionContextInTx, withPromotions } from '../pricing/promotionsInTx.js';
 import { depositAmountFor, DEPOSIT_STATUS } from '../anticipos/anticipoModel.js';
 
+const holdRef = (negocioId, citaId) => db.collection('anticipoHolds').doc(`${negocioId}_${citaId}`);
+
 /**
  * Anticipo de la reserva (solo link público con anticipos activos): la cita
  * queda 'pending' y ocupa el horario hasta que vence. Ver anticipoService.js.
@@ -122,6 +124,8 @@ export async function createAppointment({
     };
 
     tx.set(nuevaCitaRef, nuevaCita);
+    // Anticipo: registro para que el revisor la cancele apenas venza (anticipoService.sweepHolds).
+    if (nuevaCita.deposit) tx.set(holdRef(negocioId, nuevaCitaRef.id), { negocioId, citaId: nuevaCitaRef.id, expiresAt: nuevaCita.deposit.expiresAt });
 
     return { id: nuevaCitaRef.id, ...nuevaCita };
   });
@@ -216,6 +220,8 @@ export async function createPendingAppointment({
       updatedAt: nowIso,
     };
     tx.set(nuevaCitaRef, nuevaCita);
+    // Anticipo: registro para que el revisor la cancele apenas venza (anticipoService.sweepHolds).
+    if (nuevaCita.deposit) tx.set(holdRef(negocioId, nuevaCitaRef.id), { negocioId, citaId: nuevaCitaRef.id, expiresAt: nuevaCita.deposit.expiresAt });
     return { id: nuevaCitaRef.id, ...nuevaCita };
   });
 }

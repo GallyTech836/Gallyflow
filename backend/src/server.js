@@ -1,6 +1,7 @@
 import app from './app.js';
 import { logger } from '../utils/logger.js';
 import { startReminderScheduler } from '../services/reminders/reminderScheduler.js';
+import { startAnticipoSweeper } from '../services/anticipos/anticipoService.js';
 import { maybeRunLegacyPasswordMigration } from '../services/staff/legacyPasswordMigration.js';
 import { startInboxSweeper } from '../services/whatsapp/inboundQueue.js';
 import { startDeletionSweeper } from '../services/negocios/deleteNegocio.js';
@@ -15,6 +16,8 @@ process.on('unhandledRejection', (err) => {
 app.listen(PORT, () => {
   logger.info(`GallyFlow backend escuchando en el puerto ${PORT}`);
   startReminderScheduler();
+  // Anticipos por QR: cancela y avisa apenas vence el tiempo para pagar.
+  startAnticipoSweeper();
   // Solo si existe MIGRATE_LEGACY_PASSWORDS en Railway (dry / apply).
   maybeRunLegacyPasswordMigration();
   // Cola de WhatsApp: retoma mensajes pendientes (reinicio, otra instancia).

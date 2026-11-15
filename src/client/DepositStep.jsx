@@ -1,28 +1,33 @@
-// DepositStep.jsx — Después de reservar en un negocio que pide anticipo:
-// QR, monto, hasta cuándo pagar y botón para mandar el comprobante por
-// WhatsApp. La reserva queda "por confirmar" hasta que el dueño confirma el pago.
-// No vuelve sola al inicio (el cliente necesita tiempo para pagar).
+// DepositStep.jsx — Después de reservar en un negocio que pide anticipo.
+// Estilo billetera: el QR grande, sin descargas; el cliente le toma captura y
+// paga desde la app de su banco. Cuenta regresiva del tiempo para pagar.
+// "Ya pagué" avisa al negocio (el backend guarda el horario un rato más para
+// que confirme) y abre WhatsApp para mandar el comprobante.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, Download } from 'lucide-react';
+import { Clock, CheckCircle2 } from 'lucide-react';
 import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { WhatsAppIcon } from '../shared/location/WhatsAppButton';
 import { useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
-import { useSavableImage, saveImage } from '../shared/qr/saveImage';
+import { reportDepositPaid } from '../shared/appointments/publicBookingApi';
 
 const bs = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
+const mmss = (ms) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+const hora = (ms) => new Date(ms).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
 
-export default function DepositStep({ deposit, onReset, selectedDate, selectedHour, selectedServices = [], total = null, branch = null, clientName = '' }) {
+export default function DepositStep({ deposit, negocioId, citaId, onReset, selectedDate, selectedHour, selectedServices = [], total = null, branch = null, clientName = '' }) {
   const terms = useBusinessTerms();
-  const qr = useSavableImage(deposit.qrImage, 'qr-anticipo.png');
-  const [saveHint, setSaveHint] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
+  const [reported, setReported] = useState(null); // { expiresAt } cuando avisó "ya pagué"
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  const expMs = Date.parse(deposit.expiresAt);
-  const minutos = Math.max(0, Math.ceil((expMs - now) / 60000));
-  const vencida = Number.isFinite(expMs) && expMs <= now;
-  const horaLimite = Number.isFinite(expMs) ? new Date(expMs).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' }) : '';
+  const expMs = Date.parse(reported?.expiresAt || deposit.expiresAt);
+  const restante = expMs - now;
+  const vencida = Number.isFinite(expMs) && restante <= 0;
+  const urgente = !reported && restante <= 60000;
 
   const fechaLegible = useMemo(() => {
     if (!selectedDate) return '';
@@ -35,50 +40,54 @@ export default function DepositStep({ deposit, onReset, selectedDate, selectedHo
   const waUrl = buildWhatsAppUrl(phone, mensaje);
   const saldo = typeof total === 'number' ? Math.max(0, total - deposit.amount) : null;
 
+  // El enlace de WhatsApp se abre igual (es un <a>); el aviso al backend va en paralelo.
+  const avisarPago = () => {
+    if (reported || vencida || !citaId) return;
+    const fallback = { expiresAt: new Date(Date.now() + (deposit.verifyMinutes || 120) * 60000).toISOString() };
+    setReported(fallback);
+    reportDepositPaid(negocioId, citaId).then((r) => { if (r.ok && r.expiresAt) setReported({ expiresAt: r.expiresAt }); });
+  };
+
   return (
-    <div className="flex-1 flex flex-col items-center py-4 text-center space-y-5 animate-scale-up">
-      <div className="space-y-1.5">
-        <h2 className="text-2xl font-extrabold tracking-tight text-nexus-text">Paga el anticipo para confirmar</h2>
+    <div className="flex-1 flex flex-col items-center py-2 text-center space-y-4 animate-scale-up">
+      <div className="space-y-1">
+        <h2 className="text-2xl font-extrabold tracking-tight text-nexus-text">{reported ? 'Avisaste que ya pagaste' : 'Paga el anticipo para confirmar'}</h2>
         <p className="mx-auto max-w-xs text-xs leading-relaxed text-nexus-text-secondary">
-          Tu {terms.tl('appointment')} {terms.g('appointment', 'está guardado', 'está guardada')}, pero se confirma cuando el negocio reciba el anticipo.
+          {reported
+            ? `El negocio revisa el pago y confirma tu ${terms.tl('appointment')}.`
+            : `Tu ${terms.tl('appointment')} ${terms.g('appointment', 'está guardado', 'está guardada')}, pero se confirma cuando el negocio reciba el anticipo.`}
         </p>
       </div>
 
-      <div className="w-full rounded-2xl border border-nexus-border bg-nexus-surface p-4">
+      {/* Cuenta regresiva */}
+      {!reported ? (
+        <div className={`flex w-full items-center justify-center gap-2.5 rounded-2xl border px-4 py-3 ${vencida || urgente ? 'border-nexus-error/30 bg-nexus-error-bg text-nexus-error-text' : 'border-nexus-border bg-nexus-surface text-nexus-text'}`} role="timer" aria-live="off">
+          <Clock size={20} className="shrink-0" aria-hidden="true" />
+          {vencida ? (
+            <p className="text-sm font-semibold">Se acabó el tiempo y el horario se liberó. Si ya pagaste, escríbele al negocio.</p>
+          ) : (
+            <p className="text-sm">Tienes <b className="nx-num text-2xl font-extrabold align-middle">{mmss(restante)}</b> para pagar</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex w-full items-center gap-2.5 rounded-2xl border border-nexus-success/30 bg-nexus-success-bg px-4 py-3 text-left text-sm text-nexus-success-text">
+          <CheckCircle2 size={20} className="shrink-0" aria-hidden="true" />
+          <p>Tu horario queda guardado hasta las <b className="nx-num">{hora(expMs)}</b> mientras el negocio confirma.</p>
+        </div>
+      )}
+
+      <div className="w-full rounded-2xl border border-nexus-border bg-nexus-surface p-3">
         <p className="text-xs font-semibold text-nexus-text-secondary">Anticipo por {deposit.method}</p>
         <p className="nx-num text-4xl font-extrabold text-nexus-text">{bs(deposit.amount)}</p>
         {deposit.qrImage && (
-          <>
-            <img
-              src={qr?.objectUrl || deposit.qrImage}
-              alt={`QR para pagar el anticipo de ${bs(deposit.amount)}`}
-              className="mx-auto mt-3 aspect-square w-full max-w-[260px] rounded-xl border border-nexus-border bg-white object-contain p-2"
-              style={{ WebkitTouchCallout: 'default' }}
-            />
-            <button
-              type="button"
-              onClick={() => setSaveHint(saveImage(qr, { url: deposit.qrImage, title: 'QR del anticipo' }) === 'hint')}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-nexus-border bg-nexus-background px-4 py-3 text-sm font-semibold text-nexus-text transition-all hover:opacity-80 active:scale-[0.97]"
-            >
-              <Download size={16} aria-hidden="true" /> Guardar QR en el celular
-            </button>
-            {saveHint && (
-              <p className="mt-2 rounded-lg bg-nexus-surface-hover px-3 py-2 text-sm text-nexus-text">
-                Mantén presionado el QR y elige «Guardar en Fotos». Después ábrelo desde la app de tu banco.
-              </p>
-            )}
-          </>
+          <img
+            src={deposit.qrImage}
+            alt={`QR para pagar el anticipo de ${bs(deposit.amount)}`}
+            className="mx-auto mt-2 aspect-square w-full max-w-[380px] rounded-xl bg-white object-contain"
+          />
         )}
-        {deposit.instructions && <p className="mt-3 whitespace-pre-line text-sm text-nexus-text">{deposit.instructions}</p>}
-      </div>
-
-      <div className={`flex w-full items-start gap-2.5 rounded-2xl border p-3 text-left text-sm ${vencida ? 'border-nexus-error/30 bg-nexus-error-bg text-nexus-error-text' : 'border-nexus-border bg-nexus-background text-nexus-text'}`}>
-        <Clock size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
-        <p>
-          {vencida
-            ? 'Se acabó el tiempo para pagar y el horario se liberó. Si ya pagaste, escríbele al negocio.'
-            : <>Tienes hasta las <b className="nx-num">{horaLimite}</b> ({minutos} min). Si no se paga, el horario se libera.</>}
-        </p>
+        {!reported && <p className="mt-2 text-xs text-nexus-text-secondary">Toma una captura de pantalla y paga desde la app de tu banco.</p>}
+        {deposit.instructions && <p className="mt-2 whitespace-pre-line text-sm text-nexus-text">{deposit.instructions}</p>}
       </div>
 
       {waUrl ? (
@@ -86,13 +95,20 @@ export default function DepositStep({ deposit, onReset, selectedDate, selectedHo
           href={waUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={avisarPago}
           className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-nexus-success/30 bg-nexus-success-bg px-4 py-4 text-sm font-bold text-nexus-success-text transition-all hover:opacity-80 active:scale-[0.97]"
         >
-          <WhatsAppIcon size={17} /> Ya pagué: enviar comprobante
+          <WhatsAppIcon size={17} /> {reported ? 'Enviar comprobante por WhatsApp' : 'Ya pagué: enviar comprobante'}
         </a>
-      ) : (
-        <p className="text-xs text-nexus-text-secondary">Después de pagar, envía el comprobante al negocio.</p>
-      )}
+      ) : !reported && !vencida ? (
+        <button
+          type="button"
+          onClick={avisarPago}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-nexus-success/30 bg-nexus-success-bg px-4 py-4 text-sm font-bold text-nexus-success-text transition-all hover:opacity-80 active:scale-[0.97]"
+        >
+          Ya pagué
+        </button>
+      ) : null}
 
       <div className="w-full space-y-2.5 rounded-2xl border border-nexus-border bg-nexus-surface p-4 text-left text-xs text-nexus-text-secondary">
         {selectedServices.length > 0 && (

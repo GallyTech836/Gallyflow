@@ -7,8 +7,11 @@
 //   2. El cliente paga con el QR del negocio y avisa por WhatsApp.
 //   3. El dueño confirma en el modal de la reserva -> deposit.paid, cita 'confirmed'.
 //      O la rechaza -> cita cancelada, horario libre.
-//   4. Si no se confirma a tiempo, la cita se cancela sola (expireHolds) la
-//      próxima vez que alguien mira horarios, reserva o abre la agenda.
+//   2b. Si el cliente toca "Ya pagué" (reportPaid), el horario se guarda
+//      verifyMinutes más para que el dueño confirme, y al dueño le llega un aviso.
+//   4. Si no se confirma a tiempo, la cita se cancela sola: el revisor
+//      (sweepHolds, cada minuto, con la colección anticipoHolds) o cuando
+//      alguien mira horarios, reserva o abre la agenda (expireHolds).
 //   5. Si una cita con anticipo pagado se cancela (o el cliente no vino), el
 //      dueño decide: devolverlo (refunded) o quedárselo (retained = ingreso).
 //
@@ -27,7 +30,7 @@ import { logger } from '../../utils/logger.js';
  */
 async function avisar(tipo, negocioId, cita, { actorUid = null, soloProfesional = false } = {}) {
   const pro = cita.professionalId || cita.barberId;
-  const conPro = pro && pro !== 'pending';
+  const conPro = pro && pro !== 'pending' && tipo !== 'ANTICIPO_REPORTADO'; // "ya pagué": solo al dueño
   if (soloProfesional && !conPro) return;
   try {
     await sendNotification({
@@ -35,7 +38,7 @@ async function avisar(tipo, negocioId, cita, { actorUid = null, soloProfesional 
       negocioId,
       data: { clientName: cita.clientName, time: cita.time, date: cita.date, amount: cita.deposit?.amount },
       actorUid,
-      ...(conPro ? { targetProfessionalId: pro } : {}),
+      ...(conPro ? { targetProfessionalId: pro } : { targetProfessionalIds: tipo === 'ANTICIPO_REPORTADO' ? [] : undefined }),
       ...(soloProfesional ? { onlyTargetProfessional: true } : {}),
     });
   } catch (err) {
@@ -48,6 +51,9 @@ export class AnticipoError extends Error {
 }
 
 const negRef = (id) => db.collection('negocios').doc(id);
+// anticipoHolds/{negocioId_citaId} = { negocioId, citaId, expiresAt }: solo backend.
+const holdRef = (negocioId, citaId) => db.collection('anticipoHolds').doc(`${negocioId}_${citaId}`);
+const dropHold = (negocioId, citaId) => holdRef(negocioId, citaId).delete().catch(() => {});
 const actorInfo = (actor) => ({ uid: actor?.uid || null, email: actor?.email || null });
 
 /** Configuración de anticipos lista para usar, o null si el negocio no pide anticipos. */
@@ -81,8 +87,54 @@ export async function expireHolds(negocioId, nowMs = Date.now()) {
     return c;
   })));
   const hechas = canceladas.filter(Boolean);
+  vencidas.forEach((d) => dropHold(negocioId, d.id));
   await Promise.all(hechas.map((c) => avisar('ANTICIPO_VENCIDO', negocioId, c)));
   return hechas.length;
+}
+
+/**
+ * Revisor (cada minuto, desde server.js): cancela apenas vencen las reservas
+ * que esperaban anticipo, en todos los negocios, y avisa. Lee solo
+ * anticipoHolds vencidos (índice de un campo, automático).
+ */
+export async function sweepHolds(nowMs = Date.now()) {
+  const snap = await db.collection('anticipoHolds').where('expiresAt', '<=', new Date(nowMs).toISOString()).limit(200).get();
+  if (snap.empty) return 0;
+  const negocios = [...new Set(snap.docs.map((d) => d.data().negocioId).filter(Boolean))];
+  let total = 0;
+  for (const n of negocios) total += await expireHolds(n, nowMs).catch((err) => { logger.warn('[anticipos] revisor:', err.message); return 0; });
+  await Promise.all(snap.docs.map((d) => d.ref.delete().catch(() => {})));
+  return total;
+}
+
+export function startAnticipoSweeper(everyMs = 60 * 1000) {
+  if (process.env.ANTICIPOS_SWEEPER === 'false') return;
+  setInterval(() => { sweepHolds().catch((err) => logger.warn('[anticipos] revisor:', err.message)); }, everyMs);
+}
+
+/**
+ * El cliente avisa que ya pagó (botón "Ya pagué" de la página de pago).
+ * Público, pero solo sirve una vez, para una reserva que todavía espera el
+ * anticipo y sin vencer. Alarga el vencimiento verifyMinutes y avisa al dueño.
+ */
+export async function reportPaid(negocioId, citaId) {
+  const cfg = await getAnticipoConfig(negocioId);
+  const extra = (cfg?.verifyMinutes || 120) * 60000;
+  const now = Date.now();
+  const at = new Date(now).toISOString();
+  const r = await withCita(negocioId, citaId, (tx, ref, c) => {
+    const d = c.deposit;
+    if (!d || d.status !== DEPOSIT_STATUS.AWAITING || c.status !== 'pending') throw new AnticipoError(409, 'Esta reserva ya no espera el anticipo.', 'NOT_AWAITING');
+    if (d.reportedAt) return { expiresAt: d.expiresAt, reportedAt: d.reportedAt };
+    if (holdExpired(c, now)) throw new AnticipoError(409, 'Se acabó el tiempo para pagar y el horario se liberó.', 'EXPIRED');
+    const deposit = { ...d, reportedAt: at, expiresAt: new Date(now + extra).toISOString() };
+    tx.update(ref, { deposit, updatedAt: at });
+    tx.set(holdRef(negocioId, ref.id), { negocioId, citaId: ref.id, expiresAt: deposit.expiresAt });
+    return { expiresAt: deposit.expiresAt, reportedAt: at, _cita: { ...c, deposit } };
+  });
+  const { _cita, ...out } = r;
+  if (_cita) await avisar('ANTICIPO_REPORTADO', negocioId, _cita);
+  return out;
 }
 
 async function withCita(negocioId, citaId, fn) {
@@ -111,6 +163,7 @@ export async function confirmDeposit(negocioId, citaId, { actor }) {
     tx.update(ref, { status: 'confirmed', deposit, updatedAt: at });
     return { status: 'confirmed', deposit, _cita: { ...c, deposit } };
   }).then(async ({ _cita, ...r }) => {
+    dropHold(negocioId, citaId);
     if (_cita) await avisar('ANTICIPO_CONFIRMADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true });
     return r;
   });
@@ -126,6 +179,7 @@ export async function rejectDeposit(negocioId, citaId, { actor }) {
     tx.update(ref, { status: 'cancelled', cancelledBy: 'admin', cancelledReason: 'anticipo_rechazado', cancelledAt: at, deposit, updatedAt: at });
     return { status: 'cancelled', deposit, _cita: { ...c, deposit } };
   }).then(async ({ _cita, ...r }) => {
+    dropHold(negocioId, citaId);
     if (_cita) await avisar('ANTICIPO_RECHAZADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true });
     return r;
   });

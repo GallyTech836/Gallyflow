@@ -25,6 +25,8 @@ export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
     // Reserva del link público que pide anticipo: todavía no está confirmada.
     case 'RESERVA_POR_CONFIRMAR':
       return { titulo: '⏳ Reserva por confirmar', cuerpo: `${cliente} reservó${dia}${hora}. Se confirma cuando llegue el anticipo${monto}.` };
+    case 'ANTICIPO_REPORTADO':
+      return { titulo: '💸 Dice que ya pagó el anticipo', cuerpo: `${cliente} avisó que pagó el anticipo${monto} de la reserva${dia}${hora}. Revísalo y confírmalo.` };
     case 'ANTICIPO_CONFIRMADO':
       return { titulo: '✅ Reserva confirmada', cuerpo: `Llegó el anticipo de ${cliente}: la reserva${dia}${hora} está confirmada.` };
     case 'ANTICIPO_RECHAZADO':

@@ -2,11 +2,14 @@
 // Copia idéntica en src/shared/anticipos/anticipoModel.js: si cambia uno, cambiar el otro.
 //
 // Configuración: negocios/{id}.businessSettings.anticipos
-//   { enabled, mode: 'percent'|'fixed', value, minutes, method, qrImage, instructions, phone, excludedServiceIds[] }
+//   { enabled, mode: 'percent'|'fixed', value, minutes, verifyMinutes, method, qrImage, instructions, phone, excludedServiceIds[] }
+//   minutes:       tiempo que tiene el cliente para pagar (cuenta regresiva en la pantalla)
+//   verifyMinutes: cuando el cliente avisa "ya pagué", tiempo extra para que el dueño confirme
 //   phone: WhatsApp para mandar el comprobante (si está vacío, el de la sucursal)
 //
 // En la cita (lo escribe solo el backend):
-//   deposit: { amount, method, status, expiresAt, createdAt, paidAt?, verifiedBy?, resolvedAt?, resolvedBy? }
+//   deposit: { amount, method, status, expiresAt, createdAt, reportedAt?, paidAt?, verifiedBy?, resolvedAt?, resolvedBy? }
+//   reportedAt: el cliente tocó "Ya pagué" (expiresAt se alarga verifyMinutes)
 //   status del anticipo:
 //     awaiting  la reserva espera el anticipo (cita 'pending', ocupa el horario hasta expiresAt)
 //     paid      el dueño confirmó que llegó (cita 'confirmed')
@@ -28,11 +31,12 @@ export const DEPOSIT_LABELS = {
   retained: 'Anticipo retenido',
 };
 
-export const MIN_MINUTES = 10;
+export const MIN_MINUTES = 5;
+export const MIN_VERIFY_MINUTES = 15;
 export const MAX_MINUTES = 24 * 60;
 
 export const ANTICIPO_DEFAULTS = {
-  enabled: false, mode: 'percent', value: 50, minutes: 30, method: '', qrImage: '', instructions: '', phone: '', excludedServiceIds: [],
+  enabled: false, mode: 'percent', value: 50, minutes: 5, verifyMinutes: 120, method: '', qrImage: '', instructions: '', phone: '', excludedServiceIds: [],
 };
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -58,11 +62,14 @@ export function normalizeAnticipoConfig(raw, paymentMethods = []) {
   let minutes = Math.round(Number(c.minutes));
   if (!Number.isFinite(minutes)) minutes = ANTICIPO_DEFAULTS.minutes;
   minutes = Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, minutes));
+  let verifyMinutes = Math.round(Number(c.verifyMinutes));
+  if (!Number.isFinite(verifyMinutes)) verifyMinutes = ANTICIPO_DEFAULTS.verifyMinutes;
+  verifyMinutes = Math.min(MAX_MINUTES, Math.max(MIN_VERIFY_MINUTES, verifyMinutes));
   const noCash = (paymentMethods || []).map((m) => String(m || '').trim()).filter((m) => m && !/^efectivo$/i.test(m) && m !== 'Pendiente');
   const method = noCash.includes(c.method) ? c.method : (noCash.find((m) => /qr/i.test(m)) || noCash[0] || '');
   return {
     enabled: c.enabled === true,
-    mode, value, minutes, method,
+    mode, value, minutes, verifyMinutes, method,
     qrImage: typeof c.qrImage === 'string' && /^https:\/\//.test(c.qrImage.trim()) ? c.qrImage.trim() : '',
     instructions: typeof c.instructions === 'string' ? c.instructions.trim().slice(0, 300) : '',
     phone: typeof c.phone === 'string' && /^[0-9+()\s-]{6,25}$/.test(c.phone.trim()) ? c.phone.trim() : '',

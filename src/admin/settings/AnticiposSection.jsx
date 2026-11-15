@@ -8,7 +8,7 @@ import { QrCode } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { Card, Button, Field, Input, ChoiceChips } from '../../shared/ui';
 import QrUploader from '../../shared/anticipos/QrUploader';
-import { normalizeAnticipoConfig, anticipoReady, MIN_MINUTES, MAX_MINUTES } from '../../shared/anticipos/anticipoModel';
+import { normalizeAnticipoConfig, anticipoReady, MIN_MINUTES, MAX_MINUTES, MIN_VERIFY_MINUTES } from '../../shared/anticipos/anticipoModel';
 import { DEFAULT_PAYMENT_METHODS } from '../../shared/businessSettings/businessSettingsModel';
 
 export default function AnticiposSection({ negocioId, services = [] }) {
@@ -82,8 +82,11 @@ export default function AnticiposSection({ negocioId, services = [] }) {
           <Field label={form.mode === 'percent' ? 'Porcentaje del precio (%)' : 'Monto (Bs)'} hint={ejemplo}>
             <Input type="number" inputMode="decimal" min="1" max={form.mode === 'percent' ? 100 : undefined} className="nx-num" value={form.value} onChange={(e) => set({ value: e.target.value })} />
           </Field>
-          <Field label="Tiempo para pagar (minutos)" hint={`Entre ${MIN_MINUTES} y ${MAX_MINUTES / 60} horas. Después se libera el horario.`}>
+          <Field label="Tiempo para pagar (minutos)" hint={`El cliente ve una cuenta regresiva. Si no avisa que pagó, la reserva se cancela y te llega un aviso. Mínimo ${MIN_MINUTES}.`}>
             <Input type="number" inputMode="numeric" min={MIN_MINUTES} max={MAX_MINUTES} className="nx-num" value={form.minutes} onChange={(e) => set({ minutes: e.target.value })} />
+          </Field>
+          <Field label="Tiempo para que confirmes (minutos)" hint={`Cuando el cliente toca "Ya pagué", el horario se guarda este tiempo para que revises y confirmes. Mínimo ${MIN_VERIFY_MINUTES}.`}>
+            <Input type="number" inputMode="numeric" min={MIN_VERIFY_MINUTES} max={MAX_MINUTES} className="nx-num" value={form.verifyMinutes} onChange={(e) => set({ verifyMinutes: e.target.value })} />
           </Field>
           <Field label="¿Cómo entra el anticipo?" hint={noCash.length ? 'En Finanzas entra a la cuenta de este método.' : 'Agrega QR u otro método en Configuración › Negocio.'}>
             <ChoiceChips label="Método del anticipo" options={noCash} value={form.method} onChange={(method) => set({ method })} />

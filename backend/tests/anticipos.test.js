@@ -30,6 +30,7 @@ mock.module('../services/capabilities/capabilityService.js', {
 
 await import('../routes/anticipos.routes.js');
 const { createPublicBooking, listBusyAppointments } = await import('../services/appointments/publicBooking.js');
+const S = await import('../services/anticipos/anticipoService.js');
 const M = await import('../services/anticipos/anticipoModel.js');
 const C = await import('../services/cash/cashModel.js');
 const F = await import('../services/finanzas/finanzasModel.js');
@@ -232,5 +233,50 @@ describe('avisos', () => {
     assert.equal(enviados.length, 1);
     assert.equal(enviados[0].tipo, 'ANTICIPO_VENCIDO');
     assert.equal(enviados[0].onlyTargetProfessional, undefined);
+  });
+});
+
+describe('cuenta regresiva y "ya pagué"', () => {
+  const vencer = (id) => { const c = db._get(`${N}/citas/${id}`); db._set(`${N}/citas/${id}`, { ...c, deposit: { ...c.deposit, expiresAt: new Date(Date.now() - 1000).toISOString() } }); };
+
+  test('la reserva deja su registro para el revisor; el revisor la cancela al vencer y avisa', async () => {
+    seed({ minutes: 5 });
+    const { id } = await createPublicBooking(reserva());
+    const hold = db._get(`anticipoHolds/${NEG}_${id}`);
+    assert.equal(hold.citaId, id);
+    const faltan = (Date.parse(hold.expiresAt) - Date.now()) / 60000;
+    assert.ok(faltan > 4 && faltan <= 5);
+    assert.equal(await S.sweepHolds(), 0); // todavía no vence
+    enviados.length = 0;
+    assert.equal(await S.sweepHolds(Date.now() + 6 * 60000), 1);
+    assert.equal(db._get(`${N}/citas/${id}`).status, 'cancelled');
+    assert.equal(db._get(`anticipoHolds/${NEG}_${id}`), undefined);
+    assert.equal(enviados[0].tipo, 'ANTICIPO_VENCIDO');
+  });
+
+  test('"ya pagué": alarga el tiempo para que el dueño confirme y le avisa (solo una vez)', async () => {
+    seed({ minutes: 5, verifyMinutes: 120 });
+    const { id } = await createPublicBooking(reserva());
+    enviados.length = 0;
+    const r = await S.reportPaid(NEG, id);
+    const extra = (Date.parse(r.expiresAt) - Date.now()) / 60000;
+    assert.ok(extra > 119 && extra <= 120);
+    assert.equal(db._get(`anticipoHolds/${NEG}_${id}`).expiresAt, r.expiresAt);
+    assert.equal(enviados.length, 1);
+    assert.equal(enviados[0].tipo, 'ANTICIPO_REPORTADO');
+    assert.deepEqual(enviados[0].targetProfessionalIds, []); // solo al dueño
+    const otra = await S.reportPaid(NEG, id);
+    assert.equal(otra.expiresAt, r.expiresAt); // la segunda vez no alarga más
+    assert.equal(enviados.length, 1);
+    assert.equal(await S.sweepHolds(Date.now() + 6 * 60000), 0); // a los 6 min sigue guardada
+    assert.equal((await call(`/anticipos/${id}/confirmar`)).status, 200);
+    assert.equal(db._get(`anticipoHolds/${NEG}_${id}`), undefined);
+  });
+
+  test('"ya pagué" con el tiempo vencido no sirve', async () => {
+    seed({ minutes: 5 });
+    const { id } = await createPublicBooking(reserva());
+    vencer(id);
+    await assert.rejects(S.reportPaid(NEG, id), /Se acabó el tiempo/);
   });
 });

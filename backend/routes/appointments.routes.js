@@ -5,6 +5,7 @@ import { pendingRateLimit, publicBookingRateLimit, publicReadRateLimit } from '.
 import { createPublicBooking, listBusyAppointments, BookingError } from '../services/appointments/publicBooking.js';
 import { logger } from '../utils/logger.js';
 import { checkCapability, DENY_MESSAGES } from '../services/capabilities/capabilityService.js';
+import { reportPaid, AnticipoError } from '../services/anticipos/anticipoService.js';
 
 const router = Router();
 
@@ -63,6 +64,19 @@ router.post('/appointments/public', publicBookingRateLimit, async (req, res) => 
     if (err instanceof BookingError) return res.status(err.status).json({ error: err.message, code: err.code });
     logger.error('[appointments.routes] reserva pública:', err.message);
     return res.status(500).json({ error: 'No se pudo guardar la reserva. Inténtalo de nuevo.' });
+  }
+});
+
+// Anticipos: el cliente avisa "Ya pagué" desde la página de pago.
+router.post('/appointments/public/:citaId/anticipo-pagado', publicBookingRateLimit, async (req, res) => {
+  const negocioId = typeof req.body?.negocioId === 'string' ? req.body.negocioId : '';
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(negocioId) || !/^[A-Za-z0-9_-]{1,80}$/.test(req.params.citaId || '')) return res.status(400).json({ error: 'Datos inválidos.' });
+  try {
+    return res.json(await reportPaid(negocioId, req.params.citaId));
+  } catch (err) {
+    if (err instanceof AnticipoError) return res.status(err.status).json({ error: err.message, code: err.code });
+    logger.error('[appointments.routes] anticipo-pagado:', err.message);
+    return res.status(500).json({ error: 'No se pudo avisar. Escríbele al negocio.' });
   }
 });
 

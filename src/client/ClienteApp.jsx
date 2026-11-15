@@ -693,7 +693,7 @@ export default function App({ negocioSlug, proId } = {}) {
       // debe esperar al diálogo de permiso de notificaciones del navegador.
       // Con anticipo la reserva no está confirmada todavía: no se manda el push de "confirmada".
       const deposit = result.cita?.deposit || null;
-      setBookedDeposit(deposit);
+      setBookedDeposit(deposit ? { ...deposit, citaId: result.cita.id } : null);
       if (!deposit) confirmBookingToClient({ time: selectedHour, negocioId }); // negocioId: solo para la terminología del push
       setBookedPricing({ min: bookingPricing.priceMin, max: bookingPricing.priceMax, hasVariable: bookingPricing.hasVariable, promo: bookingPricing.promo, normalMin: bookingPricing.normalMin });
       setStep(6); 
@@ -889,6 +889,8 @@ export default function App({ negocioSlug, proId } = {}) {
       />;
       case 6: if (bookedDeposit) return <DepositStep
         deposit={bookedDeposit}
+        citaId={bookedDeposit.citaId}
+        negocioId={negocioId}
         onReset={resetBooking}
         selectedDate={selectedDate}
         selectedHour={selectedHour}
