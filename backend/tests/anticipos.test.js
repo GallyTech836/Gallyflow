@@ -16,6 +16,10 @@ mock.module('../config/firebase.js', { namedExports: { db } });
 mock.module('firebase-admin/firestore', { namedExports: { FieldValue } });
 mock.module('express', { namedExports: { Router: () => router } });
 mock.module('../middlewares/auth.middleware.js', { namedExports: { identifyRequester: pasa } });
+const enviados = [];
+mock.module('../services/notificationService.js', {
+  namedExports: { sendNotification: async (x) => { enviados.push(x); return { sent: 1 }; }, sendDirectNotification: async () => ({}) },
+});
 mock.module('../middlewares/session.middleware.js', { namedExports: { requireSession: pasa } });
 mock.module('../services/capabilities/capabilityService.js', {
   namedExports: {
@@ -29,6 +33,7 @@ const { createPublicBooking, listBusyAppointments } = await import('../services/
 const M = await import('../services/anticipos/anticipoModel.js');
 const C = await import('../services/cash/cashModel.js');
 const F = await import('../services/finanzas/finanzasModel.js');
+const { buildMessage } = await import('../services/notificationTemplates.js');
 
 const NEG = 'negA';
 const N = `negocios/${NEG}`;
@@ -197,5 +202,35 @@ describe('Finanzas', () => {
     assert.equal(F.computeBalances(accounts, F.buildFlows({ anticipos: [ret], config })).balances.bnb, 40);
     assert.equal(F.monthTotals({ anticipos: [ret], startDay: '2026-02-01', endDay: '2026-02-28' }).ingresos, 0);
     assert.equal(F.monthTotals({ anticipos: [ret], startDay: '2026-03-01', endDay: '2026-03-31' }).ingresos, 40);
+  });
+});
+
+describe('avisos', () => {
+  test('textos: por confirmar, confirmado, rechazado y vencido', () => {
+    const d = { clientName: 'Martin', time: '09:00', date: '2026-11-18', amount: 40 };
+    assert.deepEqual(buildMessage('RESERVA_POR_CONFIRMAR', d), { titulo: '⏳ Reserva por confirmar', cuerpo: 'Martin reservó el mié 18 nov a las 09:00. Se confirma cuando llegue el anticipo de Bs 40.' });
+    assert.equal(buildMessage('ANTICIPO_CONFIRMADO', d).titulo, '✅ Reserva confirmada');
+    assert.match(buildMessage('ANTICIPO_VENCIDO', d).cuerpo, /no pagó el anticipo a tiempo/);
+    assert.match(buildMessage('RESERVA_PENDIENTE', { ...d, porConfirmar: true }).cuerpo, /Por confirmar: espera el anticipo/);
+  });
+
+  test('confirmar avisa al profesional; vencer avisa a dueño y profesional', async () => {
+    seed();
+    const id = (await createPublicBooking(reserva())).id;
+    enviados.length = 0;
+    await call(`/anticipos/${id}/confirmar`);
+    assert.equal(enviados.length, 1);
+    assert.equal(enviados[0].tipo, 'ANTICIPO_CONFIRMADO');
+    assert.equal(enviados[0].targetProfessionalId, 'ana');
+    assert.equal(enviados[0].onlyTargetProfessional, true);
+
+    const id2 = (await createPublicBooking(reserva({ time: '10:00' }))).id;
+    const c = db._get(`${N}/citas/${id2}`);
+    db._set(`${N}/citas/${id2}`, { ...c, deposit: { ...c.deposit, expiresAt: new Date(Date.now() - 1000).toISOString() } });
+    enviados.length = 0;
+    await call('/anticipos/vencer');
+    assert.equal(enviados.length, 1);
+    assert.equal(enviados[0].tipo, 'ANTICIPO_VENCIDO');
+    assert.equal(enviados[0].onlyTargetProfessional, undefined);
   });
 });

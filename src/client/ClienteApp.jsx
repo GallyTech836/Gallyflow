@@ -672,16 +672,20 @@ export default function App({ negocioSlug, proId } = {}) {
         return;
       }
       const citaRef = { id: result.cita.id };
+      // Con anticipo: al dueño y al profesional les llega "Reserva por confirmar".
+      const depositoPendiente = result.cita?.deposit || null;
+      const tipoAviso = depositoPendiente ? NotificationType.RESERVA_POR_CONFIRMAR : NotificationType.RESERVA_CREADA_CLIENTE;
+      const datosAviso = { clientName: clientName.trim(), time: selectedHour, date: selectedDate, ...(depositoPendiente ? { amount: depositoPendiente.amount } : {}) };
       if (professionalId === 'pending') {
         // El backend asigna (si hay un único candidato) o avisa SOLO a los candidatos.
         // Si no responde, se avisa únicamente a los administradores.
         processPendingCita(negocioId, citaRef.id).then((r) => {
           if (!r) {
-            notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, undefined, []);
+            notify(tipoAviso, negocioId, datosAviso, undefined, undefined, []);
           }
         });
       } else {
-        notify(NotificationType.RESERVA_CREADA_CLIENTE, negocioId, { clientName: clientName.trim(), time: selectedHour }, undefined, professionalId);
+        notify(tipoAviso, negocioId, datosAviso, undefined, professionalId);
         // Este profesional se ocupó: puede que alguna Pendiente ya tenga un único candidato.
         reevaluatePending(negocioId, selectedDate);
       }

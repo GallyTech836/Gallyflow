@@ -18,4 +18,7 @@ export const NotificationType = {
   // Registro de servicio (Nexus Control). Lo envía el backend al registrar;
   // el front no lo dispara.
   SERVICIO_REGISTRADO: 'SERVICIO_REGISTRADO',
+  // Anticipos por QR: reserva del link que espera el anticipo. Los avisos de
+  // confirmado / rechazado / vencido los manda el backend.
+  RESERVA_POR_CONFIRMAR: 'RESERVA_POR_CONFIRMAR',
 };

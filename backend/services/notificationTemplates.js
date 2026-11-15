@@ -10,7 +10,27 @@ export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
   const servicio = data.serviceName || t('service');
   const hora = data.time ? ` a las ${data.time}` : '';
 
+  // Anticipos: "mié 18 nov" para que se sepa de qué día es la reserva.
+  const dia = (() => {
+    if (!data.date || !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) return '';
+    const f = new Date(`${data.date}T12:00:00Z`);
+    const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return ` el ${dias[f.getUTCDay()]} ${f.getUTCDate()} ${meses[f.getUTCMonth()]}`;
+  })();
+  const monto = Number(data.amount) > 0 ? ` de Bs ${Number(data.amount)}` : '';
+  const porConfirmar = data.porConfirmar === true ? '\nPor confirmar: espera el anticipo.' : '';
+
   switch (tipo) {
+    // Reserva del link público que pide anticipo: todavía no está confirmada.
+    case 'RESERVA_POR_CONFIRMAR':
+      return { titulo: '⏳ Reserva por confirmar', cuerpo: `${cliente} reservó${dia}${hora}. Se confirma cuando llegue el anticipo${monto}.` };
+    case 'ANTICIPO_CONFIRMADO':
+      return { titulo: '✅ Reserva confirmada', cuerpo: `Llegó el anticipo de ${cliente}: la reserva${dia}${hora} está confirmada.` };
+    case 'ANTICIPO_RECHAZADO':
+      return { titulo: '🔔 Reserva cancelada', cuerpo: `Se canceló la reserva${dia}${hora} de ${cliente}: no llegó el anticipo.` };
+    case 'ANTICIPO_VENCIDO':
+      return { titulo: '🔔 Reserva cancelada', cuerpo: `${cliente} no pagó el anticipo a tiempo: se liberó el horario${dia}${hora}.` };
     case 'RESERVA_CREADA_CLIENTE':
       return { titulo: '🔔¡Nueva reserva!', cuerpo: `Tienes una reserva${hora} de ${cliente}.` };
     case 'RESERVA_CREADA_ADMIN':
@@ -40,12 +60,12 @@ export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
     case 'RESERVA_PENDIENTE':
       return {
         titulo: '🔔 Nueva reserva pendiente',
-        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nEsta reserva aún no tiene ${tl('professional')} ${g('professional', 'asignado', 'asignada')}.`,
+        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nEsta reserva aún no tiene ${tl('professional')} ${g('professional', 'asignado', 'asignada')}.${porConfirmar}`,
       };
     case 'RESERVA_PENDIENTE_ASIGNADA':
       return {
         titulo: '✅ Reserva asignada',
-        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nSe te asignó la reserva de ${cliente}.`,
+        cuerpo: `${servicio}${data.time ? ` · ${data.time}` : ''}\nSe te asignó la reserva de ${cliente}.${porConfirmar}`,
       };
     case 'SERVICIO_REGISTRADO': {
       // Registro de servicio (Nexus Control). byRole = quién lo registró:

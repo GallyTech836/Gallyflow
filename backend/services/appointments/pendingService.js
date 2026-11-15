@@ -97,14 +97,14 @@ async function evaluateOne(negocioId, citaId) {
       await sendNotification({
         tipo: 'RESERVA_PENDIENTE_ASIGNADA',
         negocioId,
-        data: { clientName: outcome.cita.clientName, time: outcome.cita.time, serviceName: outcome.cita.serviceName },
+        data: { clientName: outcome.cita.clientName, time: outcome.cita.time, serviceName: outcome.cita.serviceName, porConfirmar: outcome.cita.deposit?.status === 'awaiting' },
         targetProfessionalId: outcome.assignee.id,
       });
     } else if (outcome.action === 'notify') {
       await sendNotification({
         tipo: 'RESERVA_PENDIENTE',
         negocioId,
-        data: { clientName: outcome.cita.clientName, time: outcome.cita.time, serviceName: outcome.cita.serviceName },
+        data: { clientName: outcome.cita.clientName, time: outcome.cita.time, serviceName: outcome.cita.serviceName, porConfirmar: outcome.cita.deposit?.status === 'awaiting' },
         targetProfessionalIds: outcome.candidates.map((c) => c.id),
       });
     }

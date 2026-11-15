@@ -17,6 +17,31 @@
 import { db } from '../../config/firebase.js';
 import { checkCapability } from '../capabilities/capabilityService.js';
 import { normalizeAnticipoConfig, anticipoReady, holdExpired, DEPOSIT_STATUS } from './anticipoModel.js';
+import { sendNotification } from '../notificationService.js';
+import { logger } from '../../utils/logger.js';
+
+/**
+ * Aviso push del anticipo (best-effort: si falla, la operación ya quedó hecha).
+ *   ANTICIPO_CONFIRMADO / ANTICIPO_RECHAZADO -> al profesional (el dueño lo hizo)
+ *   ANTICIPO_VENCIDO                         -> al dueño y al profesional
+ */
+async function avisar(tipo, negocioId, cita, { actorUid = null, soloProfesional = false } = {}) {
+  const pro = cita.professionalId || cita.barberId;
+  const conPro = pro && pro !== 'pending';
+  if (soloProfesional && !conPro) return;
+  try {
+    await sendNotification({
+      tipo,
+      negocioId,
+      data: { clientName: cita.clientName, time: cita.time, date: cita.date, amount: cita.deposit?.amount },
+      actorUid,
+      ...(conPro ? { targetProfessionalId: pro } : {}),
+      ...(soloProfesional ? { onlyTargetProfessional: true } : {}),
+    });
+  } catch (err) {
+    logger.warn('[anticipos] aviso falló:', err.message);
+  }
+}
 
 export class AnticipoError extends Error {
   constructor(status, message, code) { super(message); this.status = status; this.code = code; }
@@ -45,16 +70,19 @@ export async function expireHolds(negocioId, nowMs = Date.now()) {
   const vencidas = snap.docs.filter((d) => holdExpired({ id: d.id, ...d.data() }, nowMs));
   if (!vencidas.length) return 0;
   const at = new Date(nowMs).toISOString();
-  await Promise.all(vencidas.map((d) => db.runTransaction(async (tx) => {
+  const canceladas = await Promise.all(vencidas.map((d) => db.runTransaction(async (tx) => {
     const s = await tx.get(d.ref);
     const c = s.data();
-    if (!holdExpired({ id: s.id, ...c }, nowMs)) return; // alguien la confirmó justo ahora
+    if (!holdExpired({ id: s.id, ...c }, nowMs)) return null; // alguien la confirmó justo ahora
     tx.update(d.ref, {
       status: 'cancelled', cancelledBy: 'system', cancelledReason: 'anticipo_vencido', cancelledAt: at, updatedAt: at,
       deposit: { ...c.deposit, status: DEPOSIT_STATUS.EXPIRED, resolvedAt: at },
     });
+    return c;
   })));
-  return vencidas.length;
+  const hechas = canceladas.filter(Boolean);
+  await Promise.all(hechas.map((c) => avisar('ANTICIPO_VENCIDO', negocioId, c)));
+  return hechas.length;
 }
 
 async function withCita(negocioId, citaId, fn) {
@@ -81,7 +109,10 @@ export async function confirmDeposit(negocioId, citaId, { actor }) {
     }
     const deposit = { ...d, status: DEPOSIT_STATUS.PAID, paidAt: at, verifiedBy: actorInfo(actor) };
     tx.update(ref, { status: 'confirmed', deposit, updatedAt: at });
-    return { status: 'confirmed', deposit };
+    return { status: 'confirmed', deposit, _cita: { ...c, deposit } };
+  }).then(async ({ _cita, ...r }) => {
+    if (_cita) await avisar('ANTICIPO_CONFIRMADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true });
+    return r;
   });
 }
 
@@ -93,7 +124,10 @@ export async function rejectDeposit(negocioId, citaId, { actor }) {
     if (!d || d.status !== DEPOSIT_STATUS.AWAITING) throw new AnticipoError(409, 'Esta reserva ya no espera el anticipo.', 'NOT_AWAITING');
     const deposit = { ...d, status: DEPOSIT_STATUS.REJECTED, resolvedAt: at, resolvedBy: actorInfo(actor) };
     tx.update(ref, { status: 'cancelled', cancelledBy: 'admin', cancelledReason: 'anticipo_rechazado', cancelledAt: at, deposit, updatedAt: at });
-    return { status: 'cancelled', deposit };
+    return { status: 'cancelled', deposit, _cita: { ...c, deposit } };
+  }).then(async ({ _cita, ...r }) => {
+    if (_cita) await avisar('ANTICIPO_RECHAZADO', negocioId, _cita, { actorUid: actor?.uid, soloProfesional: true });
+    return r;
   });
 }
 
