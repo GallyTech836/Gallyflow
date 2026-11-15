@@ -8,11 +8,14 @@ import { Clock, Download } from 'lucide-react';
 import { buildWhatsAppUrl } from '../shared/location/whatsappLink';
 import { WhatsAppIcon } from '../shared/location/WhatsAppButton';
 import { useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
+import { useSavableImage, saveImage } from '../shared/qr/saveImage';
 
 const bs = (n) => `Bs ${Math.round((Number(n) || 0) * 100) / 100}`;
 
 export default function DepositStep({ deposit, onReset, selectedDate, selectedHour, selectedServices = [], total = null, branch = null, clientName = '' }) {
   const terms = useBusinessTerms();
+  const qr = useSavableImage(deposit.qrImage, 'qr-anticipo.png');
+  const [saveHint, setSaveHint] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
 
@@ -46,10 +49,24 @@ export default function DepositStep({ deposit, onReset, selectedDate, selectedHo
         <p className="nx-num text-4xl font-extrabold text-nexus-text">{bs(deposit.amount)}</p>
         {deposit.qrImage && (
           <>
-            <img src={deposit.qrImage} alt={`QR para pagar el anticipo de ${bs(deposit.amount)}`} className="mx-auto mt-3 aspect-square w-full max-w-[260px] rounded-xl border border-nexus-border bg-white object-contain p-2" />
-            <a href={deposit.qrImage} target="_blank" rel="noopener noreferrer" download className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-nexus-primary underline underline-offset-2">
-              <Download size={14} aria-hidden="true" /> Abrir o guardar el QR
-            </a>
+            <img
+              src={qr?.objectUrl || deposit.qrImage}
+              alt={`QR para pagar el anticipo de ${bs(deposit.amount)}`}
+              className="mx-auto mt-3 aspect-square w-full max-w-[260px] rounded-xl border border-nexus-border bg-white object-contain p-2"
+              style={{ WebkitTouchCallout: 'default' }}
+            />
+            <button
+              type="button"
+              onClick={() => setSaveHint(saveImage(qr, { url: deposit.qrImage, title: 'QR del anticipo' }) === 'hint')}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-nexus-border bg-nexus-background px-4 py-3 text-sm font-semibold text-nexus-text transition-all hover:opacity-80 active:scale-[0.97]"
+            >
+              <Download size={16} aria-hidden="true" /> Guardar QR en el celular
+            </button>
+            {saveHint && (
+              <p className="mt-2 rounded-lg bg-nexus-surface-hover px-3 py-2 text-sm text-nexus-text">
+                Mantén presionado el QR y elige «Guardar en Fotos». Después ábrelo desde la app de tu banco.
+              </p>
+            )}
           </>
         )}
         {deposit.instructions && <p className="mt-3 whitespace-pre-line text-sm text-nexus-text">{deposit.instructions}</p>}

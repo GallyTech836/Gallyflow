@@ -214,6 +214,10 @@ export default function AppointmentManageModal({
     ? `Desde ${fmtBs(minTotal)}`
     : fmtBs(Number(appointment.price) > 0 ? appointment.price : calculateTotals(currentServices).totalPrice);
   const realPaymentMethods = (paymentMethods || []).filter(m => m && m !== 'Pendiente');
+  // Con anticipo pagado: lo que falta cobrar en el local (el total menos el anticipo).
+  const totalNum = hasVariable && !finalPriceSet ? minTotal : (Number(appointment.price) > 0 ? Number(appointment.price) : calculateTotals(currentServices).totalPrice);
+  const conAnticipo = anticipoPagado > 0 && appointment.status !== 'cancelled';
+  const faltaCobrar = Math.max(0, Math.round((Number(totalNum) - anticipoPagado) * 100) / 100);
 
   const saveDisabled = !anyEditable || paymentMethodMissing || finalPriceMissing || clientMissing || durationInvalid;
   const actionBtn = 'inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-nexus-primary/20 bg-nexus-primary-soft px-3 text-sm font-semibold text-nexus-primary whitespace-nowrap cursor-pointer hover:brightness-95';
@@ -432,12 +436,15 @@ export default function AppointmentManageModal({
             {showPrices && (
               <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-nexus-border pb-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-nexus-text-secondary">Total a cobrar</p>
+                  <p className="text-xs font-medium text-nexus-text-secondary">{conAnticipo ? 'Falta cobrar' : 'Total a cobrar'}</p>
+                  {conAnticipo && (
+                    <p className="text-xs text-nexus-text-muted nx-num">Total {totalLabel} − anticipo {fmtBs(anticipoPagado)}</p>
+                  )}
                   {hasVariable && !finalPriceSet && (
                     <p className="text-xs text-nexus-text-muted">El precio final se anota al terminar.</p>
                   )}
                 </div>
-                <p className="nx-num shrink-0 text-xl font-bold text-nexus-text">{totalLabel}</p>
+                <p className="nx-num shrink-0 text-xl font-bold text-nexus-text">{conAnticipo ? `${hasVariable && !finalPriceSet ? 'Desde ' : ''}${fmtBs(faltaCobrar)}` : totalLabel}</p>
               </div>
             )}
             <div className="flex items-center justify-between gap-3">
