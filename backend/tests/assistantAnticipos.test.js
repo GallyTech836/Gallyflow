@@ -1,6 +1,6 @@
-// Asistente de WhatsApp con anticipos por QR: pide el anticipo antes de
-// confirmar, "Ya pagué" avisa al dueño, y el asistente le escribe al cliente
-// cuando el dueño confirma o rechaza. Firestore en memoria, sin red.
+// Asistente de WhatsApp con anticipos por QR: el resumen ya llega con el QR
+// (sin paso "Confirmar"), el cliente manda el comprobante (foto o PDF), y el
+// asistente le escribe recién cuando el dueño confirma o rechaza. Firestore en memoria, sin red.
 // Ejecutar:  cd backend && npm test
 
 import { test, describe, beforeEach, mock } from 'node:test';
@@ -67,20 +67,23 @@ async function reservar() {
   await say('1');          // agendar / servicios
   await say('1');          // Corte
   await say('1');          // primera hora (con un solo profesional se elige solo)
-  return say('Juan Perez');
+  return say('Juan Perez'); // sin paso "Confirmar": llega el resumen con el QR
 }
+const comprobante = (mimeType = 'image/jpeg') => assistantEngine({ negocioId: 'neg', phone, message: '', media: [{ id: 'm1', mimeType }] });
 
-describe('Asistente: anticipo antes de confirmar', () => {
+describe('Asistente: anticipo sin paso de confirmar', () => {
   beforeEach(seed);
 
-  test('el resumen avisa del anticipo; al confirmar manda el QR y queda por confirmar', async () => {
-    const resumen = await reservar();
-    assert.match(body(resumen), /se pide un anticipo del 50 % del precio por QR/);
-    const r = await say('1'); // Confirmar
+  test('después del nombre manda el resumen con el QR y queda por confirmar', async () => {
+    const r = await reservar();
     assert.equal(r.interactive.header.image.link, QR);
+    assert.match(r.interactive.body.text, /Corte con Ana/);
     assert.match(r.interactive.body.text, /paga el anticipo de \*Bs 50\*/);
     assert.match(r.interactive.body.text, /Tienes 5 minutos/);
-    assert.ok(r.interactive.action.buttons.some((b) => /anticipo_pague\|/.test(b.reply.id)));
+    assert.match(r.interactive.body.text, /comprobante/);
+    const botones = r.interactive.action.buttons.map((b) => b.reply.id);
+    assert.equal(botones.length, 1);
+    assert.match(botones[0], /anticipo_cancelar\|/);
     const [cita] = db._list(`${N}/citas`);
     assert.equal(cita.status, 'pending');
     assert.equal(cita.deposit.status, 'awaiting');
@@ -88,24 +91,34 @@ describe('Asistente: anticipo antes de confirmar', () => {
     assert.equal(sent.find((n) => n.tipo === 'RESERVA_POR_CONFIRMAR')?.data.amount, 50);
   });
 
-  test('"Ya pagué" (botón o escrito) avisa al dueño y alarga el tiempo', async () => {
+  test('la foto o el PDF del comprobante avisa al dueño y alarga el tiempo; no confirma solo', async () => {
     await reservar();
-    const r = await say('1');
-    const pague = r.interactive.action.buttons.find((b) => /anticipo_pague/.test(b.reply.id)).reply.id;
     sent.length = 0;
-    const resp = await say(pague);
-    assert.match(body(resp), /Le avisé al negocio/);
+    const resp = await comprobante('application/pdf');
+    assert.match(body(resp), /Recibí tu comprobante/);
     const [cita] = db._list(`${N}/citas`);
     assert.ok(cita.deposit.reportedAt);
+    assert.ok(cita.deposit.receiptAt);
+    assert.equal(cita.deposit.receiptType, 'pdf');
+    assert.equal(cita.deposit.status, 'awaiting');
     assert.equal(sent[0].tipo, 'ANTICIPO_REPORTADO');
-    // escrito, sin botón: también lo encuentra
-    const otra = await say('ya pagué');
-    assert.match(body(otra), /Le avisé al negocio/);
+    assert.equal(sent[0].data.comprobante, true);
+    assert.equal(whatsapp.length, 0); // el "confirmado" llega recién cuando el dueño confirma
+    // una segunda foto también se registra
+    const otra = await comprobante();
+    assert.match(body(otra), /Recibí tu comprobante/);
+  });
+
+  test('"ya pagué" escrito avisa y pide el comprobante', async () => {
+    await reservar();
+    const r = await say('ya pagué');
+    assert.match(body(r), /foto o el PDF del comprobante/);
+    assert.ok(db._list(`${N}/citas`)[0].deposit.reportedAt);
   });
 
   test('cuando el dueño confirma, el asistente le escribe al cliente', async () => {
     await reservar();
-    await say('1');
+    await comprobante();
     const [cita] = db._list(`${N}/citas`);
     await S.confirmDeposit('neg', cita.id, { actor: { uid: 'admin' } });
     assert.equal(whatsapp.length, 1);
@@ -114,9 +127,8 @@ describe('Asistente: anticipo antes de confirmar', () => {
     assert.equal(whatsapp[0].envio.phoneNumberId, 'pn1');
   });
 
-  test('si vence, el asistente le avisa que se liberó', async () => {
+  test('si vence sin comprobante, el asistente le avisa que se liberó', async () => {
     await reservar();
-    await say('1');
     const [cita] = db._list(`${N}/citas`);
     await S.sweepHolds(Date.now() + 6 * 60000);
     assert.match(whatsapp[0].text, /Se acabó el tiempo para pagar el anticipo/);
@@ -124,13 +136,17 @@ describe('Asistente: anticipo antes de confirmar', () => {
   });
 
   test('"Cancelar reserva" la cancela y libera el horario', async () => {
-    await reservar();
-    const r = await say('1');
-    const cancelar = r.interactive.action.buttons.find((b) => /anticipo_cancelar/.test(b.reply.id)).reply.id;
-    const resp = await say(cancelar);
+    const r = await reservar();
+    const resp = await say(r.interactive.action.buttons[0].reply.id);
     assert.match(body(resp), /cancelé tu reserva/);
     const [cita] = db._list(`${N}/citas`);
     assert.equal(cita.status, 'cancelled');
     assert.equal(sent.at(-1).tipo, 'RESERVA_CANCELADA');
+  });
+
+  test('una foto sin reserva esperando anticipo no se toma como comprobante', async () => {
+    await say('hola');
+    const r = await comprobante();
+    assert.doesNotMatch(body(r) || '', /Recibí tu comprobante/);
   });
 });

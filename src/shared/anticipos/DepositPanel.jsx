@@ -29,7 +29,15 @@ export default function DepositPanel({ appointment, savedStatus, onAction = null
     body = (
       <>
         <p className="text-sm font-semibold text-nexus-text">Espera anticipo de <span className="nx-num">{bs(d.amount)}</span> por {d.method}</p>
-        {d.reportedAt && <p className="text-sm text-nexus-text">El cliente avisó que pagó a las {hora(d.reportedAt)}. Revisa tu cuenta.</p>}
+        {d.reportedAt && !d.receiptAt && <p className="text-sm text-nexus-text">El cliente avisó que pagó a las {hora(d.reportedAt)}. Revisa tu cuenta.</p>}
+        {d.receiptAt && (
+          <p className="text-sm text-nexus-text">
+            Llegó el comprobante a las {hora(d.receiptAt)}.{' '}
+            {d.receiptUrl
+              ? <a href={d.receiptUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-nexus-primary underline">Ver comprobante{d.receiptType === 'pdf' ? ' (PDF)' : ''}</a>
+              : 'Míralo en el chat de WhatsApp del cliente.'}
+          </p>
+        )}
         <p className="text-xs text-nexus-text-secondary">
           {vencida ? 'Venció: el horario ya está libre. Si el cliente pagó, crea la cita de nuevo.' : `Si no lo confirmas hasta las ${hora(d.expiresAt)}, se cancela solo y el horario se libera.`}
         </p>

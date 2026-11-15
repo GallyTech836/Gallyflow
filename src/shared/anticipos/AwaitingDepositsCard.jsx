@@ -40,7 +40,7 @@ export default function AwaitingDepositsCard({ citas = [], onOpen }) {
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-nexus-text">{c.clientName || 'Cliente'} · {diaCorto(c.date)} {c.time}</span>
                   <span className={`block text-xs ${min <= 5 ? 'text-nexus-error-text' : 'text-nexus-text-secondary'}`}>
-                    Anticipo Bs {c.deposit?.amount} · {c.deposit?.reportedAt ? 'avisó que pagó · ' : ''}vence en {min} min
+                    Anticipo Bs {c.deposit?.amount} · {c.deposit?.receiptAt ? 'envió comprobante · ' : c.deposit?.reportedAt ? 'avisó que pagó · ' : ''}vence en {min} min
                   </span>
                 </span>
                 <span className="shrink-0 rounded-lg border border-nexus-border px-3 py-1.5 text-xs font-semibold text-nexus-text">Revisar</span>

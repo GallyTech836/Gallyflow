@@ -26,6 +26,9 @@ export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
     case 'RESERVA_POR_CONFIRMAR':
       return { titulo: '⏳ Reserva por confirmar', cuerpo: `${cliente} reservó${dia}${hora}. Se confirma cuando llegue el anticipo${monto}.` };
     case 'ANTICIPO_REPORTADO':
+      if (data.comprobante === true) {
+        return { titulo: '🧾 Llegó el comprobante del anticipo', cuerpo: `${cliente} envió el comprobante del anticipo${monto} de la reserva${dia}${hora}. Revísalo y confírmalo en la app.` };
+      }
       return { titulo: '💸 Dice que ya pagó el anticipo', cuerpo: `${cliente} avisó que pagó el anticipo${monto} de la reserva${dia}${hora}. Revísalo y confírmalo.` };
     case 'ANTICIPO_CONFIRMADO':
       return { titulo: '✅ Reserva confirmada', cuerpo: `Llegó el anticipo de ${cliente}: la reserva${dia}${hora} está confirmada.` };

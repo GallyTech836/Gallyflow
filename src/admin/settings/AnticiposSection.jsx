@@ -48,7 +48,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
     try {
       await setDoc(doc(db, 'negocios', negocioId), { businessSettings: { anticipos: clean } }, { merge: true });
       setForm(clean);
-      setMsg({ tone: 'ok', text: clean.enabled ? 'Guardado. Las reservas del link público ahora piden anticipo.' : 'Guardado. Los anticipos están apagados.' });
+      setMsg({ tone: 'ok', text: clean.enabled ? 'Guardado. Las reservas del link y de WhatsApp ahora piden anticipo.' : 'Guardado. Los anticipos están apagados.' });
     } catch (err) {
       setMsg({ tone: 'error', text: `No se pudo guardar: ${err.message}` });
     } finally {
@@ -70,7 +70,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-nexus-border p-3">
           <span>
             <span className="block text-sm font-semibold text-nexus-text">Pedir anticipo al reservar</span>
-            <span className="block text-xs text-nexus-text-secondary">Solo en el link público. Las reservas por WhatsApp siguen igual.</span>
+            <span className="block text-xs text-nexus-text-secondary">En el link público y en el asistente de WhatsApp (ahí el cliente manda el comprobante por el chat).</span>
           </span>
           <input type="checkbox" className="h-5 w-5 accent-[var(--nx-primary)]" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
         </label>
@@ -85,7 +85,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
           <Field label="Tiempo para pagar (minutos)" hint={`El cliente ve una cuenta regresiva. Si no avisa que pagó, la reserva se cancela y te llega un aviso. Mínimo ${MIN_MINUTES}.`}>
             <Input type="number" inputMode="numeric" min={MIN_MINUTES} max={MAX_MINUTES} className="nx-num" value={form.minutes} onChange={(e) => set({ minutes: e.target.value })} />
           </Field>
-          <Field label="Tiempo para que confirmes (minutos)" hint={`Cuando el cliente toca "Ya pagué", el horario se guarda este tiempo para que revises y confirmes. Mínimo ${MIN_VERIFY_MINUTES}.`}>
+          <Field label="Tiempo para que confirmes (minutos)" hint={`Cuando el cliente avisa que pagó o manda el comprobante, el horario se guarda este tiempo para que revises y confirmes. Mínimo ${MIN_VERIFY_MINUTES}.`}>
             <Input type="number" inputMode="numeric" min={MIN_VERIFY_MINUTES} max={MAX_MINUTES} className="nx-num" value={form.verifyMinutes} onChange={(e) => set({ verifyMinutes: e.target.value })} />
           </Field>
           <Field label="¿Cómo entra el anticipo?" hint={noCash.length ? 'En Finanzas entra a la cuenta de este método.' : 'Agrega QR u otro método en Configuración › Negocio.'}>

@@ -82,7 +82,7 @@ async function avisarCliente(tipo, negocioId, cita) {
  *   ANTICIPO_CONFIRMADO / ANTICIPO_RECHAZADO -> al profesional (el dueño lo hizo)
  *   ANTICIPO_VENCIDO                         -> al dueño y al profesional
  */
-async function avisar(tipo, negocioId, cita, { actorUid = null, soloProfesional = false } = {}) {
+async function avisar(tipo, negocioId, cita, { actorUid = null, soloProfesional = false, comprobante = false } = {}) {
   const pro = cita.professionalId || cita.barberId;
   const conPro = pro && pro !== 'pending' && tipo !== 'ANTICIPO_REPORTADO'; // "ya pagué": solo al dueño
   if (soloProfesional && !conPro) return;
@@ -90,7 +90,7 @@ async function avisar(tipo, negocioId, cita, { actorUid = null, soloProfesional 
     await sendNotification({
       tipo,
       negocioId,
-      data: { clientName: cita.clientName, time: cita.time, date: cita.date, amount: cita.deposit?.amount },
+      data: { clientName: cita.clientName, time: cita.time, date: cita.date, amount: cita.deposit?.amount, ...(comprobante ? { comprobante: true } : {}) },
       actorUid,
       ...(conPro ? { targetProfessionalId: pro } : { targetProfessionalIds: tipo === 'ANTICIPO_REPORTADO' ? [] : undefined }),
       ...(soloProfesional ? { onlyTargetProfessional: true } : {}),
@@ -171,7 +171,7 @@ export function startAnticipoSweeper(everyMs = 60 * 1000) {
  * Público, pero solo sirve una vez, para una reserva que todavía espera el
  * anticipo y sin vencer. Alarga el vencimiento verifyMinutes y avisa al dueño.
  */
-export async function reportPaid(negocioId, citaId) {
+export async function reportPaid(negocioId, citaId, { receipt = null } = {}) {
   const cfg = await getAnticipoConfig(negocioId);
   const extra = (cfg?.verifyMinutes || 120) * 60000;
   const now = Date.now();
@@ -179,15 +179,21 @@ export async function reportPaid(negocioId, citaId) {
   const r = await withCita(negocioId, citaId, (tx, ref, c) => {
     const d = c.deposit;
     if (!d || d.status !== DEPOSIT_STATUS.AWAITING || c.status !== 'pending') throw new AnticipoError(409, 'Esta reserva ya no espera el anticipo.', 'NOT_AWAITING');
-    if (d.reportedAt) return { expiresAt: d.expiresAt, reportedAt: d.reportedAt };
-    if (holdExpired(c, now)) throw new AnticipoError(409, 'Se acabó el tiempo para pagar y el horario se liberó.', 'EXPIRED');
-    const deposit = { ...d, reportedAt: at, expiresAt: new Date(now + extra).toISOString() };
+    if (!d.reportedAt && holdExpired(c, now)) throw new AnticipoError(409, 'Se acabó el tiempo para pagar y el horario se liberó.', 'EXPIRED');
+    // Comprobante (foto o PDF por WhatsApp): se guarda aunque ya hubiera avisado antes.
+    // Sin url (número con Meta directo): queda la hora en que llegó, para que el dueño lo busque en el chat.
+    const conComprobante = receipt ? { ...(receipt.url ? { receiptUrl: receipt.url } : {}), receiptType: receipt.type || 'image', receiptAt: at } : {};
+    if (d.reportedAt && !receipt) return { expiresAt: d.expiresAt, reportedAt: d.reportedAt };
+    const deposit = d.reportedAt
+      ? { ...d, ...conComprobante }
+      : { ...d, ...conComprobante, reportedAt: at, expiresAt: new Date(now + extra).toISOString() };
     tx.update(ref, { deposit, updatedAt: at });
-    tx.set(holdRef(negocioId, ref.id), { negocioId, citaId: ref.id, expiresAt: deposit.expiresAt });
-    return { expiresAt: deposit.expiresAt, reportedAt: at, _cita: { ...c, deposit } };
+    if (!d.reportedAt) tx.set(holdRef(negocioId, ref.id), { negocioId, citaId: ref.id, expiresAt: deposit.expiresAt });
+    return { expiresAt: deposit.expiresAt, reportedAt: deposit.reportedAt, _cita: { ...c, deposit }, _primero: !d.reportedAt };
   });
-  const { _cita, ...out } = r;
-  if (_cita) await avisar('ANTICIPO_REPORTADO', negocioId, _cita);
+  const { _cita, _primero, ...out } = r;
+  // Aviso al dueño: la primera vez, o cuando llega el comprobante.
+  if (_cita && (_primero || receipt)) await avisar('ANTICIPO_REPORTADO', negocioId, _cita, { comprobante: !!receipt });
   return out;
 }
 

@@ -125,6 +125,15 @@ export function normalizarMensaje(mensaje = {}, value = {}) {
       media: { link: mensaje.image.link || null, mimeType: mensaje.image.mime_type || null, id: mensaje.image.id || null },
     };
   }
+  // PDF (comprobante del anticipo): se trata como archivo que el bot sí recibe.
+  if (type === 'document' && mensaje.document && /pdf/i.test(String(mensaje.document.mime_type || mensaje.document.filename || ''))) {
+    return {
+      ...base,
+      kind: 'media',
+      text: mensaje.document.caption ? String(mensaje.document.caption) : null,
+      media: { link: mensaje.document.link || null, mimeType: 'application/pdf', id: mensaje.document.id || null },
+    };
+  }
   if (TIPOS_NO_SOPORTADOS.has(type)) {
     // La descripción, si viene, se usa como texto.
     const caption = mensaje[type]?.caption;

@@ -34,6 +34,7 @@ import { crearVoz, aplicarVoz } from './personalidad.js';
 import { findClosure, findSpecialHours, isClosedOn } from '../appointments/closedDays.js';
 import { activeFields, askFor, cleanFieldValue, validateIntake, formatIntakeValue } from '../bookingForms/bookingFormModel.js';
 import { guardarFotoDeWhatsApp, puedeDescargar } from '../media/intakePhoto.js';
+import { guardarComprobante, esComprobante } from '../media/receiptFile.js';
 
 const SERVICE_DURATION_DEFAULT = 30;
 const TZ = process.env.APP_TIMEZONE || 'America/La_Paz';
@@ -650,14 +651,22 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     return responder(await bienvenidaAnuncio(), conversation);
   }
 
+  // Anticipos: foto o PDF mientras una reserva espera el anticipo = comprobante.
+  const archivosRecibidos = (Array.isArray(media) ? media : [media]).filter(Boolean);
+  if (archivosRecibidos.some(esComprobante) && conversation.currentFlow !== 'collecting_intake') {
+    const esperando = await findAwaitingByPhone(negocioId, phone).catch(() => null);
+    if (esperando) return recibirComprobante(esperando, archivosRecibidos.find(esComprobante));
+  }
+
   if (expirada) {
     conversation = await resetConversation(negocioId, phone);
     return responder(prefijo(`Tu conversación anterior quedó sin terminar, empecemos de nuevo.\n\n`, await bienvenida()), conversation);
   }
 
   // Fotos y archivos (el lote completo llega en un solo llamado).
-  const fotos = (Array.isArray(media) ? media : [media]).filter(Boolean);
-  const otrosArchivos = Number(unsupportedCount) || 0;
+  // PDFs: solo sirven como comprobante del anticipo; aquí cuentan como "otros archivos".
+  const fotos = archivosRecibidos.filter((f) => !/pdf/i.test(String(f.mimeType || '')));
+  const otrosArchivos = (Number(unsupportedCount) || 0) + (archivosRecibidos.length - fotos.length);
   const esperaFoto = conversation.currentFlow === 'collecting_intake' && campoActual()?.type === 'image';
   if (esperaFoto) {
     // El formulario pide una foto: se usa la primera; el formulario avanza una sola vez.
@@ -988,7 +997,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
           selectedTime: hora,
           clientName: nombreConocido,
         });
-        return responder(mensajeResumen(conversation), conversation);
+        return mostrarResumen();
       }
 
       conversation = await updateConversation(negocioId, phone, {
@@ -1008,7 +1017,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
         currentFlow: 'confirming',
         clientName: nombre,
       });
-      return responder(mensajeResumen(conversation), conversation);
+      return mostrarResumen();
     }
 
     case 'confirming': {
@@ -1157,35 +1166,51 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
 
   // ── Anticipos por QR ──
 
-  // "Se pide un anticipo de Bs 20" / "del 50 % del precio" (si algún servicio lo pide).
-  function lineaAnticipo(conv) {
+  // ¿Esta reserva pide anticipo? (algún servicio que no esté en las excepciones)
+  function pideAnticipo(conv) {
     const cfg = context.anticipo;
-    if (!cfg) return '';
+    if (!cfg || conv.rescheduleCitaId) return false;
     const excl = new Set(cfg.excludedServiceIds || []);
-    if (!serviciosDe(conv).some((s) => !excl.has(String(s.serviceId)))) return '';
-    const cuanto = cfg.mode === 'fixed' ? `de Bs ${cfg.value}` : `del ${cfg.value} % del precio`;
-    return `\n\nPara confirmarla se pide un anticipo ${cuanto} por ${cfg.method}.`;
+    return serviciosDe(conv).some((s) => !excl.has(String(s.serviceId)));
+  }
+
+  // Con anticipo no hay botón "Confirmar": la reserva queda guardada "por
+  // confirmar" y el resumen ya llega con el QR y el monto.
+  async function mostrarResumen() {
+    if (pideAnticipo(conversation)) return confirmarReserva();
+    return responder(mensajeResumen(conversation), conversation);
   }
 
   function mensajeAnticipo(cita, conQuien) {
     const cfg = context.anticipo || {};
     const d = cita.deposit;
-    const { tl, g } = context.terms;
-    const cuerpo = `Tu ${tl('appointment')} de ${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${conQuien} está ${g('appointment', 'guardado', 'guardada')} 🙌\n\nPara confirmarla, paga el anticipo de *Bs ${d.amount}* con este QR (${d.method}). Tienes ${cfg.minutes || 5} minutos.${cfg.instructions ? `\n${cfg.instructions}` : ''}\n\nCuando pagues, toca «Ya pagué».`;
+    const { tl } = context.terms;
+    const precio = Number(cita.price) > 0 ? `\nPrecio: Bs ${cita.price}` : '';
+    const resumen = `Tu ${tl('appointment')}:\n${cita.serviceName}${conQuien}\n${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${precio}\nA nombre de: ${cita.clientName}`;
+    const cuerpo = `${resumen}\n\nPara confirmarla, paga el anticipo de *Bs ${d.amount}* con este QR (${d.method}). Tienes ${cfg.minutes || 5} minutos.${cfg.instructions ? `\n${cfg.instructions}` : ''}\n\nDespués envíame por aquí la foto o el PDF del comprobante 🧾`;
     return {
-      text: `${cuerpo}\n\nQR: ${cfg.qrImage}\nEscribe "ya pagué" cuando pagues.`,
+      text: `${cuerpo}\n\nQR: ${cfg.qrImage}\n(Escribe "cancelar reserva" si no la quieres)`,
       interactive: {
         type: 'button',
         header: { type: 'image', image: { link: cfg.qrImage } },
         body: { text: recortar(cuerpo, 1024) },
-        action: {
-          buttons: [
-            { type: 'reply', reply: { id: `anticipo_pague|${cita.id}`, title: 'Ya pagué' } },
-            { type: 'reply', reply: { id: `anticipo_cancelar|${cita.id}`, title: 'Cancelar reserva' } },
-          ],
-        },
+        action: { buttons: [{ type: 'reply', reply: { id: `anticipo_cancelar|${cita.id}`, title: 'Cancelar reserva' } }] },
       },
     };
+  }
+
+  async function recibirComprobante(cita, archivo) {
+    try {
+      const guardado = await guardarComprobante(archivo);
+      await reportPaid(negocioId, cita.id, { receipt: guardado || { url: null, type: /pdf/i.test(archivo?.mimeType || '') ? 'pdf' : 'image' } });
+      return responder('Recibí tu comprobante 🙌\nEl negocio lo revisará y te confirmo por aquí.', conversation);
+    } catch (err) {
+      if (err instanceof AnticipoError && err.code === 'EXPIRED') {
+        return responder('Se acabó el tiempo para pagar el anticipo y el horario se liberó. Escribe «hablar con alguien» si ya pagaste.', conversation);
+      }
+      logger.warn('[assistantEngine] comprobante:', err.message);
+      return responder('No pude registrar el comprobante. Intenta enviarlo de nuevo en un momento.', conversation);
+    }
   }
 
   async function accionAnticipo(tipo, citaId) {
@@ -1198,7 +1223,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       const snap = await db.collection('negocios').doc(negocioId).collection('citas').doc(citaId).get();
       if (!snap.exists || String(snap.data().clientPhone || '') !== String(phone)) return responder('No encontré esa reserva. Escribe «menu» para ver tus opciones.', conversation);
       await reportPaid(negocioId, citaId);
-      return responder(`¡Gracias! Le avisé al negocio que pagaste 🙌\nApenas confirme el pago, te escribo por aquí.`, conversation);
+      return responder(`¡Gracias! Le avisé al negocio 🙌\nEnvíame por aquí la foto o el PDF del comprobante para que lo revise. Apenas lo confirme, te escribo.`, conversation);
     } catch (err) {
       if (err instanceof AnticipoError) {
         if (err.code === 'EXPIRED') return responder('Se acabó el tiempo para pagar el anticipo y el horario se liberó. Escribe «agendar» para reservar de nuevo. Si ya pagaste, escribe «hablar con alguien».', conversation);
@@ -2432,7 +2457,7 @@ Escribe "precios", "ubicación" o "1" para agendar ${g('appointment', 'un', 'una
       date: conv.selectedDate, branch: conv.selectedStaff?.branch || branch || '',
     });
     const lineaPrecio = precio ? `\nPrecio: ${precio}${conv.selectedStaff?.id === PENDING_ID && /–/.test(precio) ? ` (según quién te atienda)` : ''}` : '';
-    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}${lineaMascota(conv)}\nA nombre de: ${conv.clientName}${lineaAnticipo(conv)}`;
+    const resumen = `Confirma tu ${context.terms.tl('appointment')}:\n${nombresServicios(conv)} con ${conv.selectedStaff.name}\n${fechaLegible(conv.selectedDate)} (${conv.selectedDate}) a las ${conv.selectedTime}${lineaPrecio}${lineaMascota(conv)}\nA nombre de: ${conv.clientName}`;
     return menuBotones({
       texto: `${resumen}\n\n1. Confirmar\n2. Cancelar\n(Escribe "nombre" para cambiar el nombre)`,
       cuerpo: resumen,
