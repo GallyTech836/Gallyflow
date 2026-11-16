@@ -353,7 +353,11 @@ function proximosDias(ctx, pros, servicios) {
   const closedDays = ctx.businessSettings?.closedDays || [];
   const base = ahoraNegocio();
   const dias = [];
-  for (let i = 0; i < DIAS_A_BUSCAR && dias.length < DIAS_A_MOSTRAR; i++) {
+  // Anticipación de horas o días: se saltan los días que quedan enteros antes del mínimo.
+  const minAdv = ctx.businessSettings?.minAdvanceMinutes || 0;
+  const limite = base.getHours() * 60 + base.getMinutes() + minAdv;
+  const desde = minAdv > 0 ? Math.floor(limite / 1440) : 0;
+  for (let i = desde; i < desde + DIAS_A_BUSCAR && dias.length < DIAS_A_MOSTRAR; i++) {
     const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i, 12);
     const dayName = DAY_NAMES_MON_FIRST[(d.getDay() + 6) % 7];
 

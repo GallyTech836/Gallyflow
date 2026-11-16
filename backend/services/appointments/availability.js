@@ -89,8 +89,11 @@ export function getAvailableSlots({
   ).padStart(2, '0')}`;
   const esHoy = fecha === todayStr;
   const nowMin = ahora.getHours() * 60 + ahora.getMinutes();
+  // Anticipación en minutos (puede ser de horas o días): la hora tiene que
+  // quedar al menos minAdvanceMinutes después de ahora, aunque sea otro día.
+  const diaRel = esHoy ? 0 : Math.round((Date.parse(`${fecha}T12:00:00Z`) - Date.parse(`${todayStr}T12:00:00Z`)) / 86400000);
   const cumpleAnticipacion = (hourStr) =>
-    !aplicarAnticipacion || !esHoy || timeToMin(hourStr) >= nowMin + minAdvanceMinutes;
+    !aplicarAnticipacion || diaRel * 1440 + timeToMin(hourStr) >= nowMin + minAdvanceMinutes;
 
   const hours = [];
   for (let slotStart = startOfDayMin; slotStart < endOfDayMin; slotStart += SLOT_STEP) {

@@ -13,6 +13,49 @@ function Card({ children, className = '' }) {
   );
 }
 
+// Anticipación: se guarda siempre en minutos (minAdvanceMinutes), así lo ya
+// configurado no cambia. La unidad solo es para escribirlo más fácil.
+const UNIDADES = [
+  { id: 'min', label: 'minutos', uno: 'minuto', factor: 1 },
+  { id: 'h', label: 'horas', uno: 'hora', factor: 60 },
+  { id: 'd', label: 'días', uno: 'día', factor: 1440 },
+];
+const unidadDe = (m) => (m > 0 && m % 1440 === 0 ? 'd' : m > 0 && m % 60 === 0 ? 'h' : 'min');
+
+function AdvanceInput({ minutes, onChange }) {
+  const [unit, setUnit] = useState(() => unidadDe(minutes));
+  const factor = UNIDADES.find((u) => u.id === unit).factor;
+  const value = Math.round((minutes / factor) * 100) / 100;
+  const field = 'h-10 bg-nexus-background border border-nexus-border rounded-lg px-3 text-base sm:text-sm text-nexus-text outline-none focus:border-nexus-primary';
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        min="0"
+        step="1"
+        inputMode="numeric"
+        aria-label="Anticipación"
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Math.round((parseFloat(e.target.value) || 0) * factor)))}
+        className={`${field} w-24 nx-num`}
+      />
+      <select
+        aria-label="Unidad"
+        value={unit}
+        onChange={(e) => {
+          const next = UNIDADES.find((u) => u.id === e.target.value);
+          setUnit(next.id);
+          onChange(Math.round(value * next.factor)); // el número queda igual, cambia la unidad
+        }}
+        className={`${field} cursor-pointer`}
+      >
+        {UNIDADES.map((u) => <option key={u.id} value={u.id}>{value === 1 ? u.uno : u.label}</option>)}
+      </select>
+      <span className="text-sm text-nexus-text-secondary">antes</span>
+    </div>
+  );
+}
+
 // Negocio: horario de atención, anticipación para reservar y métodos de pago.
 // (Marca, plan, cuenta y sesiones están en AccountSection: "Cuenta y plan".)
 // registrosMode (Nexus Control, sin agenda): solo métodos de pago. El horario,
@@ -163,26 +206,13 @@ export default function BusinessSection({ negocioId, registrosMode = false }) {
             </h3>
           </div>
           <p className="text-sm text-nexus-text-secondary mb-3">
-            Desde el link público. 0 = sin límite.
+            Desde el link y WhatsApp. 0 = sin límite.
           </p>
-          <label className="flex items-center gap-3">
-            <input
-              type="number"
-              min="0"
-              step="15"
-              inputMode="numeric"
-              value={form.minAdvanceMinutes}
-              onChange={(e) => {
-                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                setForm((prev) => ({ ...prev, minAdvanceMinutes: val }));
-                setSaved(false);
-              }}
-              className="h-10 w-28 bg-nexus-background border border-nexus-border rounded-lg px-3 text-base sm:text-sm nx-num text-nexus-text outline-none focus:border-nexus-primary"
-            />
-            <span className="text-sm text-nexus-text-secondary">
-              minutos antes
-            </span>
-          </label>
+          <AdvanceInput
+            key={settingsLoading ? 'cargando' : 'listo'}
+            minutes={form.minAdvanceMinutes}
+            onChange={(val) => { setForm((prev) => ({ ...prev, minAdvanceMinutes: val })); setSaved(false); }}
+          />
         </Card>
         )}
 

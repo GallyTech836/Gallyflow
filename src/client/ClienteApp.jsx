@@ -61,6 +61,9 @@ const DEFAULT_HOURS = [
 
 const DAY_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
+// Días entre hoy y una fecha AAAA-MM-DD (negativo si ya pasó).
+const diasDesdeHoy = (dateStr, hoyStr) => Math.round((Date.parse(`${dateStr}T12:00:00Z`) - Date.parse(`${hoyStr}T12:00:00Z`)) / 86400000);
+
 export default function App({ negocioSlug, proId } = {}) {
   const [step, setStep] = useState(0); 
   const [selectedServices, setSelectedServices] = useState([]);
@@ -365,6 +368,13 @@ export default function App({ negocioSlug, proId } = {}) {
   // (availableDays vacío = todos).
   const isDayDisabled = (dateStr) => {
     if (closureOf(dateStr)) return true;
+    // Anticipación de horas o días: el día entero queda antes del mínimo.
+    const minAdv = businessSettings?.minAdvanceMinutes || 0;
+    if (minAdv > 0) {
+      const now = new Date();
+      const hoy = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      if (diasDesdeHoy(dateStr, hoy) * 1440 + 24 * 60 <= now.getHours() * 60 + now.getMinutes() + minAdv) return true;
+    }
     const dayName = DAY_NAMES_MON_FIRST[(new Date(dateStr + "T12:00:00").getDay() + 6) % 7];
     const businessDay = (businessSettings?.schedule || []).find(d => d?.day === dayName);
     if (businessDay && businessDay.status !== 'Disponible') return true;
@@ -384,7 +394,9 @@ export default function App({ negocioSlug, proId } = {}) {
     const nowMin = now.getHours() * 60 + now.getMinutes();
 
     const minAdvance = businessSettings?.minAdvanceMinutes || 0;
-    const cumpleAnticipacion = (hourStr) => !isToday || timeToMin(hourStr) >= nowMin + minAdvance;
+    // La anticipación puede ser de horas o días: cuenta desde ahora, aunque sea otro día.
+    const diaRel = isToday ? 0 : diasDesdeHoy(selectedDate, todayStr);
+    const cumpleAnticipacion = (hourStr) => diaRel * 1440 + timeToMin(hourStr) >= nowMin + minAdvance;
 
     const eligePendiente = !selectedBarber || selectedBarber.isPending;
     const realBarbers = branchPros;
