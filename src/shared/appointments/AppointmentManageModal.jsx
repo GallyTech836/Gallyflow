@@ -508,7 +508,7 @@ export default function AppointmentManageModal({
           >
             {anticipoPagado > 0 && (
               <p className="mb-2 text-sm text-nexus-text-secondary">
-                Ya pagó <b className="nx-num text-nexus-text">Bs {anticipoPagado}</b> de anticipo por {appointment.deposit.method}. Elige cómo pagó el resto.
+                Ya pagó <b className="nx-num text-nexus-text">Bs {anticipoPagado}</b> de anticipo. Elige cómo pagó el resto.
               </p>
             )}
             <ChoiceChips

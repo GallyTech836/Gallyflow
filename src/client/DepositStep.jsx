@@ -54,15 +54,15 @@ export default function DepositStep({ deposit, negocioId, citaId, onReset, selec
         <h2 className="text-2xl font-extrabold tracking-tight text-nexus-text">{reported ? 'Avisaste que ya pagaste' : 'Paga el anticipo para confirmar'}</h2>
         <p className="mx-auto max-w-xs text-xs leading-relaxed text-nexus-text-secondary">
           {reported
-            ? `El negocio revisa el pago y confirma tu ${terms.tl('appointment')}.`
-            : `Tu ${terms.tl('appointment')} ${terms.g('appointment', 'está guardado', 'está guardada')}, pero se confirma cuando el negocio reciba el anticipo.`}
+            ? 'El negocio revisa el pago y te confirma.'
+            : 'Se confirma cuando llegue el anticipo.'}
         </p>
       </div>
 
       {reported && (
         <div className="flex w-full items-center gap-2.5 rounded-2xl border border-nexus-success/30 bg-nexus-success-bg px-4 py-3 text-left text-sm text-nexus-success-text">
           <CheckCircle2 size={20} className="shrink-0" aria-hidden="true" />
-          <p>Tu horario queda guardado hasta las <b className="nx-num">{hora(expMs)}</b> mientras el negocio confirma.</p>
+          <p>Tu horario está guardado hasta las <b className="nx-num">{hora(expMs)}</b>.</p>
         </div>
       )}
 
@@ -76,10 +76,10 @@ export default function DepositStep({ deposit, negocioId, citaId, onReset, selec
             className="mx-auto mt-2 aspect-square w-full max-w-[380px] rounded-xl bg-white object-contain"
           />
         )}
-        {!reported && <p className="mt-2 text-xs text-nexus-text-secondary">Toma una captura de pantalla y paga desde la app de tu banco.</p>}
+        {!reported && <p className="mt-2 text-xs text-nexus-text-secondary">Toma una captura y paga desde tu banco.</p>}
         {/* Cuenta regresiva del tiempo para pagar: solo los números. */}
         {!reported && (vencida ? (
-          <p role="alert" className="mt-2 text-sm font-semibold text-nexus-error-text">Se acabó el tiempo y el horario se liberó. Si ya pagaste, escríbele al negocio.</p>
+          <p role="alert" className="mt-2 text-sm font-semibold text-nexus-error-text">Se acabó el tiempo y el horario se liberó.</p>
         ) : (
           <p role="timer" aria-label={`Tiempo para pagar: ${mmss(restante)}`} className={`nx-num mt-1 text-2xl font-bold ${urgente ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{mmss(restante)}</p>
         ))}

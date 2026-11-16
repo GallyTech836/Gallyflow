@@ -38,17 +38,17 @@ export default function AnticiposSection({ negocioId, services = [] }) {
   const set = (patch) => { setForm((f) => ({ ...f, ...patch })); setMsg(null); };
   const toggleExcluded = (id) => set({ excludedServiceIds: form.excludedServiceIds.includes(id) ? form.excludedServiceIds.filter((x) => x !== id) : [...form.excludedServiceIds, id] });
 
-  const ejemplo = form.mode === 'percent' ? `De un servicio de Bs 100, el cliente paga Bs ${Math.ceil(form.value)} antes.` : `El cliente paga Bs ${form.value} antes (o el precio, si es menor).`;
+  const ejemplo = form.mode === 'percent' ? `Ej.: de Bs 100 paga Bs ${Math.ceil(form.value)}.` : null;
 
   const save = async () => {
     const clean = normalizeAnticipoConfig(form, methods);
-    if (clean.enabled && !clean.method) return setMsg({ tone: 'error', text: 'Agrega un método de pago que no sea efectivo (por ejemplo QR) en Configuración › Negocio.' });
-    if (clean.enabled && !clean.qrImage) return setMsg({ tone: 'error', text: 'Sube la imagen de tu QR para cobrar el anticipo.' });
+    if (clean.enabled && !clean.method) return setMsg({ tone: 'error', text: 'Agrega QR u otro método en Configuración › Negocio.' });
+    if (clean.enabled && !clean.qrImage) return setMsg({ tone: 'error', text: 'Sube tu QR.' });
     setSaving(true);
     try {
       await setDoc(doc(db, 'negocios', negocioId), { businessSettings: { anticipos: clean } }, { merge: true });
       setForm(clean);
-      setMsg({ tone: 'ok', text: clean.enabled ? 'Guardado. Las reservas del link y de WhatsApp ahora piden anticipo.' : 'Guardado. Los anticipos están apagados.' });
+      setMsg({ tone: 'ok', text: 'Guardado.' });
     } catch (err) {
       setMsg({ tone: 'error', text: `No se pudo guardar: ${err.message}` });
     } finally {
@@ -63,14 +63,12 @@ export default function AnticiposSection({ negocioId, services = [] }) {
           <QrCode className="h-5 w-5 text-nexus-primary" aria-hidden="true" />
           <h3 className="text-base font-semibold text-nexus-text">Anticipos por QR</h3>
         </div>
-        <p className="mb-4 text-sm text-nexus-text-secondary">
-          Quien reserva por el link paga una parte con tu QR. La reserva queda por confirmar y guarda el horario hasta que tú confirmes el pago desde la reserva. Si no se paga a tiempo, el horario se libera solo.
-        </p>
+        <p className="mb-4 text-sm text-nexus-text-secondary">El cliente paga una parte con tu QR al reservar.</p>
 
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-nexus-border p-3">
           <span>
             <span className="block text-sm font-semibold text-nexus-text">Pedir anticipo al reservar</span>
-            <span className="block text-xs text-nexus-text-secondary">En el link público y en el asistente de WhatsApp (ahí el cliente manda el comprobante por el chat).</span>
+            <span className="block text-xs text-nexus-text-secondary">Link de reservas y WhatsApp.</span>
           </span>
           <input type="checkbox" className="h-5 w-5 accent-[var(--nx-primary)]" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
         </label>
@@ -82,13 +80,13 @@ export default function AnticiposSection({ negocioId, services = [] }) {
           <Field label={form.mode === 'percent' ? 'Porcentaje del precio (%)' : 'Monto (Bs)'} hint={ejemplo}>
             <Input type="number" inputMode="decimal" min="1" max={form.mode === 'percent' ? 100 : undefined} className="nx-num" value={form.value} onChange={(e) => set({ value: e.target.value })} />
           </Field>
-          <Field label="Tiempo para pagar (minutos)" hint={`El cliente ve una cuenta regresiva. Si no avisa que pagó, la reserva se cancela y te llega un aviso. Mínimo ${MIN_MINUTES}.`}>
+          <Field label="Tiempo para pagar (minutos)" hint={`Si no paga, se cancela sola. Mínimo ${MIN_MINUTES}.`}>
             <Input type="number" inputMode="numeric" min={MIN_MINUTES} max={MAX_MINUTES} className="nx-num" value={form.minutes} onChange={(e) => set({ minutes: e.target.value })} />
           </Field>
-          <Field label="Tiempo para que confirmes (minutos)" hint={`Cuando el cliente avisa que pagó o manda el comprobante, el horario se guarda este tiempo para que revises y confirmes. Mínimo ${MIN_VERIFY_MINUTES}.`}>
+          <Field label="Tiempo para que confirmes (minutos)" hint={`Desde que llega el comprobante. Mínimo ${MIN_VERIFY_MINUTES}.`}>
             <Input type="number" inputMode="numeric" min={MIN_VERIFY_MINUTES} max={MAX_MINUTES} className="nx-num" value={form.verifyMinutes} onChange={(e) => set({ verifyMinutes: e.target.value })} />
           </Field>
-          <Field label="¿Cómo entra el anticipo?" hint={noCash.length ? 'En Finanzas entra a la cuenta de este método.' : 'Agrega QR u otro método en Configuración › Negocio.'}>
+          <Field label="¿Cómo entra el anticipo?" hint={noCash.length ? null : 'Agrega QR en Configuración › Negocio.'}>
             <ChoiceChips label="Método del anticipo" options={noCash} value={form.method} onChange={(method) => set({ method })} />
           </Field>
         </div>
@@ -97,7 +95,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
       <Card>
         <h3 className="mb-3 text-base font-semibold text-nexus-text">Lo que ve el cliente</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[260px_1fr]">
-          <QrUploader hint="Puede ser una captura de tu banco: la recortas al subirla." value={form.qrImage} onChange={(url) => set({ qrImage: url })} onUploadingChange={setUploading} />
+          <QrUploader hint="Sirve una captura de tu banco." value={form.qrImage} onChange={(url) => set({ qrImage: url })} onUploadingChange={setUploading} />
           <div className="space-y-4">
             <Field label="Instrucciones (opcional)" hint="Ej.: pon tu nombre en la glosa.">
               <textarea
@@ -108,7 +106,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
                 className="w-full resize-none rounded-lg border border-nexus-border bg-nexus-background px-3 py-2 text-base text-nexus-text outline-none focus:border-nexus-primary sm:text-sm"
               />
             </Field>
-            <Field label="WhatsApp para el comprobante (opcional)" hint="Si lo dejas vacío, se usa el de la sucursal.">
+            <Field label="WhatsApp para el comprobante (opcional)" hint="Vacío: el de la sucursal.">
               <Input type="tel" inputMode="tel" placeholder="+591 70000000" value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
             </Field>
           </div>
@@ -117,8 +115,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
 
       {sorted.length > 0 && (
         <Card>
-          <h3 className="text-base font-semibold text-nexus-text">Servicios que no piden anticipo</h3>
-          <p className="mb-3 text-sm text-nexus-text-secondary">Márcalos si no quieres cobrar anticipo por ellos. Si la reserva solo tiene servicios marcados, se confirma sin anticipo.</p>
+          <h3 className="mb-3 text-base font-semibold text-nexus-text">Servicios sin anticipo</h3>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Servicios sin anticipo">
             {sorted.map((s) => {
               const on = form.excludedServiceIds.includes(s.id);
@@ -140,7 +137,7 @@ export default function AnticiposSection({ negocioId, services = [] }) {
 
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
         {msg && <p role={msg.tone === 'error' ? 'alert' : 'status'} className={`text-sm ${msg.tone === 'error' ? 'text-nexus-error-text' : 'text-nexus-success-text'}`}>{msg.text}</p>}
-        {form.enabled && !anticipoReady(normalizeAnticipoConfig(form, methods)) && !msg && <p className="text-sm text-nexus-text-secondary">Falta el QR o el método para empezar a pedir anticipos.</p>}
+        {form.enabled && !anticipoReady(normalizeAnticipoConfig(form, methods)) && !msg && <p className="text-sm text-nexus-text-secondary">Falta el QR o el método.</p>}
         <Button onClick={save} loading={saving} disabled={uploading}>Guardar</Button>
       </div>
     </div>

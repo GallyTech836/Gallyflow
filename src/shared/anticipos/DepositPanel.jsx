@@ -29,17 +29,17 @@ export default function DepositPanel({ appointment, savedStatus, onAction = null
     body = (
       <>
         <p className="text-sm font-semibold text-nexus-text">Espera anticipo de <span className="nx-num">{bs(d.amount)}</span> por {d.method}</p>
-        {d.reportedAt && !d.receiptAt && <p className="text-sm text-nexus-text">El cliente avisó que pagó a las {hora(d.reportedAt)}. Revisa tu cuenta.</p>}
+        {d.reportedAt && !d.receiptAt && <p className="text-sm text-nexus-text">Avisó que pagó · {hora(d.reportedAt)}</p>}
         {d.receiptAt && (
           <p className="text-sm text-nexus-text">
-            Llegó el comprobante a las {hora(d.receiptAt)}.{' '}
             {d.receiptUrl
               ? <a href={d.receiptUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-nexus-primary underline">Ver comprobante{d.receiptType === 'pdf' ? ' (PDF)' : ''}</a>
-              : 'Míralo en el chat de WhatsApp del cliente.'}
+              : 'Comprobante en su WhatsApp'}
+            {' '}· {hora(d.receiptAt)}
           </p>
         )}
         <p className="text-xs text-nexus-text-secondary">
-          {vencida ? 'Venció: el horario ya está libre. Si el cliente pagó, crea la cita de nuevo.' : `Si no lo confirmas hasta las ${hora(d.expiresAt)}, se cancela solo y el horario se libera.`}
+          {vencida ? 'Venció y el horario se liberó.' : `Se cancela a las ${hora(d.expiresAt)} si no confirmas.`}
         </p>
       </>
     );
@@ -47,7 +47,7 @@ export default function DepositPanel({ appointment, savedStatus, onAction = null
       actions = (
         <>
           <Button size="sm" loading={busy === 'c'} onClick={() => run('c', 'confirm')}>Confirmar anticipo</Button>
-          <Button size="sm" variant="secondary" loading={busy === 'r'} onClick={() => run('r', 'reject')}>No llegó: rechazar</Button>
+          <Button size="sm" variant="secondary" loading={busy === 'r'} onClick={() => run('r', 'reject')}>Rechazar</Button>
         </>
       );
     }
@@ -55,8 +55,7 @@ export default function DepositPanel({ appointment, savedStatus, onAction = null
     tone = 'border-nexus-text-secondary bg-nexus-background';
     body = (
       <>
-        <p className="text-sm font-semibold text-nexus-text">Pagó <span className="nx-num">{bs(d.amount)}</span> de anticipo. ¿Qué haces con él?</p>
-        <p className="text-xs text-nexus-text-secondary">Si te lo quedas, cuenta como ingreso del negocio, sin comisión.</p>
+        <p className="text-sm font-semibold text-nexus-text">Pagó <span className="nx-num">{bs(d.amount)}</span> de anticipo. ¿Qué hiciste con él?</p>
       </>
     );
     if (onAction) {
@@ -71,14 +70,13 @@ export default function DepositPanel({ appointment, savedStatus, onAction = null
     tone = 'border-nexus-success/30 bg-nexus-success-bg';
     body = (
       <p className="text-sm text-nexus-success-text">
-        <b>Anticipo pagado:</b> <span className="nx-num">{bs(d.amount)}</span> por {d.method}{d.paidAt ? ` · ${fecha(d.paidAt)}` : ''}. Al terminar, cobra solo el saldo.
+        <b>Anticipo pagado:</b> <span className="nx-num">{bs(d.amount)}</span> · {d.method}{d.paidAt ? ` · ${fecha(d.paidAt)}` : ''}
       </p>
     );
   } else {
     body = (
       <p className="text-sm text-nexus-text-secondary">
         <b className="text-nexus-text">{DEPOSIT_LABELS[d.status] || 'Anticipo'}:</b> <span className="nx-num">{bs(d.amount)}</span>
-        {d.status === 'retained' ? ' · quedó como ingreso del negocio.' : d.status === 'refunded' ? ' · se le devolvió al cliente.' : '.'}
       </p>
     );
   }

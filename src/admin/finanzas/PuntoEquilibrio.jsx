@@ -30,7 +30,7 @@ export default function PuntoEquilibrio({ financeToken = null, onFinanceExpired,
     <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
       <div>
         <h3 className="text-base font-semibold text-nexus-text">Punto de equilibrio</h3>
-        <p className="text-sm text-nexus-text-secondary">Lo que tienes que vender en el mes para no perder.</p>
+        <p className="text-sm text-nexus-text-secondary">Cuánto vender en el mes para no perder.</p>
       </div>
       {badge}
     </div>
@@ -44,7 +44,7 @@ export default function PuntoEquilibrio({ financeToken = null, onFinanceExpired,
     return (
       <Card>
         {header(null)}
-        <p className="mt-2 text-sm text-nexus-text-secondary">Registra en Finanzas › Gastos los gastos que se repiten cada mes (alquiler, sueldos, internet…) y aquí verás cuánto tienes que vender para cubrirlos.</p>
+        <p className="mt-2 text-sm text-nexus-text-secondary">Registra tus gastos fijos (alquiler, sueldos…) para calcularlo.</p>
         {onOpenFinanzas && <Button variant="secondary" size="sm" className="mt-3" onClick={onOpenFinanzas}>Ir a Gastos</Button>}
       </Card>
     );
@@ -63,11 +63,11 @@ export default function PuntoEquilibrio({ financeToken = null, onFinanceExpired,
   if (sinMargen) {
     estado = ratio === null
       ? <p className="text-sm text-nexus-text-secondary">Todavía no hay ventas este mes para calcularlo.</p>
-      : <p className="text-sm font-semibold text-nexus-error-text">Con lo que queda de cada venta no alcanzas a cubrir los fijos.</p>;
+      : <p className="text-sm font-semibold text-nexus-error-text">Con este margen no alcanzas a cubrir los fijos.</p>;
   } else if (cubierto) {
-    estado = <p className="text-sm font-semibold text-nexus-success-text">Ya cubriste los gastos fijos. Desde aquí empiezas a ganar.</p>;
+    estado = <p className="text-sm font-semibold text-nexus-success-text">Gastos fijos cubiertos.</p>;
   } else {
-    estado = <p className="text-sm text-nexus-text">Te faltan <b className="nx-num">{bs(falta)}</b> para cubrir los gastos del mes.</p>;
+    estado = <p className="text-sm text-nexus-text">Faltan <b className="nx-num">{bs(falta)}</b>.</p>;
   }
 
   const badge = cubierto
@@ -111,7 +111,7 @@ export default function PuntoEquilibrio({ financeToken = null, onFinanceExpired,
           {meta && (
             <div className="flex justify-between gap-3 border-t border-nexus-border pt-1.5"><span className="font-semibold text-nexus-text">Meta ({bs(fijos)} ÷ {ratio.toFixed(3).replace('.', ',')})</span><span className="nx-num font-semibold text-nexus-text">{bs(meta)}</span></div>
           )}
-          <p className="text-xs text-nexus-text-muted">Fijos = los gastos que se repiten cada mes. Lo que queda de cada venta es después de comisiones y otros gastos.{usoMesPasado ? ' Como este mes todavía no hay ventas, se usa lo del mes pasado.' : ''}</p>
+          {usoMesPasado && <p className="text-xs text-nexus-text-muted">Sin ventas este mes: usa las del mes pasado.</p>}
         </div>
       )}
     </Card>

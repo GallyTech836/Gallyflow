@@ -80,7 +80,7 @@ export default function FinanzasSection({ financeToken = null, onFinanceExpired,
   };
 
   const quitarGasto = async (g) => {
-    const ok = await confirm({ title: '¿Eliminar este gasto?', subject: `${g.title} · ${bs(g.total)}`, message: g.paid > 0 ? 'Lo que ya pagaste vuelve a la cuenta de donde salió.' : null });
+    const ok = await confirm({ title: '¿Eliminar este gasto?', subject: `${g.title} · ${bs(g.total)}`, message: g.paid > 0 ? 'Lo pagado vuelve a su cuenta.' : null });
     if (!ok) return;
     const r = await deleteGasto(financeToken, g.id);
     if (r.status === 401) return onFinanceExpired?.();
@@ -89,7 +89,7 @@ export default function FinanzasSection({ financeToken = null, onFinanceExpired,
   };
 
   const detenerFijo = async (f) => {
-    const ok = await confirm({ title: '¿Dejar de repetir?', subject: f.title, message: 'Ya no aparecerá en los próximos meses. Lo de este mes queda como está.', confirmLabel: 'Dejar de repetir', irreversible: false });
+    const ok = await confirm({ title: '¿Dejar de repetir?', subject: f.title, message: 'Este mes no cambia.', confirmLabel: 'Dejar de repetir', irreversible: false });
     if (!ok) return;
     const r = await stopFijo(financeToken, f.id);
     if (r.status === 401) return onFinanceExpired?.();
@@ -162,7 +162,7 @@ export default function FinanzasSection({ financeToken = null, onFinanceExpired,
         <SetupModal
           {...modalProps}
           onLater={() => { setSetupLater(true); setModal(null); }}
-          onDone={(data) => afterSave(data, 'Listo. Ya sabemos a dónde llega cada cobro.')}
+          onDone={(data) => afterSave(data, 'Cuentas listas.')}
         />
       )}
       {modal?.kind === 'account' && (
@@ -216,7 +216,7 @@ function Resumen({ estado, resumen, gastos, onPagar, period, setPeriod, loading,
   const stackLabel = `De lo que entró: comisiones ${pct(r.comisiones)} %, gastos ${pct(r.gastos)} %, te queda ${pct(Math.max(gain, 0))} %`;
   const titulo = r.current ? `${cap(r.label)}, hasta hoy` : cap(r.label);
   const nota = r.current
-    ? (r.daysLeft > 0 ? `Va a cambiar: faltan ${r.daysLeft} ${r.daysLeft === 1 ? 'día' : 'días'} del mes.` : 'Último día del mes.')
+    ? (r.daysLeft > 0 ? `Faltan ${r.daysLeft} ${r.daysLeft === 1 ? 'día' : 'días'}.` : 'Último día del mes.')
     : 'Mes completo.';
 
   const hist = histAll ? r.history : r.history.slice(0, HIST_LIMIT);
@@ -276,7 +276,6 @@ function Resumen({ estado, resumen, gastos, onPagar, period, setPeriod, loading,
             <Row label="− Comisiones del mes (pagadas o no)" value={`− ${bs(r.comisiones)}`} />
             <Row label="− Gastos del mes (pagados o no)" value={`− ${bs(r.gastos)}`} />
             <div className="mt-1 border-t border-nexus-border pt-1.5"><Row label="Ganancia aproximada" value={sbs(gain)} strong /></div>
-            <p className="text-xs text-nexus-text-muted">Es una cuenta simple para el dueño, no un balance contable.</p>
           </div>
         )}
       </Card>
@@ -297,10 +296,9 @@ function Resumen({ estado, resumen, gastos, onPagar, period, setPeriod, loading,
             </div>
             {estado.unassigned?.total ? (
               <p className="mt-2 rounded-lg border border-nexus-border p-2.5 text-xs text-nexus-text-secondary">
-                {bs(estado.unassigned.total)} cobrados con {Object.keys(estado.unassigned.byMethod).join(', ')} no llegan a ninguna cuenta. Elige su cuenta en Administrar cuentas.
+                {bs(estado.unassigned.total)} de {Object.keys(estado.unassigned.byMethod).join(', ')} sin cuenta.
               </p>
             ) : null}
-            <p className="mt-2 text-xs text-nexus-text-muted">No es la ganancia: es lo que tienes hoy.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={onDeposit}>Deposité el sobre en el banco</Button>
               <Button variant="ghost" size="sm" onClick={onCuentas}>Administrar cuentas</Button>
@@ -308,7 +306,7 @@ function Resumen({ estado, resumen, gastos, onPagar, period, setPeriod, loading,
           </>
         ) : (
           <>
-            <p className="mt-1 text-sm text-nexus-text-secondary">Dinos a dónde llega lo que cobras (QR, tarjeta, transferencia) y te mostramos cuánto tienes en cada lugar.</p>
+            <p className="mt-1 text-sm text-nexus-text-secondary">Elige a dónde llega cada cobro.</p>
             <Button size="sm" className="mt-3" onClick={onSetup}>Empezar</Button>
           </>
         )}
@@ -338,10 +336,7 @@ function Resumen({ estado, resumen, gastos, onPagar, period, setPeriod, loading,
 
       <Card>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-nexus-text">Entró y salió por mes</h3>
-            {r.chart.at(-1)?.partial && <p className="text-sm text-nexus-text-secondary">{r.current ? cap(r.label) : 'Este mes'} va hasta hoy.</p>}
-          </div>
+          <h3 className="text-base font-semibold text-nexus-text">Entró y salió por mes</h3>
           <div className="flex gap-3 text-xs text-nexus-text-secondary">
             <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-nexus-primary" aria-hidden="true" />Entró</span>
             <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-[#A1A1AA]" aria-hidden="true" />Salió</span>
@@ -362,7 +357,6 @@ function Resumen({ estado, resumen, gastos, onPagar, period, setPeriod, loading,
 
       <Card>
         <h3 className="text-base font-semibold text-nexus-text">Historial</h3>
-        <p className="text-sm text-nexus-text-secondary">Todo lo que entró y salió, con su origen</p>
         {r.history.length === 0 ? (
           <p className="py-6 text-center text-sm text-nexus-text-secondary">Todavía no hay movimientos este mes.</p>
         ) : (
@@ -424,7 +418,7 @@ function Gastos({ gastos, filter, setFilter, onNew, onPay, onDelete, onStop }) {
   let rows = [];
   if (filter === 'fijos') {
     rows = gastos.fijos.map((f) => ({
-      key: f.id, title: f.title, sub: `${f.category} · se paga el día ${f.day}`, amount: bs(f.amount),
+      key: f.id, title: f.title, sub: `${f.category} · día ${f.day}`, amount: bs(f.amount),
       action: <Button variant="ghost" size="sm" onClick={() => onStop(f)}>Dejar de repetir</Button>,
     }));
   } else {
@@ -486,7 +480,6 @@ function Gastos({ gastos, filter, setFilter, onNew, onPay, onDelete, onStop }) {
           </div>
         )}
       </Card>
-      <p className="text-xs text-nexus-text-muted">Las comisiones no se cargan aquí: están en su pestaña y cuentan solas en la ganancia.</p>
     </>
   );
 }
@@ -504,21 +497,20 @@ function Cuentas({ estado, onBack, onNew, onEdit, onSetup }) {
             <ArrowLeft size={14} aria-hidden="true" /> Volver al resumen
           </button>
           <h3 className="mt-1.5 text-base font-semibold text-nexus-text">Tus cuentas</h3>
-          <p className="text-sm text-nexus-text-secondary">Dónde está tu plata y qué cobros llegan a cada una.</p>
         </div>
         {estado?.setupDone && <Button icon={Plus} onClick={onNew}>Nueva cuenta</Button>}
       </div>
 
       {!estado?.setupDone ? (
         <Card>
-          <p className="text-sm text-nexus-text-secondary">Primero dinos a dónde llega lo que cobras.</p>
+          <p className="text-sm text-nexus-text-secondary">Elige a dónde llega cada cobro.</p>
           <Button size="sm" className="mt-3" onClick={onSetup}>Empezar</Button>
         </Card>
       ) : (
         <>
           {sinCuenta.length > 0 && (
             <p className="rounded-lg border border-nexus-text-secondary p-3 text-sm text-nexus-text">
-              {sinCuenta.join(', ')} no {sinCuenta.length === 1 ? 'llega' : 'llegan'} a ninguna cuenta. Toca Editar en la cuenta donde cae esa plata y márcalo.
+              {sinCuenta.join(', ')} sin cuenta. Márcalo con Editar.
             </p>
           )}
           <Card padding="none" className="px-4 sm:px-5">
@@ -547,7 +539,6 @@ function Cuentas({ estado, onBack, onNew, onEdit, onSetup }) {
               ))}
             </div>
           </Card>
-          <p className="text-xs text-nexus-text-muted">Para elegir qué cobros llegan a cada cuenta, toca Editar.</p>
         </>
       )}
     </>

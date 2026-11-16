@@ -123,7 +123,7 @@ function CropModal({ file, onCancel, onDone }) {
   return (
     <Modal
       title="Recorta tu QR"
-      description={detected ? 'Encontramos el QR y lo marcamos. Ajusta si hace falta.' : 'Mueve el recuadro sobre el QR. Arrastra la esquina para cambiar el tamaño.'}
+      description={detected ? 'Ajusta el recuadro si hace falta.' : 'Pon el recuadro sobre el QR.'}
       onClose={busy ? undefined : onCancel}
       footer={(
         <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">

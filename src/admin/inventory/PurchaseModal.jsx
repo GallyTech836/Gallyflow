@@ -76,7 +76,7 @@ export default function PurchaseModal({ products = [], branches = [], initialBra
       onClose={onClose}
       size="lg"
       title="Registrar compra"
-      description={conFinanzas ? 'El stock sube y el gasto queda en Finanzas, en un solo paso.' : 'El stock sube al guardar.'}
+      description={conFinanzas ? 'También se anota el gasto en Finanzas.' : null}
       footer={(
         <>
           <Button variant="secondary" onClick={onClose} fullWidth className="sm:w-auto">Cancelar</Button>

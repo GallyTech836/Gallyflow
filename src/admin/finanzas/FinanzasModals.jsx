@@ -85,8 +85,8 @@ export function SetupModal({ estado, token, onExpired, onDone, onLater }) {
 
   return (
     <Modal
-      title="Antes de empezar: ¿a dónde llega lo que cobras?"
-      description="Te lo preguntamos una sola vez. Después lo cambias en Finanzas › Administrar cuentas."
+      title="¿A dónde llega lo que cobras?"
+      description="Lo puedes cambiar después."
       size="lg"
       onClose={onLater}
       footer={(
@@ -100,7 +100,7 @@ export function SetupModal({ estado, token, onExpired, onDone, onLater }) {
         <div className="rounded-lg border border-nexus-border bg-nexus-background p-3">
           <p className="text-sm font-semibold text-nexus-text">Efectivo</p>
           <p className="text-sm text-nexus-text-secondary">
-            Va a la caja de cada sucursal. No tienes que hacer nada.
+            Va a la caja de cada sucursal.
             {cajas.length > 0 && ` Hoy: ${cajas.map((c) => `${c.name} ${bs(c.balance)}`).join(' · ')}.`}
           </p>
         </div>
@@ -180,7 +180,7 @@ export function AccountModal({ account, estado, token, onExpired, onClose, onSav
   return (
     <Modal
       title={isEdit ? `Editar ${account.name}` : 'Nueva cuenta'}
-      description={isEdit ? (isCaja ? 'Recibe el efectivo de la sucursal.' : 'Saldo y cobros que llegan aquí.') : 'Un banco, una billetera o donde guardes plata.'}
+      description={isEdit ? (isCaja ? 'Efectivo de la sucursal.' : null) : 'Banco, billetera u otro.'}
       onClose={onClose}
       footer={(
         <div className="flex justify-end gap-2">
@@ -198,12 +198,12 @@ export function AccountModal({ account, estado, token, onExpired, onClose, onSav
         )}
         <Field
           label={isEdit ? 'Saldo de hoy (Bs)' : '¿Cuánto hay hoy? (Bs)'}
-          hint={isEdit ? `Nexus calcula ${bs2(account.balance)}. Si no coincide, escribe el real: queda como «Corrección de saldo».` : 'Puede ser 0.'}
+          hint={isEdit ? `Nexus calcula ${bs2(account.balance)}. Si no coincide, escribe el real.` : 'Puede ser 0.'}
         >
           <Input type="number" inputMode="decimal" min="0" step="0.01" className="nx-num text-lg" value={balance} onChange={(e) => setBalance(e.target.value)} />
         </Field>
         {!isCaja && metodos.length > 0 && (
-          <Field label="¿Qué cobros llegan aquí?" hint="Cada cobro llega a una sola cuenta: si eliges uno que estaba en otra, se mueve aquí.">
+          <Field label="¿Qué cobros llegan aquí?" hint="Cada cobro llega a una sola cuenta.">
             <ToggleChips label="Cobros que llegan aquí" options={metodos.map((m) => ({ value: m.key, label: m.name }))} values={methods} onToggle={toggle} />
           </Field>
         )}
@@ -212,7 +212,7 @@ export function AccountModal({ account, estado, token, onExpired, onClose, onSav
           <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-nexus-border p-3">
             <span>
               <span className="block text-sm font-semibold text-nexus-text">Cuenta activa</span>
-              <span className="block text-xs text-nexus-text-secondary">Para desactivarla, deja el saldo en 0 y sin cobros.</span>
+              <span className="block text-xs text-nexus-text-secondary">Solo con saldo 0 y sin cobros.</span>
             </span>
             <input type="checkbox" className="h-5 w-5 accent-[var(--nx-primary)]" checked={active} onChange={(e) => setActive(e.target.checked)} />
           </label>
@@ -252,7 +252,7 @@ export function DepositModal({ estado, token, onExpired, onClose, onSaved }) {
   return (
     <Modal
       title="Deposité el sobre en el banco"
-      description="Mueve plata de la caja al banco. No es venta ni gasto."
+      description="De la caja al banco."
       onClose={onClose}
       footer={(
         <div className="flex justify-end gap-2">
@@ -325,10 +325,10 @@ export function GastoModal({ estado, categories, token, onExpired, onClose, onSa
     if (!data) return;
     const sv = data.saved || {};
     const msg = sv.repeat
-      ? `Listo. Cada mes te aparecerá «${title.trim()}» para pagar el día ${dia}.`
+      ? `Se repetirá el día ${dia} de cada mes.`
       : sv.paidNow
-        ? (sv.fromCaja ? 'Gasto guardado. También salió de la caja.' : `Gasto guardado: salieron ${bs(monto)} de ${sv.account}.`)
-        : 'Anotado en «Tienes que pagar». No se descontó de ninguna cuenta.';
+        ? (sv.fromCaja ? 'Gasto guardado. Salió de la caja.' : `Gasto guardado. Salió de ${sv.account}.`)
+        : 'Anotado en «Tienes que pagar».';
     onSaved(data, msg);
   };
 
@@ -369,7 +369,7 @@ export function GastoModal({ estado, categories, token, onExpired, onClose, onSa
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-nexus-border p-3">
           <span>
             <span className="block text-sm font-semibold text-nexus-text">Se repite cada mes</span>
-            <span className="block text-xs text-nexus-text-secondary">Alquiler, internet, sueldos… Te lo recordamos cada mes.</span>
+            <span className="block text-xs text-nexus-text-secondary">Alquiler, internet, sueldos…</span>
           </span>
           <input type="checkbox" className="h-5 w-5 accent-[var(--nx-primary)]" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
         </label>
@@ -401,7 +401,7 @@ export function PayModal({ gasto, estado, token, onExpired, onClose, onSaved }) 
     const data = await run(payGasto(token, gasto.id, { requestId, amount: monto, accountId }), { onExpired, setError });
     if (!data) return;
     const resto = data.saved?.remaining ?? 0;
-    onSaved(data, resto > 0 ? `Pagaste una parte. Quedan ${bs(resto)} por pagar.` : 'Pagado. Ya no aparece en «Tienes que pagar».');
+    onSaved(data, resto > 0 ? `Quedan ${bs(resto)} por pagar.` : 'Pagado.');
   };
 
   return (
@@ -422,7 +422,7 @@ export function PayModal({ gasto, estado, token, onExpired, onClose, onSaved }) 
           <p className="nx-num text-3xl font-bold text-nexus-text">{bs(gasto.remaining)}</p>
           <p className="text-xs text-nexus-text-secondary">{whenLabel(gasto)}</p>
         </div>
-        <Field label="¿Cuánto pagas ahora? (Bs)" hint="Puedes pagar una parte; el resto queda pendiente.">
+        <Field label="¿Cuánto pagas ahora? (Bs)" hint="Puede ser una parte.">
           <Input type="number" inputMode="decimal" min="0" step="0.01" className="nx-num text-lg" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
         <Field label="¿De dónde sale?">
