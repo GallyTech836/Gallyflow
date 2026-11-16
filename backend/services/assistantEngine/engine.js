@@ -1187,7 +1187,8 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     const { tl } = context.terms;
     const precio = Number(cita.price) > 0 ? `\nPrecio: Bs ${cita.price}` : '';
     const resumen = `Tu ${tl('appointment')}:\n${cita.serviceName}${conQuien}\n${fechaLegible(cita.date)} (${cita.date}) a las ${cita.time}${precio}\nA nombre de: ${cita.clientName}`;
-    const cuerpo = `${resumen}\n\nPara confirmarla, paga el anticipo de *Bs ${d.amount}* con este QR (${d.method}). Tienes ${cfg.minutes || 5} minutos.${cfg.instructions ? `\n${cfg.instructions}` : ''}\n\nDespués envíame por aquí la foto o el PDF del comprobante 🧾`;
+    const pedir = voz.anticipo('pedir', { monto: `Bs ${d.amount}`, metodo: d.method && !/^qr$/i.test(d.method) ? ` (${d.method})` : '', minutos: cfg.minutes || 5 });
+    const cuerpo = `${resumen}\n\n${pedir}${cfg.instructions ? `\n${cfg.instructions}` : ''}\n\n${voz.anticipo('comprobante')}`;
     return {
       text: `${cuerpo}\n\nQR: ${cfg.qrImage}\n(Escribe "cancelar reserva" si no la quieres)`,
       interactive: {
@@ -1203,7 +1204,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
     try {
       const guardado = await guardarComprobante(archivo);
       await reportPaid(negocioId, cita.id, { receipt: guardado || { url: null, type: /pdf/i.test(archivo?.mimeType || '') ? 'pdf' : 'image' } });
-      return responder('Recibí tu comprobante 🙌\nEl negocio lo revisará y te confirmo por aquí.', conversation);
+      return responder(voz.anticipo('recibido'), conversation);
     } catch (err) {
       if (err instanceof AnticipoError && err.code === 'EXPIRED') {
         return responder('Se acabó el tiempo para pagar el anticipo y el horario se liberó. Escribe «hablar con alguien» si ya pagaste.', conversation);
@@ -1223,7 +1224,7 @@ async function motor({ negocioId, phone, message, messageId, branch = null, refe
       const snap = await db.collection('negocios').doc(negocioId).collection('citas').doc(citaId).get();
       if (!snap.exists || String(snap.data().clientPhone || '') !== String(phone)) return responder('No encontré esa reserva. Escribe «menu» para ver tus opciones.', conversation);
       await reportPaid(negocioId, citaId);
-      return responder(`¡Gracias! Le avisé al negocio 🙌\nEnvíame por aquí la foto o el PDF del comprobante para que lo revise. Apenas lo confirme, te escribo.`, conversation);
+      return responder(voz.anticipo('avisado'), conversation);
     } catch (err) {
       if (err instanceof AnticipoError) {
         if (err.code === 'EXPIRED') return responder('Se acabó el tiempo para pagar el anticipo y el horario se liberó. Escribe «agendar» para reservar de nuevo. Si ya pagaste, escribe «hablar con alguien».', conversation);

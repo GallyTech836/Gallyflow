@@ -23,6 +23,7 @@ import * as whatsappProvider from '../providers/whatsappProvider.js';
 import { normalizeAnticipoConfig, anticipoReady, holdExpired, DEPOSIT_STATUS } from './anticipoModel.js';
 import { sendNotification } from '../notificationService.js';
 import { logger } from '../../utils/logger.js';
+import { crearVoz } from '../assistantEngine/personalidad.js';
 
 // ───────────── Mensaje al cliente por WhatsApp (reservas del asistente) ─────────────
 
@@ -34,13 +35,14 @@ function diaLargo(date) {
   return `${DIAS[f.getUTCDay()]} ${f.getUTCDate()} ${MESES[f.getUTCMonth()]}`;
 }
 
-export function mensajeCliente(tipo, cita) {
+const CLAVE = { ANTICIPO_CONFIRMADO: 'confirmado', ANTICIPO_RECHAZADO: 'rechazado', ANTICIPO_VENCIDO: 'vencido' };
+
+/** Mensaje al cliente con el tono de la personalidad del asistente (assistantConfig.personalidad). */
+export function mensajeCliente(tipo, cita, personalidad = null) {
+  if (!CLAVE[tipo]) return '';
   const cuando = `${diaLargo(cita.date)} a las ${cita.time}`;
   const monto = cita.deposit?.amount ? ` de Bs ${cita.deposit.amount}` : '';
-  if (tipo === 'ANTICIPO_CONFIRMADO') return `✅ Recibimos tu anticipo${monto}. Tu cita del ${cuando} quedó confirmada. ¡Te esperamos!`;
-  if (tipo === 'ANTICIPO_RECHAZADO') return `No pudimos confirmar tu anticipo, así que tu reserva del ${cuando} se canceló. Si ya pagaste, escribe «hablar con alguien».`;
-  if (tipo === 'ANTICIPO_VENCIDO') return `Se acabó el tiempo para pagar el anticipo y tu reserva del ${cuando} se liberó. Escribe «agendar» para reservar de nuevo.`;
-  return '';
+  return crearVoz(personalidad).anticipo(CLAVE[tipo], { monto, cuando });
 }
 
 /** Cuenta de WhatsApp del negocio para escribirle al cliente (la de su sucursal si hay varias). */
@@ -59,9 +61,10 @@ async function cuentaWhatsApp(negocioId, branch) {
  */
 async function avisarCliente(tipo, negocioId, cita) {
   if (cita.bookedBy !== 'assistant' || !cita.clientPhone || cita.clientPhone === 'No especificado') return;
-  const texto = mensajeCliente(tipo, cita);
-  if (!texto) return;
+  if (!CLAVE[tipo]) return;
   try {
+    const neg = (await negRef(negocioId).get()).data() || {};
+    const texto = mensajeCliente(tipo, cita, neg.assistantConfig?.personalidad);
     const permiso = await capabilities.checkCapability(negocioId, 'asistenteWhatsapp');
     if (!permiso.allowed) return;
     const envio = await cuentaWhatsApp(negocioId, cita.branch);

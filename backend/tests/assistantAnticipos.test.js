@@ -149,4 +149,16 @@ describe('Asistente: anticipo sin paso de confirmar', () => {
     const r = await comprobante();
     assert.doesNotMatch(body(r) || '', /Recibí tu comprobante/);
   });
+
+  test('las frases del anticipo siguen la personalidad (formal)', async () => {
+    db._set(N, { ...db._get(N), assistantConfig: { personalidad: { tono: 'formal' } } });
+    invalidateBusinessContext?.('neg');
+    const r = await reservar();
+    assert.match(r.interactive.body.text, /le pedimos pagar el anticipo de \*Bs 50\* mediante este QR\. Dispone de 5 minutos/);
+    const resp = await comprobante();
+    assert.match(body(resp), /Hemos recibido su comprobante/);
+    const [cita] = db._list(`${N}/citas`);
+    await S.confirmDeposit('neg', cita.id, { actor: { uid: 'admin' } });
+    assert.match(whatsapp[0].text, /^Hemos recibido su anticipo de Bs 50\. Su reserva del .+ quedó confirmada\. Le esperamos\.$/);
+  });
 });

@@ -19,6 +19,9 @@
 //
 // Días cerrados / feriados (businessSettings.closedDays): cada tono tiene su
 // forma de avisar que hoy no se atiende (cerrado / cerradoPregunta / sinEquipo).
+//
+// Anticipos por QR: cada tono tiene sus frases para pedir el anticipo, recibir
+// el comprobante y avisar al cliente cuando el dueño confirma, rechaza o vence.
 
 export const TONO_POR_DEFECTO = 'amigable';
 const MAX_TEXTO = 300;
@@ -54,6 +57,15 @@ export const TONOS = {
     cerradoPregunta: '¿Quieres agendar para otro día?',
     sinEquipo: 'Hoy no hay nadie del equipo para responderte por aquí, pero puedo ayudarte a agendar para otro día.',
     archivos: 'Todavía no puedo escuchar audios ni abrir archivos. ¿Me escribes tu consulta?',
+    anticipo: {
+      pedir: ({ monto, metodo, minutos }) => `Para confirmar, paga el anticipo de *${monto}* con este QR${metodo}. Tienes ${minutos} minutos.`,
+      comprobante: 'Después envíame por aquí la foto o el PDF del comprobante 🧾',
+      recibido: 'Recibí tu comprobante 🙌\nEl negocio lo revisará y te confirmo por aquí.',
+      avisado: '¡Gracias! Le avisé al negocio 🙌\nEnvíame por aquí la foto o el PDF del comprobante para que lo revise. Apenas lo confirme, te escribo.',
+      confirmado: ({ monto, cuando }) => `✅ Recibimos tu anticipo${monto}. Tu reserva del ${cuando} quedó confirmada. ¡Te esperamos!`,
+      rechazado: ({ cuando }) => `No pudimos confirmar tu anticipo, así que tu reserva del ${cuando} se canceló. Si ya pagaste, escribe «hablar con alguien».`,
+      vencido: ({ cuando }) => `Se acabó el tiempo para pagar el anticipo y tu reserva del ${cuando} se liberó. Escribe «agendar» para reservar de nuevo.`,
+    },
   },
   formal: {
     label: 'Formal',
@@ -77,6 +89,15 @@ export const TONOS = {
     cerradoPregunta: '¿Desea agendar para otro día?',
     sinEquipo: 'Hoy no contamos con personal para atenderle por este medio, pero con gusto puedo ayudarle a agendar para otro día.',
     archivos: 'Por el momento no puedo escuchar audios ni abrir archivos. ¿Podría escribirme su consulta?',
+    anticipo: {
+      pedir: ({ monto, metodo, minutos }) => `Para confirmar su reserva, le pedimos pagar el anticipo de *${monto}* mediante este QR${metodo}. Dispone de ${minutos} minutos.`,
+      comprobante: 'Luego, por favor, envíenos por este medio la foto o el PDF del comprobante.',
+      recibido: 'Hemos recibido su comprobante. El negocio lo revisará y le confirmaremos por este medio.',
+      avisado: 'Muchas gracias, ya informamos al negocio. Por favor, envíenos por este medio la foto o el PDF del comprobante para su revisión. Le confirmaremos en cuanto sea aprobado.',
+      confirmado: ({ monto, cuando }) => `Hemos recibido su anticipo${monto}. Su reserva del ${cuando} quedó confirmada. Le esperamos.`,
+      rechazado: ({ cuando }) => `Lamentamos informarle que no pudimos confirmar su anticipo, por lo que su reserva del ${cuando} fue cancelada. Si ya realizó el pago, escriba «hablar con alguien».`,
+      vencido: ({ cuando }) => `El tiempo para pagar el anticipo concluyó y su reserva del ${cuando} fue liberada. Escriba «agendar» para reservar nuevamente.`,
+    },
   },
   profesional: {
     label: 'Profesional',
@@ -100,6 +121,15 @@ export const TONOS = {
     cerradoPregunta: '¿Quieres reservar para otro día?',
     sinEquipo: 'Hoy el equipo no está disponible por aquí. Puedo ayudarte a reservar para otro día.',
     archivos: 'Por ahora no puedo escuchar audios ni abrir archivos. Escríbenos tu consulta, por favor.',
+    anticipo: {
+      pedir: ({ monto, metodo, minutos }) => `Para confirmar, paga el anticipo de *${monto}* con este QR${metodo}. Tienes ${minutos} minutos.`,
+      comprobante: 'Luego envía por aquí la foto o el PDF del comprobante.',
+      recibido: 'Recibimos tu comprobante. El negocio lo revisará y te confirmaremos por aquí.',
+      avisado: 'Gracias, avisamos al negocio. Envía por aquí la foto o el PDF del comprobante para revisarlo. Te confirmamos apenas se apruebe.',
+      confirmado: ({ monto, cuando }) => `✅ Anticipo${monto} recibido. Tu reserva del ${cuando} está confirmada. Te esperamos.`,
+      rechazado: ({ cuando }) => `No pudimos confirmar tu anticipo y tu reserva del ${cuando} se canceló. Si ya pagaste, escribe «hablar con alguien».`,
+      vencido: ({ cuando }) => `Venció el tiempo para pagar el anticipo y tu reserva del ${cuando} se liberó. Escribe «agendar» para reservar otra vez.`,
+    },
   },
   cercano: {
     label: 'Cercano',
@@ -123,6 +153,15 @@ export const TONOS = {
     cerradoPregunta: '¿Te agendo para otro día?',
     sinEquipo: 'Hoy no hay nadie del equipo por aquí 😅 pero te puedo agendar para otro día.',
     archivos: 'Ups, todavía no puedo escuchar audios ni abrir archivos 😅 ¿Me lo escribes?',
+    anticipo: {
+      pedir: ({ monto, metodo, minutos }) => `Para dejar todo listo, paga el anticipo de *${monto}* con este QR${metodo} 💸 Tienes ${minutos} minutos.`,
+      comprobante: 'Y me pasas por aquí la foto o el PDF del comprobante 🧾',
+      recibido: '¡Recibido! 🙌 El negocio revisa tu comprobante y te aviso por aquí.',
+      avisado: '¡Genial! Ya le avisé al negocio 🙌 Pásame por aquí la foto o el PDF del comprobante para que lo revisen. Apenas lo confirmen, te escribo.',
+      confirmado: ({ monto, cuando }) => `✅ ¡Listo! Llegó tu anticipo${monto}. Tu reserva del ${cuando} quedó confirmada. ¡Nos vemos! 🙌`,
+      rechazado: ({ cuando }) => `Ups 😅 no pudimos confirmar tu anticipo y tu reserva del ${cuando} se canceló. Si ya pagaste, escribe «hablar con alguien».`,
+      vencido: ({ cuando }) => `Se acabó el tiempo para pagar el anticipo ⏰ y tu reserva del ${cuando} se liberó. Escribe «agendar» y buscamos otro horario.`,
+    },
   },
   entusiasta: {
     label: 'Entusiasta',
@@ -146,6 +185,15 @@ export const TONOS = {
     cerradoPregunta: '¿Te gustaría agendar para otro día?',
     sinEquipo: 'Hoy el equipo está descansando 😊 pero yo te ayudo a agendar para otro día ✨',
     archivos: '¡Uy! Todavía no puedo escuchar audios ni abrir archivos 🙈 ¿Me escribes tu consulta?',
+    anticipo: {
+      pedir: ({ monto, metodo, minutos }) => `¡Ya casi! ✨ Para confirmar, paga el anticipo de *${monto}* con este QR${metodo}. Tienes ${minutos} minutos.`,
+      comprobante: 'Después envíame por aquí la foto o el PDF del comprobante 🧾',
+      recibido: '¡Recibí tu comprobante! 🙌 El negocio lo revisará y te confirmo por aquí muy pronto ✨',
+      avisado: '¡Gracias! Ya le avisé al negocio 🙌 Envíame por aquí la foto o el PDF del comprobante para que lo revise. ¡Apenas lo confirme, te escribo! ✨',
+      confirmado: ({ monto, cuando }) => `✅ ¡Recibimos tu anticipo${monto}! Tu reserva del ${cuando} quedó confirmada. ¡Te esperamos con muchas ganas! ✨`,
+      rechazado: ({ cuando }) => `¡Uy! 🙈 No pudimos confirmar tu anticipo, así que tu reserva del ${cuando} se canceló. Si ya pagaste, escribe «hablar con alguien».`,
+      vencido: ({ cuando }) => `¡Uy! 🙈 Se acabó el tiempo para pagar el anticipo y tu reserva del ${cuando} se liberó. Escribe «agendar» y reservamos de nuevo ✨`,
+    },
   },
   breve: {
     label: 'Breve',
@@ -169,6 +217,15 @@ export const TONOS = {
     cerradoPregunta: '¿Agendas para otro día?',
     sinEquipo: 'Hoy no hay atención del equipo. Puedo agendarte para otro día.',
     archivos: 'No puedo escuchar audios ni abrir archivos. Escríbeme.',
+    anticipo: {
+      pedir: ({ monto, metodo, minutos }) => `Paga el anticipo de *${monto}* con este QR${metodo}. Tienes ${minutos} minutos.`,
+      comprobante: 'Luego envía aquí la foto o el PDF del comprobante.',
+      recibido: 'Comprobante recibido. Te confirmo cuando el negocio lo revise.',
+      avisado: 'Avisé al negocio. Envía aquí la foto o el PDF del comprobante.',
+      confirmado: ({ monto, cuando }) => `Anticipo${monto} recibido. Reserva del ${cuando} confirmada.`,
+      rechazado: ({ cuando }) => `Anticipo no confirmado. Reserva del ${cuando} cancelada. Si ya pagaste, escribe «hablar con alguien».`,
+      vencido: ({ cuando }) => `Venció el tiempo del anticipo. Reserva del ${cuando} liberada. Escribe «agendar» para reservar.`,
+    },
   },
 };
 
@@ -323,6 +380,11 @@ export function crearVoz(rawPersonalidad, { negocio = '', hora = 12 } = {}) {
     sinEquipo: () => frase(t.sinEquipo),
     /** Audios, videos y documentos que el bot todavía no puede leer. */
     archivos: () => frase(t.archivos),
+    /** Anticipos por QR: pedir, comprobante, recibido, avisado, confirmado, rechazado, vencido. */
+    anticipo(clave, datos = {}) {
+      const f = t.anticipo[clave];
+      return f ? frase(typeof f === 'function' ? f(datos) : f) : '';
+    },
     despedida: () => (p.despedida ? frase(rellenar(p.despedida, { nombre: '', negocio })) : ''),
     /** Post-proceso de TODO lo que envía el bot. */
     texto: (s) => (typeof s === 'string' ? frase(s) : s),
