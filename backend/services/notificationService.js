@@ -88,6 +88,28 @@ export async function sendDirectNotification({ oneSignalId, tipo, data }) {
   }
 }
 
+/**
+ * Aviso interno para soporte de Nexus (desconexiones de WhatsApp, etc.).
+ * Llega por push a los ADMINS del negocio indicado en SUPPORT_ALERT_NEGOCIO_ID
+ * (tu propio negocio en Nexus), usando la misma app y el mismo OneSignal.
+ */
+export async function sendSupportAlert({ tipo, data }) {
+  const negocioId = process.env.SUPPORT_ALERT_NEGOCIO_ID;
+  if (!negocioId) {
+    logger.warn(`[notificationService] ${tipo}: falta SUPPORT_ALERT_NEGOCIO_ID, no se envía el aviso.`);
+    return { sent: 0, total: 0, skipped: true };
+  }
+  const admins = await getRecipients(negocioId, ['admin']);
+  const mensaje = buildMessage(tipo, data);
+  const results = await Promise.all(admins.map(async (u) => {
+    const r = await Promise.allSettled(u.deviceIds.map((id) => PROVIDERS.push.send(id, mensaje, APP_URLS.admin)));
+    return r.some((x) => x.status === 'fulfilled');
+  }));
+  const sent = results.filter(Boolean).length;
+  logger.info(`[notificationService] ${tipo}: aviso de soporte enviado a ${sent}/${admins.length} admins (negocio=${negocioId})`);
+  return { sent, total: admins.length };
+}
+
 function isDeadDeviceError(err) {
   const msg = String(err?.message || err || '');
   return /not subscribed|invalid_player_ids|invalid_subscription|invalid_aliases/i.test(msg);

@@ -84,6 +84,16 @@ export function buildMessage(tipo, data = {}, terms = GENERIC_TERMS) {
       const quien = data.professionalName || `${g('professional', 'Un', 'Una')} ${tl('professional')}`;
       return { titulo, cuerpo: `${quien} registró ${servicio}${fecha}${precio}.` };
     }
+    // Aviso a soporte de Nexus (no a los negocios): cuenta de WhatsApp caída o restringida.
+    case 'WHATSAPP_CUENTA_ALERTA': {
+      const titulos = {
+        desconectado: '🔴 WhatsApp desconectado',
+        restriccion: '⚠️ WhatsApp restringido',
+        calidad: '🟡 Bajó la calidad de WhatsApp',
+      };
+      const quien = data.negocios || (data.phone ? `Número ${data.phone}` : 'Una cuenta sin negocio asociado');
+      return { titulo: titulos[data.severidad] || '⚠️ Aviso de WhatsApp', cuerpo: `${quien}: ${data.motivo || 'revisa YCloud y Meta'}.` };
+    }
     case 'RESERVA_CONFIRMADA_CLIENTE':
       return { titulo: '✅ ¡Reserva confirmada!', cuerpo: `Tu ${tl('appointment')}${hora} ${g('appointment', 'quedó agendado', 'quedó agendada')}. ¡Te esperamos!` };
     default:

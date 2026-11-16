@@ -71,6 +71,9 @@ export function vistaPublica(id, data = {}, ahora = Date.now()) {
     connectedAt: data.connectedAt || null,
     lastAppActivityAt: data.lastAppActivityAt || null,
     coexistencia: provider === 'ycloud' ? estadoCoexistencia(ultimaApp, ahora) : null,
+    // 'disconnected' | 'restricted' | null: lo marca un evento de cuenta de YCloud.
+    status: data.status || null,
+    statusAt: data.status ? data.statusAt || null : null,
     // Los números de Meta los configura soporte: el admin no los quita desde el panel.
     removable: provider === 'ycloud',
   };

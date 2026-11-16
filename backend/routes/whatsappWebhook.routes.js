@@ -9,6 +9,8 @@ import {
 } from '../services/capabilities/capabilityService.js';
 import { updateConversation } from '../services/appointments/conversationState.js';
 import { enqueue, drain, inboxEnabled, registerBatchHandler } from '../services/whatsapp/inboundQueue.js';
+import { registrarEventoCuenta, notarActividadCuenta } from '../services/whatsapp/accountEvents.js';
+import { sendSupportAlert } from '../services/notificationService.js';
 import {
   recordInbound, recordOutboundDaily, recordConversationEvent, safe,
 } from '../services/assistantMetrics/assistantMetrics.js';
@@ -399,23 +401,56 @@ router.post('/whatsapp/ycloud/webhook', async (req, res) => {
     return res.sendStatus(401);
   }
   const evento = req.body || {};
-  if (evento.type === 'whatsapp.inbound_message.received') {
+  const tipo = String(evento.type || '');
+  if (tipo === 'whatsapp.inbound_message.received') {
     const m = evento.whatsappInboundMessage || {};
+    // Si la cuenta estaba marcada como caída, vuelve a estar bien; y se
+    // guarda su wabaId para poder asociar eventos de cuenta futuros.
+    notarActividadCuenta(`ycloud_${soloDigitos(m.to)}`, { wabaId: m.wabaId })
+      .catch((err) => logger.warn('[ycloudWebhook] No se pudo revisar la cuenta:', err.message));
     // Se adapta al formato de Meta (mismo camino que los mensajes de Meta).
     return recibir([{
       value: { metadata: { phone_number_id: `ycloud_${soloDigitos(m.to)}`, display_phone_number: m.to || null } },
       mensaje: { ...m, id: m.wamid || m.id, from: soloDigitos(m.from), referral: m.referral || null },
     }], res);
   }
+
+  // Eventos de cuenta y de número: se guardan ANTES de responder 200, así
+  // si Firestore falla YCloud reintenta y el evento no se pierde.
+  if (tipo.startsWith('whatsapp.business_account.') || tipo.startsWith('whatsapp.phone_number.')) {
+    try {
+      await registrarEventoCuenta(evento, { alertar: avisarSoporte });
+    } catch (err) {
+      logger.error('[ycloudWebhook] No se pudo registrar el evento de cuenta:', err.message);
+      return res.sendStatus(500);
+    }
+    return res.sendStatus(200);
+  }
+
   res.sendStatus(200);
 
   try {
-    if (evento.type === 'whatsapp.smb.message.echoes') {
-      await pausarBotPorRespuestaHumana(evento.whatsappMessage || {});
+    if (tipo === 'whatsapp.smb.message.echoes') {
+      const m = evento.whatsappMessage || {};
+      notarActividadCuenta(`ycloud_${soloDigitos(m.from)}`, { wabaId: m.wabaId })
+        .catch((err) => logger.warn('[ycloudWebhook] No se pudo revisar la cuenta:', err.message));
+      await pausarBotPorRespuestaHumana(m);
+    } else {
+      // Antes se descartaban en silencio: ahora queda en el log qué llegó.
+      logger.info(`[ycloudWebhook] Evento sin manejo: ${tipo || 'sin tipo'}`);
     }
   } catch (err) {
     logger.error('[ycloudWebhook] Error procesando evento:', err.message);
   }
 });
+
+// Push a soporte de Nexus con el negocio afectado y el motivo.
+async function avisarSoporte({ severidad, motivo, cuentas, phone }) {
+  const negocios = [...new Set(cuentas.map((c) => c.negocioId).filter(Boolean))].join(', ');
+  await sendSupportAlert({
+    tipo: 'WHATSAPP_CUENTA_ALERTA',
+    data: { severidad, motivo, negocios: negocios || null, phone: phone || cuentas[0]?.phone || null },
+  });
+}
 
 export default router;

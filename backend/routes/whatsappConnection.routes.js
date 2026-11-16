@@ -101,6 +101,9 @@ router.post('/whatsapp/connections', ...guard, async (req, res) => {
       verifiedName: ycloud.encontrado.verifiedName || null,
       connectedBy: req.actor.uid,
       updatedAt: ahora,
+      // Al (re)conectar se borra la marca de desconexión anterior.
+      status: null,
+      statusReason: null,
     };
     if (!actual.exists) datos.connectedAt = ahora;
     await ref.set(datos, { merge: true });
