@@ -5345,7 +5345,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 <textarea
                   id="svc-description"
                   rows={3}
-                  maxLength={300}
+                  maxLength={150}
                   placeholder="Ej.: Corte con máquina y tijera, lavado y peinado."
                   value={newService.description || ''}
                   onChange={(e) => setNewService(prev => ({ ...prev, description: e.target.value }))}
@@ -5353,7 +5353,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 />
                 <p className="mt-1 flex justify-between gap-3 text-xs text-nexus-text-muted">
                   <span>Lo ven tus {tl('clients')} antes de reservar.</span>
-                  <span className="nx-num">{(newService.description || '').length}/300</span>
+                  <span className={`nx-num ${(newService.description || '').length > 150 ? 'text-nexus-error-text font-bold' : ''}`}>{(newService.description || '').length}/150</span>
                 </p>
               </div>
 

@@ -1164,10 +1164,83 @@ const SelectMark = ({ selected, className = '' }) => (
   )
 );
 
+/** Descripción más larga de lo que entra en 2 líneas de la fila (aprox.). */
+const DESC_PREVIEW_CHARS = 70;
+const needsMore = (desc) => !!desc && (desc.length > DESC_PREVIEW_CHARS || desc.includes('\n'));
+
+/** Hoja inferior con el detalle completo de un servicio. */
+const ServiceDetailSheet = ({ service, showImage, isSelected, priceNode, onToggle, onClose }) => {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label={service.name}>
+      <button type="button" aria-label="Cerrar" onClick={onClose} className="absolute inset-0 bg-black/50 animate-fade-in cursor-default" />
+      <div className="relative w-full sm:max-w-md max-h-[85vh] overflow-y-auto no-scrollbar rounded-t-3xl sm:rounded-3xl bg-nexus-surface shadow-xl animate-fade-in">
+        <div className="sticky top-0 flex justify-center pt-2.5 pb-1 bg-nexus-surface sm:hidden">
+          <span className="h-1 w-10 rounded-full bg-nexus-border" />
+        </div>
+        {showImage && service.image && (
+          <img src={cloudinaryThumb(service.image, 800)} alt="" className="w-full aspect-[4/3] object-cover" />
+        )}
+        <div className="px-5 pt-4 pb-5">
+          <h3 className="text-lg font-bold text-nexus-text break-words">{service.name}</h3>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-nexus-text-secondary nx-num">
+            <span className="inline-flex items-center gap-1.5"><Tag size={14} className="text-nexus-text-muted" />{priceNode}</span>
+            {service.duration && (
+              <>
+                <span aria-hidden="true" className="text-nexus-text-muted">·</span>
+                <span className="inline-flex items-center gap-1.5"><Clock size={14} className="text-nexus-text-muted" /> {service.duration}</span>
+              </>
+            )}
+          </div>
+          {service.description && (
+            <p className="mt-3 text-sm leading-relaxed text-nexus-text-secondary whitespace-pre-line break-words">{service.description}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => { onToggle(); onClose(); }}
+            className={`mt-5 w-full h-12 rounded-2xl font-bold text-sm transition-colors cursor-pointer ${isSelected
+              ? 'border border-nexus-border bg-nexus-surface text-nexus-text hover:bg-nexus-surface-hover'
+              : 'bg-nexus-primary text-white hover:bg-nexus-primary-hover'}`}
+          >
+            {isSelected ? 'Quitar' : 'Agregar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, hasVariable = false, professional = null, professionals = [], showImages = true, promotions = [], selectMany = null }) => {
   const terms = useBusinessTerms();
   const today = todayLaPaz();
   const combos = combosAvailable(services, promotions);
+  const [detailId, setDetailId] = useState(null);
+  const closeDetail = useCallback(() => setDetailId(null), []);
+  const isTodayTuesday = new Date().getDay() === 2;
+  const promoOf = (s) => isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null);
+  const priceNodeOf = (s) => (promoOf(s) ? (
+    <>
+      <span className="text-nexus-text-muted line-through">{s.price} Bs</span>
+      <span className="font-semibold text-nexus-success-text">{s.promoPrice} Bs</span>
+    </>
+  ) : formatServicePriceFor(s, { professional, professionals }));
+  const detailService = detailId != null ? services.find((s) => s.id === detailId) : null;
+  // Abre el detalle sin marcar/desmarcar el servicio (va dentro del botón de la fila).
+  const openDetailProps = (id) => ({
+    role: 'button',
+    tabIndex: 0,
+    onClick: (e) => { e.stopPropagation(); setDetailId(id); },
+    onKeyDown: (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setDetailId(id); }
+    },
+  });
   const byId = new Map(services.map((s) => [String(s.id), s]));
   // Pestañas como el filtro de la agenda: Servicios / Combos (solo si hay combos).
   const [tab, setTab] = useState('servicios');
@@ -1223,10 +1296,11 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
       <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
         {services.map((s) => {
           const isSelected = !!selected.find(serv => serv.id === s.id);
-          const isTodayTuesday = new Date().getDay() === 2;
-          const enPromo = isTodayTuesday && s.promoPrice && !(professional && getCustomPrice(professional, s.id) !== null);
+          const enPromo = promoOf(s);
           const badge = !s.priceVariable ? discountBadgeFor(s.id, promotions) : null;
           const badgeWhen = badge ? whenText(badge.promo, today) : '';
+          const hasImage = showImages && !!s.image;
+          const hasBadges = enPromo || s.featured || badge;
 
           return (
             <li key={s.id}>
@@ -1234,14 +1308,17 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                 type="button"
                 onClick={() => toggle(s)}
                 aria-pressed={isSelected}
-                className="w-full flex items-center gap-3 py-3.5 text-left cursor-pointer transition-colors hover:bg-nexus-surface-hover/60"
+                className="w-full flex items-start gap-3.5 py-3.5 text-left cursor-pointer transition-colors hover:bg-nexus-surface-hover/60"
               >
-                {showImages && s.image && (
-                  <img src={cloudinaryThumb(s.image, 200)} alt="" className="w-12 h-12 rounded-lg object-cover border border-nexus-border shrink-0" loading="lazy" />
+                {hasImage && (
+                  <span {...openDetailProps(s.id)} aria-label={`Ver ${s.name}`} className="shrink-0 rounded-xl">
+                    <img src={cloudinaryThumb(s.image, 240)} alt="" className="w-20 h-20 rounded-xl object-cover border border-nexus-border" loading="lazy" />
+                  </span>
                 )}
                 <span className="flex-1 min-w-0">
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className={`text-[15px] font-semibold break-words ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</span>
+                  <span className={`block text-[15px] font-semibold leading-snug break-words ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</span>
+                  {hasBadges && (
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
                     {enPromo && (
                       <span className="rounded-md bg-nexus-primary-soft px-1.5 py-0.5 text-xs font-bold text-nexus-primary">Promo hoy</span>
                     )}
@@ -1254,20 +1331,19 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                       </span>
                     )}
                   </span>
-                  {s.description && (
-                    <span className="block mt-0.5 text-nexus-text-secondary text-xs leading-relaxed whitespace-pre-line">{s.description}</span>
                   )}
-                  <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-nexus-text-secondary nx-num">
+                  {s.description && (
+                    <span className="block mt-1 text-nexus-text-secondary text-xs leading-relaxed line-clamp-2 break-words">{s.description}</span>
+                  )}
+                  {needsMore(s.description) && (
+                    <span {...openDetailProps(s.id)} className="inline-block mt-0.5 text-xs font-semibold text-nexus-text underline underline-offset-2">
+                      Ver más
+                    </span>
+                  )}
+                  <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-nexus-text-secondary nx-num">
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                       <Tag size={14} className="text-nexus-text-muted" />
-                      {enPromo ? (
-                        <>
-                          <span className="text-nexus-text-muted line-through">{s.price} Bs</span>
-                          <span className="font-semibold text-nexus-success-text">{s.promoPrice} Bs</span>
-                        </>
-                      ) : (
-                        formatServicePriceFor(s, { professional, professionals })
-                      )}
+                      {priceNodeOf(s)}
                     </span>
                     {s.duration && (
                       <>
@@ -1279,12 +1355,23 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                     )}
                   </span>
                 </span>
-                <SelectMark selected={isSelected} />
+                <SelectMark selected={isSelected} className="self-center" />
               </button>
             </li>
           );
         })}
       </ul>
+      )}
+
+      {detailService && (
+        <ServiceDetailSheet
+          service={detailService}
+          showImage={showImages}
+          isSelected={!!selected.find((x) => x.id === detailService.id)}
+          priceNode={priceNodeOf(detailService)}
+          onToggle={() => toggle(detailService)}
+          onClose={closeDetail}
+        />
       )}
     </div>
 
