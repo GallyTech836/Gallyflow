@@ -260,6 +260,24 @@ export function combosAvailable(services = [], promotions = []) {
     && uniqStrings(p.serviceIds).every((id) => ids.has(id)));
 }
 
+/** ¿La promo vale en la fecha `today` ('AAAA-MM-DD'): activa y en uno de sus días? */
+export function appliesOn(p, today = todayLaPaz()) {
+  if (promotionStatus(p, today) !== PROMO_STATUS.ACTIVE) return false;
+  const days = (p?.weekdays || []).map(Number);
+  if (days.length === 0 || days.length === 7) return true;
+  const [y, m, d] = String(today).split('-').map(Number);
+  return days.includes(new Date(y, m - 1, d).getDay());
+}
+
+/** Etiqueta solo si el descuento vale hoy: "−20%" / "−Bs 10", o null. */
+export function todayDiscountBadgeFor(serviceId, promotions = [], today = todayLaPaz()) {
+  const p = (promotions || []).find((x) => x.type !== PROMO_TYPES.COMBO
+    && uniqStrings(x.serviceIds).includes(String(serviceId)) && appliesOn(x, today));
+  if (!p) return null;
+  const label = p.discountKind === DISCOUNT_KINDS.AMOUNT ? `−Bs ${round2(p.discountValue)}` : `−${round2(p.discountValue)}%`;
+  return { promo: p, label };
+}
+
 /** Servicios destacados primero (sin cambiar el orden entre ellos). */
 export function featuredFirst(services = []) {
   return [...(services || [])].sort((a, b) => (b?.featured === true) - (a?.featured === true));

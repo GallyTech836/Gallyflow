@@ -29,7 +29,7 @@ import { fetchBusyAppointments, createPublicBooking } from '../shared/appointmen
 import { BusinessProfileContext, useBusinessProfile, useBusinessTerms } from '../shared/businessProfiles/useBusinessProfile';
 import { usePromotions } from '../shared/promotions/usePromotions';
 import { applyPromotions, resolveBranchId } from '../shared/promotions/promotionPricing';
-import { visiblePromotions, discountBadgeFor, combosAvailable, whenText, featuredFirst, todayLaPaz } from '../shared/promotions/promotionModel';
+import { visiblePromotions, todayDiscountBadgeFor, combosAvailable, whenText, featuredFirst, todayLaPaz } from '../shared/promotions/promotionModel';
 import { summarizeCitaServices } from '../shared/servicePricing/professionalPricing';
 import { rememberLastBooking } from '../shared/booking/publicRoutes';
 import { useBookingForm } from '../shared/bookingForms/useBookingForm';
@@ -1297,10 +1297,8 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
         {services.map((s) => {
           const isSelected = !!selected.find(serv => serv.id === s.id);
           const enPromo = promoOf(s);
-          const badge = !s.priceVariable ? discountBadgeFor(s.id, promotions) : null;
-          const badgeWhen = badge ? whenText(badge.promo, today) : '';
+          const badge = !s.priceVariable ? todayDiscountBadgeFor(s.id, promotions, today) : null;
           const hasImage = showImages && !!s.image;
-          const hasBadges = enPromo || s.featured || badge;
 
           return (
             <li key={s.id}>
@@ -1316,9 +1314,8 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                   </span>
                 )}
                 <span className="flex-1 min-w-0">
-                  <span className={`block text-[15px] font-semibold leading-snug break-words ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</span>
-                  {hasBadges && (
-                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className={`text-[15px] font-semibold leading-snug break-words ${isSelected ? 'text-nexus-primary' : 'text-nexus-text'}`}>{s.name}</span>
                     {enPromo && (
                       <span className="rounded-md bg-nexus-primary-soft px-1.5 py-0.5 text-xs font-bold text-nexus-primary">Promo hoy</span>
                     )}
@@ -1327,11 +1324,10 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
                     )}
                     {badge && (
                       <span className="rounded-md bg-nexus-success-bg px-1.5 py-0.5 text-xs font-bold text-nexus-success-text">
-                        {badge.label}{badgeWhen ? ` · ${badgeWhen}` : ''}
+                        {badge.label}
                       </span>
                     )}
                   </span>
-                  )}
                   {s.description && (
                     <span className="block mt-1 text-nexus-text-secondary text-xs leading-relaxed line-clamp-2 break-words">{s.description}</span>
                   )}
