@@ -962,7 +962,7 @@ export default function App({ negocioSlug, proId } = {}) {
 
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
-    <div className="min-h-dvh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-hidden">
+    <div className="min-h-dvh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-clip">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
@@ -1293,7 +1293,7 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
       )}
       
       {!showCombos && (
-      <ul className="max-h-[44vh] overflow-y-auto no-scrollbar divide-y divide-nexus-border border-y border-nexus-border">
+      <ul className="divide-y divide-nexus-border border-y border-nexus-border">
         {services.map((s) => {
           const isSelected = !!selected.find(serv => serv.id === s.id);
           const enPromo = promoOf(s);
@@ -1371,12 +1371,12 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
       )}
     </div>
 
-    {/* Resumen + botón: pegados al fondo de la pantalla. */}
-    <div className="pt-4 mt-auto">
+    {/* Resumen + botón: fijos al fondo mientras se desliza la lista. */}
+    <div className="sticky bottom-0 z-20 mt-auto -mx-5 sm:-mx-6 px-5 sm:px-6 pt-3 pb-4 bg-nexus-background/95 backdrop-blur-sm">
       <div className="flex justify-between items-center mb-3 px-1">
         <div>
           <span className="text-nexus-text-secondary text-xs font-bold block">{terms.t('services')} {terms.g('service', 'Seleccionados', 'Seleccionadas')}</span>
-          <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
+          <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? terms.tl('service') : terms.tl('services')}</span>
         </div>
         <div className="text-right">
           <span className="text-nexus-text-muted text-xs block font-semibold">Total estimado</span>
