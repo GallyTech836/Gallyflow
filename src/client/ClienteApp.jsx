@@ -1027,8 +1027,8 @@ export default function App({ negocioSlug, proId } = {}) {
           {renderStep()}
         </div>
 
-        {/* «Más información» tiene su propio pie de página. */}
-        {step !== 'info' && (
+        {/* Solo en la portada y en la pantalla final; en los pasos el botón queda al fondo. */}
+        {(step === 0 || step === 6) && (
           <div className="text-center pt-6 pb-1 text-xs text-nexus-text-muted">
             Potenciado por <span className="text-nexus-primary font-semibold">Nexus</span>
           </div>
@@ -1375,9 +1375,9 @@ const ServicesStep = ({ services, selected, toggle, onNext, total, totalMax, has
       )}
     </div>
 
-    {/* CONTENEDOR Y BOTÓN: Máxima altura, padding generoso y presencia de pantalla */}
-    <div className="pt-6 mt-2">
-      <div className="flex justify-between items-center mb-5 px-1">
+    {/* Resumen + botón: pegados al fondo de la pantalla. */}
+    <div className="pt-4 mt-auto">
+      <div className="flex justify-between items-center mb-3 px-1">
         <div>
           <span className="text-nexus-text-secondary text-xs font-bold block">{terms.t('services')} {terms.g('service', 'Seleccionados', 'Seleccionadas')}</span>
           <span className="text-xs text-nexus-primary font-semibold">{selected.length} {selected.length === 1 ? 'ítem' : 'ítems'}</span>
