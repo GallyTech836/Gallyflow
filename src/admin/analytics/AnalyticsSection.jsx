@@ -404,7 +404,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
 
           {registros ? (
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-            <p className="text-3xl font-black text-nexus-text">{registrosEnRango}</p>
+            <p className="text-3xl font-bold text-nexus-text">{registrosEnRango}</p>
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('services')} registrados</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className={`text-lg ${anuladosEnRango > 0 ? 'text-nexus-error-text' : 'text-nexus-text'}`}>{anuladosEnRango}</b><span className="text-nexus-text-secondary">Anulados</span></span>
@@ -412,7 +412,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
           </div>
           ) : (
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-            <p className="text-3xl font-black text-nexus-text">{performance.reservas}</p>
+            <p className="text-3xl font-bold text-nexus-text">{performance.reservas}</p>
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">Reservas</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{performance.completadas}</b><span className="text-nexus-text-secondary">Completadas</span></span>
@@ -424,7 +424,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
           {!registros && (<>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-            <p className="text-3xl font-black text-nexus-text">{performance.clientesAtendidos}</p>
+            <p className="text-3xl font-bold text-nexus-text">{performance.clientesAtendidos}</p>
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('clients')} {terms.g('client', 'atendidos', 'atendidas')}</p>
             {!basic && (
             <div className="flex justify-center gap-6 text-sm">
@@ -435,7 +435,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
           </div>
 
           <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
-            <p className="text-3xl font-black text-nexus-text">{clientesStats.totalHistorico ?? '—'}</p>
+            <p className="text-3xl font-bold text-nexus-text">{clientesStats.totalHistorico ?? '—'}</p>
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('clients')} totales</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'activos', 'activas')}</span></span>
@@ -555,7 +555,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
                   {(commissionDetail || []).map((d) => (
                     <div key={d.citaId} className="text-xs flex justify-between text-nexus-text-secondary">
                       <span>{d.date} · {d.services.map((s) => s.serviceName).join(' + ')}</span>
-                      <span>Bs {d.totalComision.toFixed(2)} {d.commissionPaid ? '✅' : ''}</span>
+                      <span>Bs {d.totalComision.toFixed(2)} {d.commissionPaid ? '· Pagada' : ''}</span>
                     </div>
                   ))}
                   {p.finanzas.comisionPendiente > 0 && (
@@ -653,7 +653,7 @@ function BigMetric({ label, value }) {
   return (
     <div className="bg-nexus-surface border border-nexus-border rounded-lg p-4 text-center">
       <p className="text-xs text-nexus-text-secondary nx-num mb-1">{label}</p>
-      <p className="text-2xl font-black text-nexus-text">{value}</p>
+      <p className="text-2xl font-bold text-nexus-text">{value}</p>
     </div>
   );
 }

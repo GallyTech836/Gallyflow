@@ -14,11 +14,6 @@ export default function BarberLoginPage({ onLogin, error, loading }) {
   return (
     <div className="min-h-[100dvh] bg-nexus-background flex items-center justify-center px-4">
 
-      {/* Glow ambiental */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-nexus-primary/5 rounded-full blur-3xl" />
-      </div>
-
       <div className="relative w-full max-w-sm">
 
         {/* Logo / marca */}

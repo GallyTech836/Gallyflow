@@ -3,7 +3,7 @@ import ImageUploader from '../shared/ui/ImageUploader';
 import { activeFields, validateIntake, AGE_UNITS } from '../shared/bookingForms/bookingFormModel';
 import { todayLaPaz } from '../shared/promotions/promotionModel';
 
-const inputClass = 'w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-all text-sm font-bold text-nexus-text placeholder-nexus-text-muted';
+const inputClass = 'w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-colors text-sm font-bold text-nexus-text placeholder-nexus-text-muted';
 
 const PLACEHOLDERS = { petName: 'Ej: Toby', breed: 'Ej: Caniche' };
 

@@ -51,7 +51,7 @@ export default function DepositStep({ deposit, negocioId, citaId, onReset, selec
   return (
     <div className="flex-1 flex flex-col items-center py-2 text-center space-y-4 animate-scale-up">
       <div className="space-y-1">
-        <h2 className="text-2xl font-extrabold tracking-tight text-nexus-text">{reported ? 'Avisaste que ya pagaste' : 'Paga el anticipo para confirmar'}</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-nexus-text">{reported ? 'Avisaste que ya pagaste' : 'Paga el anticipo para confirmar'}</h2>
         <p className="mx-auto max-w-xs text-xs leading-relaxed text-nexus-text-secondary">
           {reported
             ? 'El negocio revisa el pago y te confirma.'
@@ -68,7 +68,7 @@ export default function DepositStep({ deposit, negocioId, citaId, onReset, selec
 
       <div className="w-full rounded-2xl border border-nexus-border bg-nexus-surface p-3">
         <p className="text-xs font-semibold text-nexus-text-secondary">Anticipo por {deposit.method}</p>
-        <p className="nx-num text-4xl font-extrabold text-nexus-text">{bs(deposit.amount)}</p>
+        <p className="nx-num text-4xl font-bold text-nexus-text">{bs(deposit.amount)}</p>
         {deposit.qrImage && (
           <img
             src={deposit.qrImage}

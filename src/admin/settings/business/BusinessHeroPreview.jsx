@@ -21,8 +21,6 @@ export default function BusinessHeroPreview({ config }) {
         {/* Pantalla de inicio, en un marco de celular */}
         <div className="mx-auto w-full max-w-[300px] rounded-[2rem] border-[6px] border-nexus-navy/85 bg-nexus-background shadow-lg overflow-hidden">
           <div className="relative min-h-[360px] flex items-center justify-center px-5 py-8 overflow-hidden">
-            <div className="absolute top-[-30%] left-[-20%] w-[70%] h-[70%] bg-nexus-primary/5 blur-[80px] rounded-full pointer-events-none" />
-            <div className="absolute bottom-[-20%] right-[-15%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[80px] rounded-full pointer-events-none" />
             <div className="relative z-10 w-full">
               <HeroDisplay config={config} compact />
             </div>

@@ -40,7 +40,7 @@ export default function PersonalBookingLink({ url, onToast = () => {} }) {
     <div className="text-left bg-nexus-background border border-nexus-border rounded-2xl p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Link2 className="w-4 h-4 text-nexus-primary" />
-        <h4 className="text-xs font-extrabold text-nexus-text">Mi link de reserva</h4>
+        <h4 className="text-xs font-bold text-nexus-text">Mi link de reserva</h4>
       </div>
       <input
         readOnly

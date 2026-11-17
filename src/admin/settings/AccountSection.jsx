@@ -42,11 +42,11 @@ export default function AccountSection({ negocioId, businessName, user, onLogout
       <div className="space-y-4 min-w-0">
         {/* ── Marca ─────────────────────────────────────────────── */}
         <Card padding="none" className="overflow-hidden">
-          <div className="relative h-28 bg-gradient-to-r from-nexus-primary to-nexus-accent">
+          <div className="relative h-28 bg-nexus-surface-hover">
             {heroConfig.cover ? (
               <img src={cloudinaryThumb(heroConfig.cover, 900)} alt="" className="h-full w-full object-cover" />
             ) : (
-              <span className="absolute right-3 top-3 rounded-md bg-black/25 px-2 py-0.5 text-xs font-medium text-white">Sin portada</span>
+              <span className="absolute right-3 top-3 rounded-md border border-nexus-border bg-nexus-surface px-2 py-0.5 text-xs font-medium text-nexus-text-secondary">Sin portada</span>
             )}
           </div>
           <div className="relative z-10 px-4 pb-4 sm:px-5 sm:pb-5">

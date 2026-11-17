@@ -218,7 +218,7 @@ export default function BusinessHeroSettings({ negocioId, registrosMode = false 
                       if (e.target.value.length <= 40) update('highlightText', e.target.value);
                     }}
                     className={`${inputClass} pr-14`}
-                    placeholder="⚡ Reserva en 1 minuto"
+                    placeholder="Reserva en 1 minuto"
                     maxLength={40}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-nexus-text-muted nx-num pointer-events-none">

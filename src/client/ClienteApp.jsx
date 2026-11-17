@@ -963,11 +963,6 @@ export default function App({ negocioSlug, proId } = {}) {
   return (
     <BusinessProfileContext.Provider value={businessProfile}>
     <div className="min-h-dvh bg-nexus-background text-nexus-text font-sans selection:bg-nexus-primary selection:text-white relative overflow-x-clip">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-nexus-primary/5 blur-[140px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-nexus-primary/5 blur-[160px] rounded-full" />
-        <div className="absolute top-[40%] right-[-10%] w-[35%] h-[35%] bg-nexus-accent/5 blur-[120px] rounded-full" />
-      </div>
       
 
       {/* min-h-dvh: el pie queda siempre al fondo de lo que se ve (100vh incluye
@@ -989,7 +984,7 @@ export default function App({ negocioSlug, proId } = {}) {
               >
                 <ChevronLeft size={24} />
               </button>
-              <h2 className="min-w-0 flex-1 text-2xl font-extrabold text-nexus-text leading-tight break-words">
+              <h2 className="min-w-0 flex-1 text-2xl font-bold text-nexus-text leading-tight break-words">
                 {({
                   1: 'Elige la sucursal',
                   2: `Elige ${businessProfile.tl('professional')}`,
@@ -1644,7 +1639,7 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
 const PaymentStep = ({ method, setMethod, onNext, onBack }) => (
   <div className="flex-1 flex flex-col justify-between animate-fade-in py-2">
     <div>
-      <h2 className="text-2xl font-extrabold text-nexus-text mb-1">Método de Pago</h2>
+      <h2 className="text-2xl font-bold text-nexus-text mb-1">Método de Pago</h2>
       <p className="text-xs text-nexus-text-secondary mb-5">Elige tu forma preferida de pago de manera segura.</p>
       
       <div className="space-y-3.5">
@@ -1719,7 +1714,7 @@ const ConfirmStep = ({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ej: Alejandro Flores"
-            className="w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-all text-sm font-bold text-nexus-text placeholder-nexus-text-muted"
+            className="w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-colors text-sm font-bold text-nexus-text placeholder-nexus-text-muted"
           />
         </div>
 
@@ -1731,7 +1726,7 @@ const ConfirmStep = ({
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Ej: +591 70000000"
-            className="w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-all text-sm font-bold text-nexus-text placeholder-nexus-text-muted"
+            className="w-full bg-nexus-background border border-nexus-border p-3.5 rounded-xl outline-none focus:border-nexus-primary transition-colors text-sm font-bold text-nexus-text placeholder-nexus-text-muted"
           />
         </div>
 
@@ -1822,7 +1817,7 @@ const SuccessStep = ({ onReset, selectedDate, selectedHour, selectedBarber, sele
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-3xl font-extrabold text-nexus-text tracking-tight">
+        <h2 className="text-3xl font-bold text-nexus-text tracking-tight">
           ¡Reserva confirmada!
         </h2>
 

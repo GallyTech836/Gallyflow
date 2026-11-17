@@ -26,7 +26,7 @@ export default function Avatar({ src, name, className = '', textClassName = 'tex
     <div
       role="img"
       aria-label={name || 'Sin foto'}
-      className={`${className} flex items-center justify-center shrink-0 bg-nexus-primary-soft text-nexus-primary font-black tracking-wide select-none ${textClassName}`}
+      className={`${className} flex items-center justify-center shrink-0 bg-nexus-primary-soft text-nexus-primary font-bold tracking-wide select-none ${textClassName}`}
     >
       {getInitials(name)}
     </div>

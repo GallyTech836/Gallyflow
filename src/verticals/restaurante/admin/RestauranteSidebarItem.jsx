@@ -23,6 +23,6 @@ export default function SidebarItem({ icon: Icon, label, active = false, badge =
   }
   
   export function SidebarSection({ label, first = false }) {
-    return <p className={`px-3 pb-1 ${first ? 'pt-0' : 'pt-4'} text-xs font-semibold tracking-wider text-white/45 uppercase`}>{label}</p>;
+    return <p className={`px-3 pb-1 ${first ? 'pt-0' : 'pt-4'} text-xs font-medium text-white/45`}>{label}</p>;
   }
   

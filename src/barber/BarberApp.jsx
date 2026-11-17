@@ -1349,7 +1349,7 @@ const fetchByDate = async (subcollection, date) => {
 
       {/* TOAST SYSTEM */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] animate-bounce">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999]">
           <div className={`px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-2xl flex items-center gap-2 text-sm font-bold ${
             toast.type === "error" 
               ? "bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text" 
@@ -1625,7 +1625,7 @@ const fetchByDate = async (subcollection, date) => {
                                   <span className="flex items-center gap-2 text-xs text-nexus-text-secondary mt-0.5">
                                     <span className="inline-flex items-center gap-1 nx-num"><Icons.Clock className="w-3.5 h-3.5" /> {dur} min</span>
                                     {staffPerms.viewFinancials && <span className="nx-num font-semibold text-nexus-text">{appt.price} Bs</span>}
-                                    {appt.notes && <span className="truncate italic">Nota: {appt.notes}</span>}
+                                    {appt.notes && <span className="truncate">Nota: {appt.notes}</span>}
                                   </span>
                                 )}
                               </button>
@@ -1658,7 +1658,7 @@ const fetchByDate = async (subcollection, date) => {
                         <div 
                           key={appt.id} 
                           onClick={() => setManagingAppt({ ...appt, services: appt.services && appt.services.length > 0 ? appt.services : getServicesFromCita(appt) })}
-                          className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-nexus-primary/40 transition-all duration-200 shadow-sm cursor-pointer"
+                          className="bg-nexus-surface border border-nexus-border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-nexus-primary/40 transition-colors duration-200 shadow-sm cursor-pointer"
                         >
                           <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-xl bg-nexus-background border border-nexus-border flex flex-col items-center justify-center shrink-0">
@@ -1698,7 +1698,7 @@ const fetchByDate = async (subcollection, date) => {
                                 {appt.status === "Confirmado" && (
                                   <button
                                   onClick={(e) => { e.stopPropagation(); updateStatus(appt.id, "completed"); }}
-                                    className="px-4 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-xl text-xs font-bold transition-all shadow-md"
+                                    className="px-4 py-1.5 bg-nexus-primary hover:bg-nexus-primary-hover text-white rounded-xl text-xs font-bold transition-colors shadow-md"
                                   >
                                     Finalizar
                                   </button>
@@ -1957,7 +1957,7 @@ const fetchByDate = async (subcollection, date) => {
                       className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-nexus-primary/20 shadow-xl"
                       textClassName="text-3xl"
                     />
-                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-nexus-success border-2 border-nexus-surface animate-pulse"></div>
+                    <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-nexus-success border-2 border-nexus-surface"></div>
                   </div>
 
                   <h3 className="text-xl font-bold tracking-tight text-nexus-text mt-4">{activeBarber.name} </h3>
@@ -2160,7 +2160,7 @@ const fetchByDate = async (subcollection, date) => {
               </div>
               <button 
                 onClick={() => setIsNewClientModalOpen(false)}
-                className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-text-secondary transition-all"
+                className="p-1.5 hover:bg-nexus-surface-hover rounded-lg text-nexus-text-secondary transition-colors"
               >
                 ✕
               </button>
@@ -2174,7 +2174,7 @@ const fetchByDate = async (subcollection, date) => {
                   value={newClientModalName}
                   onChange={(e) => setNewClientModalName(e.target.value)}
                   placeholder="Ej: Carlos Eduardo Siles"
-                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted focus:outline-none focus:border-nexus-primary transition-all"
+                  className="w-full bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted focus:outline-none focus:border-nexus-primary transition-colors"
                   required
                 />
               </div>
@@ -2202,7 +2202,7 @@ const fetchByDate = async (subcollection, date) => {
                     value={newClientModalPhone}
                     onChange={(e) => setNewClientModalPhone(e.target.value.replace(/\D/g, ""))}
                     placeholder="Número de celular"
-                    className="flex-1 bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted focus:outline-none focus:border-nexus-primary transition-all"
+                    className="flex-1 bg-nexus-background border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder-nexus-text-muted focus:outline-none focus:border-nexus-primary transition-colors"
                     required
                   />
                 </div>
@@ -2212,13 +2212,13 @@ const fetchByDate = async (subcollection, date) => {
                 <button
                   type="button"
                   onClick={() => setIsNewClientModalOpen(false)}
-                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-bold text-sm rounded-xl transition-all"
+                  className="flex-1 py-3 bg-nexus-background border border-nexus-border hover:bg-nexus-surface-hover text-nexus-text-secondary font-bold text-sm rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm rounded-xl transition-all shadow-md"
+                  className="flex-1 py-3 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold text-sm rounded-xl transition-colors shadow-md"
                 >
                   Guardar {t('client')}
                 </button>

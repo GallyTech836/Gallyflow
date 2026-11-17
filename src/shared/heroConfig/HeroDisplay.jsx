@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Star, ChevronRight } from 'lucide-react';
+import { Star, ChevronRight } from 'lucide-react';
 
 /**
  * Landing premium de la pantalla de bienvenida: logo circular con glow,
@@ -24,12 +24,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
   const renderLogo = (onCover) => (
     <div className="relative shrink-0">
       <div
-        className={`absolute inset-0 rounded-full bg-nexus-primary/25 blur-2xl opacity-50 ${
-          compact ? 'scale-100' : 'scale-110'
-        }`}
-      />
-      <div
-        className={`relative rounded-full p-[3px] bg-gradient-to-tr from-nexus-primary via-nexus-accent to-nexus-primary ${
+        className={`relative rounded-full p-[3px] bg-nexus-border ${
           onCover ? 'ring-4 ring-nexus-background shadow-lg' : ''
         } ${compact ? 'w-20 h-20' : 'w-28 h-28 sm:w-32 sm:h-32'}`}
       >
@@ -37,7 +32,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
           {logo ? (
             <img src={logo} alt={businessName} className="w-full h-full object-cover" />
           ) : (
-            <Sparkles className="text-nexus-primary" size={compact ? 26 : 40} />
+            <span className={`font-bold text-nexus-text ${compact ? 'text-2xl' : 'text-4xl'}`}>{(businessName || '?').trim().charAt(0).toUpperCase()}</span>
           )}
         </div>
       </div>
@@ -72,7 +67,7 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
         <h1
           className={`${
             compact ? 'text-xl' : 'text-3xl sm:text-4xl'
-          } font-extrabold text-nexus-text tracking-tight leading-tight truncate max-w-[85vw]`}
+          } font-bold text-nexus-text tracking-tight leading-tight truncate max-w-[85vw]`}
         >
           {businessName}
         </h1>
@@ -127,10 +122,10 @@ export default function HeroDisplay({ config, compact = false, onReservar = null
             onClick={onReservar}
             className={`w-full ${
               compact ? 'py-3 text-sm' : 'py-5 sm:py-5.5 text-sm sm:text-base'
-            } px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg active:scale-[0.97] flex items-center justify-center gap-3 transform hover:-translate-y-0.5`}
+            } px-8 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-2xl transition-colors shadow-md active:scale-[0.98] flex items-center justify-center gap-3`}
           >
             <span>{ctaLabel}</span>
-            <ChevronRight size={compact ? 14 : 18} className="text-white/70 animate-pulse" />
+            <ChevronRight size={compact ? 14 : 18} className="text-white/70" />
           </button>
         ) : (
           <div

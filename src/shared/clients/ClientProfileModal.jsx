@@ -342,7 +342,7 @@ export default function ClientProfileModal({
                     <p className="mt-0.5 text-xs text-nexus-text-muted">
                       {[a.professionalName, a.branch, a.bookedBy && bookingChannelLabel(a.bookedBy, terms)].filter(Boolean).join(' · ')}
                     </p>
-                    {a.notes && <p className="mt-1 text-xs italic text-nexus-text-secondary">Nota: {a.notes}</p>}
+                    {a.notes && <p className="mt-1 text-xs text-nexus-text-secondary">Nota: {a.notes}</p>}
                   </div>
                 ))}
               </div>

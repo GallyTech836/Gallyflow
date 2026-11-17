@@ -136,7 +136,7 @@ function SearchField({ value, onChange, placeholder, className = 'sm:w-80' }) {
 
 function SidebarSection({ label, collapsed = false, first = false }) {
   if (collapsed) return <div className={`border-t border-nexus-navy-border mx-2 ${first ? 'mb-2' : 'my-3'}`} />;
-  return <p className={`px-3 pb-1 ${first ? 'pt-0' : 'pt-4'} text-xs font-semibold tracking-wider text-white/45 uppercase`}>{label}</p>;
+  return <p className={`px-3 pb-1 ${first ? 'pt-0' : 'pt-4'} text-xs font-medium text-white/45`}>{label}</p>;
 }
 
 export default function App({ user }) {
@@ -540,7 +540,6 @@ const { heroConfig } = useHeroConfig(negocioId);
 
       const customPinIcon = window.L.divIcon({
         html: `
-        <span class="absolute inline-flex h-10 w-10 rounded-full bg-zinc-900/30 animate-ping"></span>
         <div class="w-8 h-8 rounded-full bg-[#18181B] border-2 border-white shadow-xl flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-4 h-4">
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -1689,7 +1688,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     try {
       const docRef = await addDoc(collection(db, 'negocios', negocioId, 'citas'), reservationObj);
       bumpCitasTick();
-      triggerToast(`¡${t('appointment')} ${g('appointment', 'agendado', 'agendada')} con éxito!`);
+      triggerToast(`${t('appointment')} ${g('appointment', 'agendado', 'agendada')}`);
       notify(NotificationType.RESERVA_CREADA_ADMIN, negocioId, { citaId: docRef.id, clientName: reservationObj.clientName, time: reservationObj.time }, user?.uid, targetProfessionalId);
     } catch (err) {
       triggerToast(`Error al guardar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, 'error');
@@ -1858,7 +1857,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         triggerToast(`Error al modificar ${g('appointment', 'el', 'la')} ${tl('appointment')}: ` + err.message, 'error');
         return;
       }
-      triggerToast(`¡${t('appointment')} ${g('appointment', 'modificado', 'modificada')} con éxito!`);
+      triggerToast(`${t('appointment')} ${g('appointment', 'modificado', 'modificada')}`);
       setActiveModal(null);
       setEditingReservation(null);
       return;
@@ -1974,7 +1973,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     }
 
 
-    triggerToast(`¡${t('appointment')} ${g('appointment', 'modificado', 'modificada')} con éxito!`);
+    triggerToast(`${t('appointment')} ${g('appointment', 'modificado', 'modificada')}`);
     setActiveModal(null);
     setEditingReservation(null);
   };
@@ -2039,7 +2038,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     try {
       await addDoc(collection(db, 'negocios', negocioId, 'horariosBloqueados'), newBl);
       reevaluatePending(negocioId, newBl.date);
-      triggerToast('¡Horario bloqueado con éxito!');
+      triggerToast('Horario bloqueado');
       setActiveModal(null);
     } catch (err) {
       triggerToast('Error al bloquear el horario: ' + err.message, 'error');
@@ -2056,7 +2055,7 @@ const { heroConfig } = useHeroConfig(negocioId);
     if (!ok) return;
     try {
       await deleteDoc(doc(db, 'negocios', negocioId, 'horariosBloqueados', id));
-      triggerToast('¡Bloqueo eliminado!');
+      triggerToast('Bloqueo eliminado');
     } catch (err) {
       triggerToast('Error al eliminar el bloqueo: ' + err.message, 'error');
     }
@@ -2462,7 +2461,7 @@ const { heroConfig } = useHeroConfig(negocioId);
           if (!r.ok) throw new Error(r.error || 'No se pudo guardar la contraseña.');
           setCredentialNotice(credencial);
         }
-        triggerToast(`¡Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} actualizado!`);
+        triggerToast(`Perfil ${g('professional', 'del', 'de la')} ${tl('professional')} actualizado`);
         reevaluatePending(negocioId); // activo/horario/servicios pueden cambiar los candidatos
       } catch (err) {
         triggerToast(`Error al actualizar ${g('professional', 'el', 'la')} ${tl('professional')}: ` + err.message, 'error');
@@ -2496,7 +2495,7 @@ const { heroConfig } = useHeroConfig(negocioId);
         }
         setCredentialNotice(credencial);
 
-        triggerToast(`¡${t('professional')} ${g('professional', 'creado', 'creada')} con éxito!`);
+        triggerToast(`${t('professional')} ${g('professional', 'creado', 'creada')}`);
       } catch (err) {
         triggerToast(`Error al crear ${g('professional', 'el', 'la')} ${tl('professional')}: ` + err.message, 'error');
       }
@@ -4053,7 +4052,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 <h3 className="text-base font-semibold text-nexus-text">Asistencia</h3>
                 <button
                   onClick={() => setActiveModal('assistance')}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary text-white font-extrabold rounded-lg text-sm shadow-md cursor-pointer font-bold"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary text-white font-bold rounded-lg text-sm shadow-md cursor-pointer font-bold"
                 >
                   Marcar asistencia
                 </button>
@@ -4343,13 +4342,13 @@ const { heroConfig } = useHeroConfig(negocioId);
             <div className="space-y-2">
               <button 
                 onClick={startResFromSlot}
-                className="w-full h-10 inline-flex items-center justify-center bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg transition-all cursor-pointer"
+                className="w-full h-10 inline-flex items-center justify-center bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg transition-colors cursor-pointer"
               >
                 Crear nueva reserva
               </button>
               <button 
                 onClick={startBlockoutFromSlot}
-                className="w-full h-10 inline-flex items-center justify-center bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-error-text text-sm font-bold rounded-lg transition-all cursor-pointer"
+                className="w-full h-10 inline-flex items-center justify-center bg-nexus-surface border border-nexus-border hover:bg-nexus-surface-hover text-nexus-error-text text-sm font-bold rounded-lg transition-colors cursor-pointer"
               >
                 Bloquear este espacio
               </button>
@@ -4397,7 +4396,7 @@ const { heroConfig } = useHeroConfig(negocioId);
             
             <div className="bg-nexus-background border-b border-nexus-border px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-extrabold text-nexus-text tracking-tight flex items-center gap-2">
+                <h3 className="text-base font-bold text-nexus-text tracking-tight flex items-center gap-2">
                   <UserPlus className="w-5 h-5 text-nexus-primary" />
                   {editingBarberId ? `Editar ${tl('professional')}` : `${g('professional', 'Nuevo', 'Nueva')} ${tl('professional')}`}
                 </h3>
@@ -4464,7 +4463,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    className="bg-nexus-background border border-dashed border-nexus-border hover:border-nexus-primary/60 rounded-xl p-5 flex flex-col items-center justify-center gap-4 shadow-inner text-center cursor-pointer group transition-all"
+                    className="bg-nexus-background border border-dashed border-nexus-border hover:border-nexus-primary/60 rounded-xl p-5 flex flex-col items-center justify-center gap-4 shadow-inner text-center cursor-pointer group transition-colors"
                   >
                     <input 
                       type="file"
@@ -4479,7 +4478,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                         src={newBarber.avatar}
                         name={newBarber.name}
                         alt="Preview Avatar"
-                        className="w-32 h-32 rounded-xl object-cover border-4 border-nexus-border group-hover:border-nexus-primary transition-all duration-300 shadow-md"
+                        className="w-32 h-32 rounded-xl object-cover border-4 border-nexus-border group-hover:border-nexus-primary transition-colors duration-300 shadow-md"
                         textClassName="text-4xl"
                       />
                       <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -4729,7 +4728,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                                     )
                                   }));
                                 }}
-                                className="text-xs py-2 font-extrabold text-nexus-primary hover:underline"
+                                className="text-xs py-2 font-bold text-nexus-primary hover:underline"
                               >
                                 {assigned.commissionEnabled ? 'ACTIVADA' : 'DESACTIVADA'}
                               </button>
@@ -5098,7 +5097,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   <button 
                     type="button"
                     onClick={handleSaveBarber}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-extrabold rounded-lg text-sm shadow-md transition-all cursor-pointer font-bold"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white font-bold rounded-lg text-sm shadow-md transition-colors cursor-pointer font-bold"
                   >
                     {editingBarberId ? 'Guardar cambios' : `Crear ${tl('professional')}`}
                   </button>
@@ -5116,7 +5115,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       {activeModal === 'add-branch' && (
         <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
                     <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg p-5 sm:p-6 relative shadow-xl max-h-[92dvh] overflow-y-auto">
-            <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
+            <h3 className="text-base font-bold text-nexus-text mb-1 tracking-tight flex items-center gap-2">
               <Building2 className="w-5 h-5 text-nexus-primary" />
               {editingBranchId ? 'Editar sucursal' : 'Nueva sucursal'}
             </h3>
@@ -5277,7 +5276,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </button>
                 <button 
                   type="submit" 
-                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-colors cursor-pointer font-bold"
                 >
                   {imageUploading ? 'Subiendo foto…' : editingBranchId ? 'Guardar cambios' : 'Crear sucursal'}
                 </button>
@@ -5322,7 +5321,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       {activeModal === 'add-service' && (
         <div className="fixed inset-0 bg-nexus-navy/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
                     <div role="dialog" aria-modal="true" className="bg-nexus-surface border border-nexus-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 sm:p-6 relative shadow-xl max-h-[92dvh] overflow-y-auto">
-            <h3 className="text-base font-extrabold text-nexus-text mb-1 tracking-tight flex items-center gap-2 font-bold">
+            <h3 className="text-base font-bold text-nexus-text mb-1 tracking-tight flex items-center gap-2">
               <ServiceIcon className="w-5 h-5 text-nexus-primary" />
               {editingServiceId ? `Editar ${tl('service')}` : `${g('service', 'Nuevo', 'Nueva')} ${tl('service')}`}
             </h3>
@@ -5470,7 +5469,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                             return { ...prev, availableDays: updated };
                           });
                         }}
-                        className={`h-9 w-full rounded-lg text-xs font-extrabold flex items-center justify-center transition-all border cursor-pointer ${
+                        className={`h-9 w-full rounded-lg text-xs font-bold flex items-center justify-center transition-colors border cursor-pointer ${
                           isSelected 
                             ? 'bg-nexus-primary-soft border-nexus-primary text-nexus-primary shadow-sm' 
                             : 'bg-nexus-surface border-nexus-border text-nexus-text-muted hover:text-nexus-text hover:border-nexus-text-muted'
@@ -5495,7 +5494,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                 </button>
                 <button 
                   type="submit" 
-                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-all cursor-pointer font-bold"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 px-4 bg-nexus-primary hover:bg-nexus-primary-hover text-white text-sm font-bold rounded-lg shadow-md transition-colors cursor-pointer font-bold"
                 >
                   {imageUploading ? 'Subiendo foto…' : editingServiceId ? 'Guardar cambios' : `Crear ${tl('service')}`}
                 </button>
