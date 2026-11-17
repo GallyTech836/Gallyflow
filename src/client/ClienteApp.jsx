@@ -1410,11 +1410,11 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
               className="w-full flex items-center gap-4 py-3 text-left cursor-pointer transition-colors hover:bg-nexus-surface-hover/60"
             >
               {b.isPending ? (
-                <div className="w-16 h-16 rounded-lg bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary shrink-0">
+                <div className="w-16 h-16 rounded-full bg-nexus-primary-soft border border-nexus-primary/20 flex items-center justify-center text-nexus-primary shrink-0">
                   <Sparkles size={22} />
                 </div>
               ) : (
-                <Avatar src={b.image} name={b.name} className="w-16 h-16 aspect-square rounded-lg object-cover border border-nexus-border shrink-0" textClassName="text-lg" />
+                <Avatar src={b.image} name={b.name} className="w-16 h-16 aspect-square rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-lg" />
               )}
 
               <div className="flex-1 min-w-0">

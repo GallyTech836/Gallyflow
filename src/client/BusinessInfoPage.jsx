@@ -205,7 +205,7 @@ export default function BusinessInfoPage({
                   <Avatar
                     src={p.image}
                     name={p.name}
-                    className="w-16 h-16 aspect-square shrink-0 rounded-lg object-cover border border-nexus-border"
+                    className="w-16 h-16 aspect-square shrink-0 rounded-full object-cover border border-nexus-border"
                     textClassName="text-lg"
                   />
                   <div className="min-w-0 flex-1">

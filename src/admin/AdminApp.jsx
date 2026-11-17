@@ -3712,7 +3712,7 @@ const { heroConfig } = useHeroConfig(negocioId);
                   {filteredBarbersList.map((b) => (
                     <div key={b?.id} className="rounded-xl border border-nexus-border bg-nexus-surface p-4 shadow-[var(--nx-shadow-sm)]">
                       <div className="flex items-center gap-3">
-                        <Avatar src={b?.avatar} name={b?.name} className="w-12 h-12 rounded-xl object-cover border border-nexus-border shrink-0" textClassName="text-sm" />
+                        <Avatar src={b?.avatar} name={b?.name} className="w-12 h-12 rounded-full object-cover border border-nexus-border shrink-0" textClassName="text-sm" />
                         <span className="min-w-0 flex-1 truncate font-semibold text-nexus-text">{b?.name}</span>
                         <IconButton icon={Edit3} tone="primary" label={`Editar a ${b?.name}`} onClick={() => handleEditBarber(b)} />
                         <IconButton icon={Trash2} tone="danger" label={`Eliminar a ${b?.name}`} onClick={() => handleDeleteBarber(b?.id)} />
@@ -4478,10 +4478,10 @@ const { heroConfig } = useHeroConfig(negocioId);
                         src={newBarber.avatar}
                         name={newBarber.name}
                         alt="Preview Avatar"
-                        className="w-32 h-32 rounded-xl object-cover border-4 border-nexus-border group-hover:border-nexus-primary transition-colors duration-300 shadow-md"
+                        className="w-32 h-32 rounded-full object-cover border-4 border-nexus-border group-hover:border-nexus-primary transition-colors duration-300 shadow-md"
                         textClassName="text-4xl"
                       />
-                      <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <Upload className="w-6 h-6 text-white" />
                       </div>
                     </div>
