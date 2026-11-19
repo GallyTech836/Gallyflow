@@ -29,13 +29,13 @@ function escapeHtml(value) {
 
 /**
  * Logo sin bordes de color liso (e_trim), centrado en un cuadrado SIN recortarlo (c_pad: si es
- * rectangular se rellena con el color del borde), en JPG y liviano. WhatsApp no muestra SVG,
+ * rectangular, el relleno es la misma imagen desenfocada), en JPG y liviano. WhatsApp no muestra SVG,
  * así que un logo SVG fuera de Cloudinary cae al ícono de Nexus.
  */
 function previewImage(url) {
   if (typeof url !== 'string' || !url.startsWith('http')) return '';
   if (url.includes('res.cloudinary.com') && url.includes('/image/upload/')) {
-    return url.replace('/image/upload/', '/image/upload/e_trim/c_pad,b_auto,w_600,h_600,f_jpg,q_80/');
+    return url.replace('/image/upload/', '/image/upload/e_trim/c_pad,b_blurred:400:15,w_600,h_600,f_jpg,q_80/');
   }
   if (/\.svg(\?|#|$)/i.test(url)) return '';
   return url;
