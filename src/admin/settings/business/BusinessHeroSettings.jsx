@@ -144,7 +144,8 @@ export default function BusinessHeroSettings({ negocioId, registrosMode = false 
                 onChange={(url) => updateImage('logo', url)}
                 onUploadingChange={setLogoUploading}
                 maxSize={512}
-                hint="Cuadrado, 512×512."
+                cropSquare
+                hint="Se recorta en cuadrado al subirlo."
               />
               {!registrosMode && (
               <ImageUploader

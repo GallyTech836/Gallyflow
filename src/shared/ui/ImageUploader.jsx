@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Upload, Trash2, Loader2 } from 'lucide-react';
 import { uploadImage, cloudinaryThumb } from '../cloudinary/uploadImage';
+import SquareCropModal from './SquareCropModal';
 
 /**
  * Subida de una foto a Cloudinary con vista previa (servicios, sucursales,
@@ -9,6 +10,7 @@ import { uploadImage, cloudinaryThumb } from '../cloudinary/uploadImage';
  * value: URL guardada ('' = sin foto). onChange(url). onUploadingChange(bool)
  * shape: 'square' | 'wide'. fallback: imagen a mostrar si no hay foto propia
  * (ej. la portada del negocio), con el texto fallbackLabel.
+ * cropSquare: antes de subir, abre un recorte 1:1 (ej. el logo del negocio).
  */
 export default function ImageUploader({
   value = '',
@@ -21,21 +23,33 @@ export default function ImageUploader({
   fallback = '',
   fallbackLabel = '',
   disabled = false,
+  cropSquare = false,
 }) {
   const inputRef = useRef(null);
   const [preview, setPreview] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [cropFile, setCropFile] = useState(null);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   const setBusy = (v) => { setUploading(v); onUploadingChange?.(v); };
 
-  const handleFile = async (file) => {
+  const handleFile = (file) => {
     if (!file || disabled) return;
     if (!file.type?.startsWith('image/')) { setError('El archivo debe ser una imagen.'); return; }
     if (file.size > 15 * 1024 * 1024) { setError('La imagen es muy pesada (máx. 15 MB).'); return; }
     setError('');
+    // El SVG se sube tal cual (no se puede recortar en el navegador sin perder calidad).
+    if (cropSquare && file.type !== 'image/svg+xml') {
+      setCropFile(file);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+    upload(file);
+  };
+
+  const upload = async (file) => {
     setPreview(URL.createObjectURL(file));
     setBusy(true);
     try {
@@ -113,6 +127,14 @@ export default function ImageUploader({
           {error && <p role="alert" className="text-xs text-nexus-error-text">{error}</p>}
         </div>
       </div>
+      {cropFile && (
+        <SquareCropModal
+          file={cropFile}
+          outputSize={maxSize}
+          onCancel={() => setCropFile(null)}
+          onConfirm={(cropped) => { setCropFile(null); upload(cropped); }}
+        />
+      )}
     </div>
   );
 }
