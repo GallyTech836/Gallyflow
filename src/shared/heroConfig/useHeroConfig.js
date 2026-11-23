@@ -14,6 +14,10 @@ import { DEFAULT_HERO_CONFIG, normalizeHeroConfig } from './heroConfigModel';
 export function useHeroConfig(negocioId) {
   const [heroConfig, setHeroConfig] = useState(DEFAULT_HERO_CONFIG);
   const [loading, setLoading] = useState(true);
+  // De qué negocio son los datos cargados. Sin esto, al pasar de "sin negocio"
+  // a un negocio real hay un render con loading=false y los valores por
+  // defecto ("Nexus" + eslogan genérico) antes de que el efecto corra.
+  const [loadedFor, setLoadedFor] = useState(null);
 
   useEffect(() => {
     if (!negocioId) {
@@ -30,11 +34,13 @@ export function useHeroConfig(negocioId) {
       (snap) => {
         const raw = snap.exists() ? snap.data()?.heroConfig : null;
         setHeroConfig(normalizeHeroConfig(raw));
+        setLoadedFor(negocioId);
         setLoading(false);
       },
       (err) => {
         console.error('Error al leer heroConfig:', err);
         setHeroConfig({ ...DEFAULT_HERO_CONFIG });
+        setLoadedFor(negocioId);
         setLoading(false);
       }
     );
@@ -42,5 +48,5 @@ export function useHeroConfig(negocioId) {
     return () => unsub();
   }, [negocioId]);
 
-  return { heroConfig, loading };
+  return { heroConfig, loading: loading || (!!negocioId && loadedFor !== negocioId) };
 }

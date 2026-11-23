@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Sparkles, Tag, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react';
+import { Sparkles, Tag, Clock, User, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, CreditCard, Wallet, Store, Star, Info, CircleCheck as CheckCircle2, CalendarDays, MapPin, Clock3, Phone } from 'lucide-react';
 import { useHeroConfig } from '../shared/heroConfig/useHeroConfig';
 import HeroDisplay from '../shared/heroConfig/HeroDisplay';
 import { DEFAULT_HERO_CONFIG } from '../shared/heroConfig/heroConfigModel';
@@ -35,6 +35,7 @@ import { rememberLastBooking } from '../shared/booking/publicRoutes';
 import { useBookingForm } from '../shared/bookingForms/useBookingForm';
 import { formatIntakeValue } from '../shared/bookingForms/bookingFormModel';
 import BookingFormStep from './BookingFormStep';
+import { useToasts, Skeleton } from '../shared/ui';
 
 // Paso del formulario del tipo de negocio (peluquería canina: datos de la
 // mascota). Es el primer paso de la reserva, antes de sucursal y
@@ -77,7 +78,7 @@ export default function App({ negocioSlug, proId } = {}) {
   const [loading, setLoading] = useState(false);
   const [isTuesday, setIsTuesday] = useState(false);
   const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
-  const [toasts, setToasts] = useState([]);
+  const [triggerToast, toastNode] = useToasts();
 
     // Precio confirmado al reservar (lo que se guardó), para la pantalla final.
     const [bookedPricing, setBookedPricing] = useState(null);
@@ -161,7 +162,7 @@ export default function App({ negocioSlug, proId } = {}) {
   // Mismo hook que usa el formulario de Admin: si el negocio no tiene
   // heroConfig todavía (o el doc no cargó), cae automáticamente a los
   // valores por defecto sin romper la pantalla inicial.
-  const { heroConfig } = useHeroConfig(negocioId);
+  const { heroConfig, loading: heroLoading } = useHeroConfig(negocioId);
 
   // Título de pestaña dinámico: usa el nombre real del negocio en cuanto
   // heroConfig carga (multi-negocio, sin nombres hardcodeados). Antes de
@@ -581,13 +582,6 @@ export default function App({ negocioSlug, proId } = {}) {
     );
   };
   
-  const triggerToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
 
   // Servicios → Fecha y hora. La hora se vuelve a elegir porque la duración
   // (y por lo tanto los horarios libres) depende de los servicios elegidos.
@@ -602,15 +596,15 @@ export default function App({ negocioSlug, proId } = {}) {
   const handleBooking = async (e) => {
     if (e) e.preventDefault();
     if (!clientName.trim()) {
-      triggerToast("Por favor ingresa tu nombre de reserva");
+      triggerToast("Por favor ingresa tu nombre de reserva", 'error');
       return;
     }
     if (clientPhone.replace(/[^0-9]/g, '').length < 7) {
-      triggerToast("Por favor ingresa un número de celular válido");
+      triggerToast("Por favor ingresa un número de celular válido", 'error');
       return;
     }
     if (!negocioId || selectedServices.length === 0 || !selectedBarber || !selectedDate || !selectedHour) {
-      triggerToast("Faltan datos para completar la reserva.");
+      triggerToast("Faltan datos para completar la reserva.", 'error');
       return;
     }
     const now = new Date();
@@ -620,7 +614,7 @@ export default function App({ negocioSlug, proId } = {}) {
     const diffMinutes = (reservationDate.getTime() - now.getTime()) / 60000;
 
     if (diffMinutes < 30) {
-     triggerToast("Las reservas online deben realizarse con al menos 30 minutos de anticipación.");
+     triggerToast("Las reservas online deben realizarse con al menos 30 minutos de anticipación.", 'error');
      return;
     }
     setLoading(true);
@@ -711,7 +705,7 @@ export default function App({ negocioSlug, proId } = {}) {
       setStep(6); 
     } catch (error) {
       console.error("Error al registrar la reserva en Firestore:", error);
-      triggerToast("Error al guardar reserva. Inténtalo de nuevo.");
+      triggerToast("Error al guardar reserva. Inténtalo de nuevo.", 'error');
     } finally {
       setLoading(false);
     }
@@ -867,6 +861,7 @@ export default function App({ negocioSlug, proId } = {}) {
       />;
       case 4: return <DateTimeStep 
         hours={availableHours}
+        hoursLoading={!!selectedDate && (citasFecha !== selectedDate || bloqueosFecha !== selectedDate)}
         date={selectedDate} setDate={setSelectedDate} 
         hour={selectedHour} setHour={setSelectedHour} 
         isTuesday={isTuesday}
@@ -932,12 +927,11 @@ export default function App({ negocioSlug, proId } = {}) {
     }
   };
 
-  if (negocioResolving) {
-    return (
-      <div className="min-h-screen bg-nexus-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-nexus-border border-t-nexus-primary rounded-full animate-spin" />
-      </div>
-    );
+  // Mientras se resuelve el negocio y su portada: esqueleto con la forma de la
+  // pantalla de bienvenida (antes: spinner y luego un instante con "Nexus" y
+  // el eslogan genérico por defecto).
+  if (negocioResolving || (negocioId && heroLoading)) {
+    return <PublicLoadingSkeleton />;
   }
 
   if (negocioNotFound) {
@@ -1029,31 +1023,34 @@ export default function App({ negocioSlug, proId } = {}) {
           </div>
         )}
       </main>
-      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 max-w-xs">
-        {toasts.map(t => (
-          <div 
-            key={t?.id} 
-            className={`p-3 rounded-xl border shadow-lg flex items-center gap-2.5 transition-all transform duration-300 ${
-              t?.type === 'error' 
-                ? 'bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text animate-fadeIn' 
-                : 'bg-nexus-success-bg border-nexus-success/25 text-nexus-success-text animate-fadeIn'
-            }`}
-          >
-            {t?.type === 'error' ? (
-              <XCircle className="w-4 h-4 text-nexus-error shrink-0" />
-            ) : (
-              <CheckCircle className="w-4 h-4 text-nexus-success shrink-0" />
-            )}
-            <p className="text-xs font-bold">{t?.message}</p>
-          </div>
-        ))}
-      </div>
+      {toastNode}
     </div>
     </BusinessProfileContext.Provider>
   );
 }
 
 // === COMPONENTES DE PANTALLA ===
+
+// Esqueleto de la pantalla de bienvenida: logo, nombre, eslogan y botón.
+const PublicLoadingSkeleton = () => (
+  <div className="min-h-dvh bg-nexus-background font-sans" role="status" aria-label="Cargando">
+    <main className="max-w-md mx-auto min-h-dvh flex flex-col p-5 sm:p-6">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 py-10">
+        <Skeleton className="w-28 h-28 sm:w-32 sm:h-32 rounded-full" />
+        <div className="w-full flex flex-col items-center gap-3">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-[3px] w-10 rounded-full" />
+          <Skeleton className="h-3.5 w-64" />
+          <Skeleton className="h-3.5 w-44" />
+        </div>
+        <div className="w-full pt-4 space-y-3">
+          <Skeleton className="h-[60px] w-full rounded-2xl" />
+          <Skeleton className="h-[52px] w-full rounded-2xl" />
+        </div>
+      </div>
+    </main>
+  </div>
+);
 
 const Home = ({ onNext, onInfo, heroConfig, branches = [], proName = '' }) => {
   const terms = useBusinessTerms();
@@ -1471,7 +1468,7 @@ const BarberStep = ({ barbers, selected, setSelected, pricesOf = () => [], highl
   );
 };
 
-const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, promoOf = () => null, promoTextOf = () => '', currentMonth, setCurrentMonth }) => {
+const DateTimeStep = ({ hours, hoursLoading = false, date, setDate, hour, setHour, onNext, onBack, isTuesday, isDayDisabled = () => false, closedLabelOf = () => null, promoOf = () => null, promoTextOf = () => '', currentMonth, setCurrentMonth }) => {
   const terms = useBusinessTerms();
   
   const handlePrevMonth = () => {
@@ -1588,7 +1585,16 @@ const DateTimeStep = ({ hours, date, setDate, hour, setHour, onNext, onBack, isT
         </div>
 
 
-        {date ? (
+        {date && hoursLoading ? (
+          // Mientras llegan las citas de ese día: forma de la grilla de horarios
+          // (antes se veía un instante «no tiene horario disponible»).
+          <div className="space-y-2" role="status" aria-label="Cargando horarios">
+            <Skeleton className="h-3.5 w-32" />
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-[42px] rounded-xl" />)}
+            </div>
+          </div>
+        ) : date ? (
           hours.length > 0 ? (
             <div className="space-y-2">
               {promoOf(date) && (
