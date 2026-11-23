@@ -4129,6 +4129,8 @@ const { heroConfig } = useHeroConfig(negocioId);
            onFinanceExpired={pinLock.lock}
            finanzas={finanzasOn}
            onOpenFinanzas={() => { setFinanzasStartTab('gastos'); setActiveTab('finanzas'); }}
+           clients={clients}
+           businessName={businessName === 'Mi negocio' ? '' : businessName}
            />
          )}
 

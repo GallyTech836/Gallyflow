@@ -15,6 +15,7 @@ import { amountOfCita } from '../../shared/cash/cashModel';
 import { isRegistro } from '../../shared/registros/registroModel';
 import { getFinanceOverview, getFinanceCommissionDetail, payFinanceCommission } from './financeApi';
 import CommissionPayModal from '../cash/CommissionPayModal';
+import InactiveClientsModal from './InactiveClientsModal';
 import { useBusinessTerms } from '../../shared/businessProfiles/useBusinessProfile';
 
 const CHANNEL_LABELS = {
@@ -94,7 +95,7 @@ const ingresoDeCita = (cita) => amountOfCita(cita);
 // `registros` (modo registros: agenda oculta + registro de servicios, Nexus
 // Control): la Analítica normal, pero hablando de servicios registrados en vez
 // de reservas, sin "Canales de reservas" ni las tarjetas de clientes.
-export default function AnalyticsSection({ financeToken = null, onFinanceExpired, onOpenFinanzas, finanzas = false, reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false }) {
+export default function AnalyticsSection({ financeToken = null, onFinanceExpired, onOpenFinanzas, finanzas = false, reservations, barbers, agendaView, selectedDate, selectedBranch, negocioId, paymentMethods = [], branches = [], basic = false, registros = false, clients = [], businessName = '' }) {
   const terms = useBusinessTerms();
   const [financeSummary, setFinanceSummary] = useState(null);
   const [financeCommissions, setFinanceCommissions] = useState([]);
@@ -104,6 +105,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
   const [historyDocs, setHistoryDocs] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
   // Últimos 30 días (solo si el período seleccionado no los cubre ya).
   const [recent30Docs, setRecent30Docs] = useState(null);
 
@@ -116,6 +118,7 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
   useEffect(() => {
     setHistoryDocs(null);
     setHistoryError('');
+    setShowInactive(false);
   }, [negocioId, selectedBranch]);
 
   // "Activos 30 días": consulta acotada a los últimos 30 días. Si el período seleccionado
@@ -268,6 +271,11 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
       .sort((a, b) => b.cantidad - a.cantidad);
   }, [citasEnRango]);
 
+  const clientsById = useMemo(
+    () => new Map((Array.isArray(clients) ? clients : []).filter((c) => c?.id).map((c) => [c.id, c])),
+    [clients],
+  );
+
   const clientesStats = useMemo(() => {
     // Activos 30 días: siempre disponible (consulta acotada). Total histórico y "sin volver"
     // requieren el histórico completo: null hasta pulsar "Calcular histórico".
@@ -278,25 +286,46 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
     const clientesHistoricos = new Set(todosCompletados.map((r) => r.clientId || r.clientPhone).filter(Boolean));
 
     const ultimaVisitaPorCliente = new Map();
+    // Datos de la última cita finalizada de cada cliente (para la lista "sin volver").
+    const ultimaCitaPorCliente = new Map();
+    const visitasPorCliente = new Map();
     todosCompletados.forEach((r) => {
       const key = r.clientId || r.clientPhone;
       if (!key) return;
+      visitasPorCliente.set(key, (visitasPorCliente.get(key) || 0) + 1);
       if (!ultimaVisitaPorCliente.has(key) || r.date > ultimaVisitaPorCliente.get(key)) {
         ultimaVisitaPorCliente.set(key, r.date);
+        ultimaCitaPorCliente.set(key, r);
       }
     });
 
     let activos30d = 0, sinVolver30d = 0;
-    ultimaVisitaPorCliente.forEach((ultimaFecha) => {
-      if (ultimaFecha >= hace30dias) activos30d += 1; else sinVolver30d += 1;
+    const sinVolverLista = [];
+    ultimaVisitaPorCliente.forEach((ultimaFecha, key) => {
+      if (ultimaFecha >= hace30dias) { activos30d += 1; return; }
+      sinVolver30d += 1;
+      const cita = ultimaCitaPorCliente.get(key) || {};
+      // Nombre y teléfono actuales de la ficha, si existe; si no, los de la cita.
+      const ficha = cita.clientId ? clientsById.get(cita.clientId) : null;
+      const phone = [ficha?.phone, cita.clientPhone].find((p) => p && p !== 'N/A') || '';
+      sinVolverLista.push({
+        key,
+        name: ficha?.name || cita.clientName || '',
+        phone,
+        lastDate: ultimaFecha,
+        visits: visitasPorCliente.get(key) || 1,
+      });
     });
+    // Primero los que dejaron de venir hace menos tiempo (más fáciles de recuperar).
+    sinVolverLista.sort((a, b) => String(b.lastDate).localeCompare(String(a.lastDate)));
 
     return {
       totalHistorico: clientesHistoricos.size,
       activos30d,
       sinVolver30d,
+      sinVolverLista,
     };
-  }, [historyDocs, activos30dRecientes, hace30dias]);
+  }, [historyDocs, activos30dRecientes, hace30dias, clientsById]);
 
   const profesionalesStats = useMemo(() => {
     return (barbers || []).map((barber) => {
@@ -439,7 +468,20 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
             <p className="text-xs text-nexus-text-secondary nx-num mb-2">{terms.t('clients')} totales</p>
             <div className="flex justify-center gap-6 text-sm">
               <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.activos30d ?? '—'}</b><span className="text-nexus-text-secondary">{terms.g('client', 'activos', 'activas')}</span></span>
-              <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">{clientesStats.sinVolver30d ?? '—'}</b><span className="text-nexus-text-secondary">sin volver</span></span>
+              {clientesStats.sinVolver30d != null ? (
+                // Tocar el número abre quiénes son, con su última cita y un botón de WhatsApp.
+                <button
+                  type="button"
+                  onClick={() => setShowInactive(true)}
+                  className="-mx-2 -my-1 flex flex-col items-center rounded-lg px-2 py-1 hover:bg-nexus-surface-hover cursor-pointer"
+                  aria-label={`Ver ${terms.tl("clients")} sin volver`}
+                >
+                  <b className="text-nexus-text text-lg underline decoration-nexus-text-muted decoration-dotted underline-offset-4">{clientesStats.sinVolver30d}</b>
+                  <span className="text-nexus-text-secondary">sin volver ›</span>
+                </button>
+              ) : (
+                <span className="flex flex-col items-center"><b className="text-nexus-text text-lg">—</b><span className="text-nexus-text-secondary">sin volver</span></span>
+              )}
             </div>
             {!historyDocs && (
               <button
@@ -454,6 +496,14 @@ export default function AnalyticsSection({ financeToken = null, onFinanceExpired
             {historyError && <p className="text-xs text-nexus-error-text mt-2">{historyError}</p>}
           </div>
           </>)}
+          {showInactive && clientesStats.sinVolverLista && (
+            <InactiveClientsModal
+              items={clientesStats.sinVolverLista}
+              businessName={businessName}
+              termClients={terms.t('clients')}
+              onClose={() => setShowInactive(false)}
+            />
+          )}
         </div>
       </section>
 
