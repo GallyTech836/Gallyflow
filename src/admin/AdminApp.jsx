@@ -28,7 +28,7 @@ import { useSupportContact } from '../shared/subscriptionNotice/useSupportContac
 import { getStatusCardClasses } from '../shared/appointments/statusModel';
 import AppointmentManageModal from '../shared/appointments/AppointmentManageModal';
 import { BusinessProfileContext, useBusinessProfile } from '../shared/businessProfiles/useBusinessProfile';
-import { useConfirm, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl, ImageUploader, LoadingState } from '../shared/ui';
+import { useConfirm, useToasts, Button, IconButton, Input, Badge, EmptyState, Modal, ResponsiveTable, SegmentedControl, ImageUploader, LoadingState } from '../shared/ui';
 import { getServiceIcon } from '../shared/businessProfiles/businessProfileIcons';
 import AppointmentCreateModal from '../shared/appointments/AppointmentCreateModal';
 import { calculateCommission, calculateCommissionForCita } from '../shared/commissions/commissionModel';
@@ -353,7 +353,7 @@ const { heroConfig } = useHeroConfig(negocioId);
   // Filtro por sucursal en Gestión de profesionales ('all' = todas).
   const [barberBranchFilter, setBarberBranchFilter] = useState('all');
   const [searchBranchQuery, setSearchBranchQuery] = useState('');
-  const [toasts, setToasts] = useState([]);
+  const [triggerToast, toastNode] = useToasts();
 
   const [activeModal, setActiveModal] = useState(null); 
   const [editingReservation, setEditingReservation] = useState(null);
@@ -2583,13 +2583,6 @@ const { heroConfig } = useHeroConfig(negocioId);
     setAssistPin('');
   };
 
-  const triggerToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
 
   const filteredModalClients = useMemo(() => {
     if (!Array.isArray(clients)) return [];
@@ -4170,25 +4163,7 @@ const { heroConfig } = useHeroConfig(negocioId);
       {/* ==========================================
           NOTIFICATION TOAST SYSTEM
           ========================================== */}
-      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 max-w-xs">
-        {toasts.map(t => (
-          <div 
-            key={t?.id} 
-            className={`p-3 rounded-xl border shadow-2xl flex items-center gap-2.5 transition-all transform duration-300 ${
-              t?.type === 'error' 
-                ? 'bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text animate-fadeIn' 
-                : 'bg-nexus-success-bg border-nexus-success/25 text-nexus-success-text animate-fadeIn'
-            }`}
-          >
-            {t?.type === 'error' ? (
-              <XCircle className="w-4 h-4 text-nexus-error shrink-0" />
-            ) : (
-              <CheckCircle className="w-4 h-4 text-nexus-success shrink-0" />
-            )}
-            <p className="text-[11px] font-bold">{t?.message}</p>
-          </div>
-        ))}
-      </div>
+      {toastNode}
 
       {/* ==========================================
           MODALES DE ACCIONES DEL PANEL

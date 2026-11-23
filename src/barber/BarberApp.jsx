@@ -27,7 +27,7 @@ import AppointmentManageModal from '../shared/appointments/AppointmentManageModa
 import { getEffectiveFieldPermissions } from '../shared/appointments/permissions';
 import { normalizeStaffPermissions, DEFAULT_STAFF_PERMISSIONS, canEditPart } from '../shared/staffPermissions/staffPermissionsModel';
 import { checkWorkingHours } from '../shared/appointments/workingHours';
-import { useConfirm, Modal, Button, Field, Input, SegmentedControl, LoadingState } from '../shared/ui';
+import { useConfirm, useToasts, Modal, Button, Field, Input, SegmentedControl, LoadingState } from '../shared/ui';
 import CommissionPayModal from '../admin/cash/CommissionPayModal';
 import { collectMyCommissions } from '../shared/cash/staffCommissionApi';
 import { usePromotions, usePromotionBranches } from '../shared/promotions/usePromotions';
@@ -306,7 +306,7 @@ console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const [blockedSlots, setBlockedSlots] = useState([]); // Bloqueos administrativos
   const [selectedRange, setSelectedRange] = useState("Día"); // Día, Semana, Mes, Año
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [toast, setToast] = useState(null);
+  const [triggerToast, toastNode] = useToasts();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const isFirebaseConfigured = !!(db);
@@ -346,12 +346,6 @@ console.log('[BARBER] negocioId:', negocioId, '| barberUser:', barberUser);
   const [blockReason, setBlockReason] = useState("");
 
 
-  const triggerToast = (text, type = "success") => {
-    setToast({ text, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  };
 
   useEffect(() => {
       setLoading(false);
@@ -1347,21 +1341,8 @@ const fetchByDate = async (subcollection, date) => {
         </header>
       )}
 
-      {/* TOAST SYSTEM */}
-      {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999]">
-          <div className={`px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-2xl flex items-center gap-2 text-sm font-bold ${
-            toast.type === "error" 
-              ? "bg-nexus-error-bg border-nexus-error/25 text-nexus-error-text" 
-              : toast.type === "info"
-              ? "bg-nexus-info-bg border-nexus-info/25 text-nexus-info-text"
-              : "bg-nexus-success-bg border-nexus-success/25 text-nexus-success-text"
-          }`}>
-            <div className={`w-2 h-2 rounded-full ${toast.type === "error" ? "bg-nexus-error" : toast.type === "info" ? "bg-nexus-info" : "bg-nexus-success"}`}></div>
-            {toast.text}
-          </div>
-        </div>
-      )}
+      {/* AVISOS */}
+      {toastNode}
 
       {/* CONTENEDOR PRINCIPAL */}
       <main className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
