@@ -171,3 +171,36 @@ describe('Rutas de Super Admin', () => {
     assert.equal(n.status, 404);
   });
 });
+
+describe('Gráfico diario: mes completo y conexión', () => {
+  test('trae todos los días del mes; los que faltan van como futuros y vacíos', async () => {
+    const r = await R.buildMonthReport('negA', '2026-11', { hoy: HOY });
+    assert.equal(r.diario.length, 30);
+    assert.equal(r.diario[0].fecha, '2026-11-01');
+    assert.equal(r.diario[29].fecha, '2026-11-30');
+    assert.equal(r.diario.find((d) => d.fecha === '2026-11-20').futuro, false);
+    assert.ok(r.diario.filter((d) => d.fecha > HOY).every((d) => d.futuro && d.enviados === 0 && d.conexion === null));
+  });
+
+  test('marca la caída y los días en cero hasta que vuelven los mensajes', async () => {
+    db._set('whatsappEvents/e1', { severidad: 'desconectado', negocioIds: ['negA'], receivedAt: '2026-11-03T15:00:00Z' });
+    db._set('whatsappEvents/e2', { severidad: 'calidad', negocioIds: ['negA'], receivedAt: '2026-11-12T15:00:00Z' });
+    db._set('whatsappEvents/e3', { severidad: 'desconectado', negocioIds: ['negB'], receivedAt: '2026-11-15T15:00:00Z' });
+    const r = await R.buildMonthReport('negA', '2026-11', { hoy: HOY });
+    const c = Object.fromEntries(r.diario.map((d) => [d.fecha.slice(8), d.conexion]));
+    assert.equal(c['01'], null, 'cero antes de la caída: nadie escribió');
+    assert.equal(c['03'], 'caida');
+    assert.equal(c['04'], 'sin_conexion');
+    assert.equal(c['09'], 'sin_conexion');
+    assert.equal(c['10'], null, 'volvieron los mensajes');
+    assert.equal(c['11'], null);
+    assert.equal(c['12'], null, 'un aviso de calidad no es caída');
+    assert.equal(c['15'], null, 'caída de otro negocio');
+  });
+
+  test('marcarConexion: hora de Bolivia y días futuros', () => {
+    const dias = ['2026-11-01', '2026-11-02', '2026-11-03'].map((fecha, i) => ({ fecha, enviados: 0, entrantes: 0, futuro: i === 2 }));
+    const out = R.marcarConexion(dias, ['2026-11-01']);
+    assert.deepEqual(out.map((d) => d.conexion), ['caida', 'sin_conexion', null]);
+  });
+});

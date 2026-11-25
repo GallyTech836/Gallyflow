@@ -125,6 +125,52 @@ async function reservasDelMes(negocioId, desde, hasta, startDate) {
   return { total, asistente, porcentaje: total ? redondear((asistente / total) * 100) : null };
 }
 
+/**
+ * Días del mes (hora de Bolivia) en que YCloud avisó que el WhatsApp del
+ * negocio se desconectó o fue restringido (colección whatsappEvents).
+ * Solo lectura; si falla, el gráfico sale igual sin marcas.
+ */
+async function caidasDelMes(negocioId, desde, hasta) {
+  try {
+    const snap = await db.collection('whatsappEvents')
+      .where('negocioIds', 'array-contains', String(negocioId))
+      .get();
+    const dias = new Set();
+    snap.docs.forEach((d) => {
+      const e = d.data();
+      if (e.severidad !== 'desconectado' && e.severidad !== 'restriccion') return;
+      const ms = Date.parse(e.eventTime || e.receivedAt || '');
+      if (!Number.isFinite(ms)) return;
+      const fecha = dayKey(new Date(ms));
+      if (fecha >= desde && fecha <= hasta) dias.add(fecha);
+    });
+    return [...dias].sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Marca la conexión de cada día:
+ *   'caida'        -> ese día llegó un aviso de desconexión o restricción
+ *   'sin_conexion' -> días sin ningún mensaje después de una caída, hasta el
+ *                     primer día con mensajes (cuando el número volvió)
+ *   null           -> normal (un día en cero sin caída previa = nadie escribió)
+ */
+export function marcarConexion(diario = [], caidas = []) {
+  const set = new Set(caidas);
+  let caido = false;
+  return diario.map((d) => {
+    const actividad = num(d.enviados) + num(d.entrantes) > 0;
+    let conexion = null;
+    if (set.has(d.fecha)) { conexion = 'caida'; caido = true; }
+    else if (d.futuro) conexion = null;
+    else if (actividad) caido = false;
+    else if (caido) conexion = 'sin_conexion';
+    return { ...d, conexion };
+  });
+}
+
 /** Informe de un mes para Super Admin. */
 export async function buildMonthReport(negocioId, mes, { hoy = dayKey() } = {}) {
   if (!isValidMonth(mes)) throw new MetricsError(400, 'Mes inválido (usa AAAA-MM).');
@@ -140,12 +186,15 @@ export async function buildMonthReport(negocioId, mes, { hoy = dayKey() } = {}) 
   const hasta = r.ultimoDia < hoy ? r.ultimoDia : hoy;
   const diasMedidos = r.alcance === 'ninguno' || r.desde > hasta ? 0 : fechasEntre(r.desde, hasta).length;
   const porFecha = Object.fromEntries(r.porDia.map((d) => [d.fecha, d]));
-  const diario = r.primerDia > hasta ? [] : fechasEntre(r.primerDia, hasta).map((fecha) => ({
+  // Todos los días del mes (también los que faltan); los futuros van vacíos.
+  const caidas = r.primerDia > hasta ? [] : await caidasDelMes(negocioId, r.primerDia, r.ultimoDia);
+  const diario = marcarConexion(fechasEntre(r.primerDia, r.ultimoDia).map((fecha) => ({
     fecha,
     enviados: num(porFecha[fecha]?.enviados),
     entrantes: num(porFecha[fecha]?.entrantes),
     real: r.alcance !== 'ninguno' && fecha >= r.desde,
-  }));
+    futuro: fecha > hoy,
+  })), caidas);
 
   const medible = r.alcance !== 'ninguno';
   return {
